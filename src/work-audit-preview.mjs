@@ -24,10 +24,10 @@ export function publicRepositoryOf(value) {
     const url = new URL(path);
     if (url.origin !== "https://github.com" || url.search || url.hash || url.username || url.password)
       throw new TypeError("Use one direct public GitHub repository URL without extra parameters.");
-    path = url.pathname.replace(/\/$/u, "");
+    path = url.pathname.slice(1).replace(/\/$/u, "");
   }
-  const parts = path.split("/").filter(Boolean);
-  if (parts.length !== 2 || parts.some(x => !ID.test(x) || STOP.includes(x)) || path.startsWith("/"))
+  const parts = path.split("/");
+  if (parts.length !== 2 || parts.some(x => !ID.test(x) || STOP.includes(x)))
     throw new TypeError("Use owner/repository or https://github.com/owner/repository (not an issue or file URL).");
   return Object.freeze({
     owner: parts[0], name: parts[1],
