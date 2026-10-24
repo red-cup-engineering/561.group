@@ -161,7 +161,7 @@ async function receiveBrowserWorkPreview(browser, host) {
     if(saved.kind!=="561.group.work-continuity-public-preview.v1" ||
        saved.counts.merged!==1 || saved.counts.issuesExamined!==1 ||
        saved.counts.independentCustomerAcceptance!==null ||
-       saved.records[0].actions.source!=="merge-commit") {
+       saved.records.find(record=>record.workKind==="pull-request")?.actions.source!=="merge-commit") {
       throw Error("The real exported Work audit is not the independently scoped source reading");
     }
     if(seen.length!==5 || thrown.length){
