@@ -123,7 +123,7 @@ async function receiveBrowserWorkPreview(browser, host) {
         return route.abort("blockedbyclient");
       }
       seen.push(url);
-      const value=url.includes("/pulls?")?[{
+      const value=url.includes("/issues?")?[{number:5,title:"Customer Work still needs acceptance",state:"open",state_reason:null,updated_at:"2026-10-24T13:00:00Z"}]:url.includes("/pulls?")?[{
         number:7,title:"Concrete source-to-code delivery",state:"closed",draft:false,
         updated_at:"2026-10-24T12:00:00Z",merged_at:"2026-10-24T12:00:00Z",
         merge_commit_sha:merged,head:{sha:head}
@@ -149,6 +149,7 @@ async function receiveBrowserWorkPreview(browser, host) {
     });
     const output=await page.locator("#work-audit-results").innerText();
     if(!output.includes("Concrete source-to-code delivery") ||
+       !output.includes("Customer Work still needs acceptance") ||
        !output.includes("reported-success") ||
        !output.includes("independent beneficiary acceptance")){
       throw Error("Original browser Work report did not deliver the source/recipient distinction");
@@ -158,12 +159,12 @@ async function receiveBrowserWorkPreview(browser, host) {
     const download=await downloadPromise;
     const saved=JSON.parse(await readFile(await download.path(),"utf8"));
     if(saved.kind!=="561.group.work-continuity-public-preview.v1" ||
-       saved.counts.merged!==1 ||
+       saved.counts.merged!==1 || saved.counts.issuesExamined!==1 ||
        saved.counts.independentCustomerAcceptance!==null ||
        saved.records[0].actions.source!=="merge-commit") {
       throw Error("The real exported Work audit is not the independently scoped source reading");
     }
-    if(seen.length!==4 || thrown.length){
+    if(seen.length!==5 || thrown.length){
       throw Error("Work preview failed real browser API/JS boundaries: "+
         JSON.stringify({seen,thrown}));
     }
