@@ -92,7 +92,7 @@ response=await fetchWorker(new Request('https://www.561.group/contact/?a=b'),env
 check('original alias redirects with exact path/query',()=>{assert.equal(response.status,301);assert.equal(response.headers.get('location'),'https://561.group/contact/?a=b')});
 response=await fetchWorker(new Request('https://561.group/contact/'),env,ctx);
 check('existing asset route receives unchanged request',()=>assert.equal(assetRequest.url,'https://561.group/contact/'));
-check('authored security/contact headers retained',()=>{assert.equal(response.headers.get('x-content-type-options'),'nosniff');assert.match(response.headers.get('content-security-policy'),/form-action mailto:/)});
+check('authored security/contact headers retained',()=>{assert.equal(response.headers.get('x-content-type-options'),'nosniff');assert.match(response.headers.get('content-security-policy'),/form-action 'self' mailto:/)});
 check('asset body retained',()=>assert.equal(response.status,200));assert.equal(await response.text(),'original asset body');
 response=await fetchWorker(new Request('https://561.group/estate.json?arbitrary=x'),env,ctx);await Promise.all(waits);const body=await response.json();
 check('every authored public node and machine probed',()=>assert.equal(probes.length,estate.nodes.length+estate.machines.length));
