@@ -50,6 +50,19 @@ jobs:
           path: content
           ssh-key: ${{ secrets.SITE_CONTENT_DEPLOY_KEY }}
           persist-credentials: false
+      - name: Read exact public Mathematics Work-intervention source (original Red Cup owner)
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: red-cup-engineering/mathematical-readout-exchange
+          ref: 767ab0c3bdaccc05f425f8ac1ca465f306203cb8
+          path: .math-source
+          persist-credentials: false
+      - name: Preserve original Math source revision and no duplicate solver
+        run: |
+          set -euo pipefail
+          test "$(git -C .math-source rev-parse HEAD)" = "767ab0c3bdaccc05f425f8ac1ca465f306203cb8"
+          test -s .math-source/src/work-critical-intervention.mjs
+          test -s .math-source/src/work-intervention-certificate.mjs
       - name: Bind front-door content (data/, locales/, authored public/ assets) into the application
         run: node scripts/bind-content.mjs
       - name: Select one source-qualified UTC publication day
