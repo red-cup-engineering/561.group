@@ -264,9 +264,9 @@ export async function inspectPublicGitHub(value, fetcher = fetch, clock = () => 
   return Object.freeze({
     ...report,
     sourceWarnings: Object.freeze([
-      ...(issueRead.status === "rejected" ? [String(issueRead.reason?.message ?? "Issue source unavailable")] : []),
-      ...(runs.status === "rejected" ? [String(runs.reason?.message ?? "Actions source unavailable")] : []),
-      ...(deployed.status === "rejected" ? [String(deployed.reason?.message ?? "Deployment source unavailable")] : []),
+      ...(issueRead.status === "rejected" ? ["GitHub Issues: " + String(issueRead.reason?.message ?? "source unavailable")] : []),
+      ...(runs.status === "rejected" ? ["GitHub Actions: " + String(runs.reason?.message ?? "source unavailable")] : []),
+      ...(deployed.status === "rejected" ? ["GitHub Deployments: " + String(deployed.reason?.message ?? "source unavailable")] : []),
     ])
   });
 }
