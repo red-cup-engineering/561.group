@@ -354,6 +354,30 @@ function workAuditPage(frontdoor) {
       '<p id="work-audit-status" role="status" aria-live="polite">Enter a public repository and select Read public Work.</p>' +
       '<div id="work-audit-results" aria-live="polite" aria-label="Attributed Work continuity reading"></div>' +
       '<script type="module" src="/work/audit/preview.mjs"></script>', 12),
+    panel("work-math","Find a least-cost way to shorten a Work dependency network",
+      para("Supply explicit original tasks, prerequisites, duration units and optional costs "+
+        "of shortening tasks by one unit. The computation and independent proof check run "+
+        "inside your browser; nothing is sent to the Group. This does not infer duration "+
+        "or real supplier cost from issue titles.","site-section-lead") +
+      '<form id="work-math-form" method="get" action="/work/audit/">' +
+      '<label for="work-math-source">Original dependency network and qualified assumptions (JSON)</label>' +
+      '<textarea id="work-math-source" required rows="16" spellcheck="false" ' +
+      'aria-describedby="work-math-privacy" style="width:100%;max-width:100%"></textarea>' +
+      '<div class="site-actions">' +
+      '<button type="submit">Find minimum-cost acceleration</button>' +
+      '<button type="button" id="work-math-example">Restore hypothetical example</button>' +
+      '<button type="button" id="work-math-download" disabled>Save independently checked certificate</button>' +
+      '</div></form>' +
+      '<p id="work-math-privacy" class="site-evidence-limit">' +
+      'The example is hypothetical. Dates, staff availability, dependent Work ownership, rights, ' +
+      'actual estimates, prices and external acceptance must be received separately. ' +
+      'Source and calculations stay in this browser; no token, private data upload, ' +
+      'charge or automatic rescheduling is performed.' +
+      '</p>' +
+      '<p id="work-math-status" role="status" aria-live="polite">' +
+      'An editable example is loaded. Supply your actual evidence before using results for a decision.</p>' +
+      '<div id="work-math-results" aria-live="polite" aria-label="Proof-carrying mathematical Work calculation"></div>' +
+      '<script type="module" src="/work/audit/math-preview.mjs"></script>', 12),
     panel("boundary", "What a deeper engagement would actually qualify",
       para(service.scope) +
       para(service.example) +
