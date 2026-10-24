@@ -156,6 +156,11 @@ async function receiveBrowserWorkPreview(browser, host, output) {
       throw Error("Original browser Work report did not deliver the source/recipient distinction");
     }
     await page.locator("#work-audit-copy").click();
+    await page.waitForFunction(()=>{
+      const s=document.getElementById("work-audit-status")?.textContent??"";
+      return s.includes("Inquiry scope copied") ||
+        s.includes("Browser clipboard permission unavailable");
+    },null,{timeout:10000});
     const copyState=await page.locator("#work-audit-status").innerText();
     const copiedText=copyState.includes("Inquiry scope copied")
       ? await page.evaluate(()=>navigator.clipboard.readText()).catch(()=>null)
