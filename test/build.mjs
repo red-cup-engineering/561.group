@@ -32,13 +32,17 @@ check("actual original build executes with authored ARB inputs and no unavailabl
 const obsolete=await readFile(path.join(app,"public/index.html"),"utf8").then(()=>true,
   error=>{if(error.code==="ENOENT")return false;throw error;});
 check("root has one TUFTE authority and stale static index is removed",()=>assert.equal(obsolete,false));
-const names=["source-revision.json","estate-records.json","zh-hans/index.html",
+const names=["source-revision.json","estate-records.json","work/audit/preview.mjs","zh-hans/index.html",
   "lkt/index.html","llms.txt","llms-full.txt","feed.json","feed.atom.xml",
   "feed.rss.xml",".well-known/security.txt","8d232583e7cba18a83bf5c0325fcc7c9.txt",
   "humans.txt","robots.txt","sitemap.xml"];
 const readOutputs=async()=>Object.fromEntries(await Promise.all(names.map(async name=>[
   name,await readFile(path.join(app,"public",name),"utf8")])));
 const before=await readOutputs();
+check("the authored application builds a real public Work audit browser module",()=>{
+  assert.ok(before["work/audit/preview.mjs"].includes("inspectPublicGitHub"));
+  assert.ok(before["sitemap.xml"].includes("<loc>https://561.group/work/audit/</loc>"));
+});
 check("the published site guides humans and agents to every real public page",()=>{
   for(const route of ["/work/","/projects/","/about/","/for-agents/"]){
     assert.ok(before["sitemap.xml"].includes("<loc>https://561.group"+route+"</loc>"),
