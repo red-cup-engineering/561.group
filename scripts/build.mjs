@@ -61,6 +61,9 @@ const space = siteSpace({
 });
 const speakers = Object.fromEntries(LOCALES.map((tag) => [tag, speaker(space, tag, { origin: home.origin })]));
 const files = {
+  // Read-only GitHub Work preview is an original application asset, generated
+  // from this exact Code source into the existing public assets binding.
+  "public/work/audit/preview.mjs": await readText("src/work-audit-preview.mjs"),
   "public/estate-records.json": JSON.stringify(estate, null, 2) + "\n",
   // English / is served by TUFTE + LivingWebServer, never by a competing static index.
   ...Object.fromEntries(LOCALES.filter(tag => tag !== "en").map((tag) => [`public${localePath(tag)}index.html`, renderIndex(home, estate, speakers[tag], items)])),
