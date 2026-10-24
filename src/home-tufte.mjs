@@ -343,7 +343,10 @@ function workAuditPage(frontdoor) {
       'placeholder="owner/repository" spellcheck="false" autocomplete="off" ' +
       'aria-describedby="work-audit-privacy">' +
       '<button type="submit">Read public Work</button>' +
-      '<button type="button" id="work-audit-download" disabled>Save report as JSON</button></div></form>' +
+      '<button type="button" id="work-audit-download" disabled>Save report as JSON</button>' +
+      '<button type="button" id="work-audit-copy" disabled>Copy scope for an inquiry</button></div></form>' +
+      '<textarea id="work-audit-summary" aria-label="Review and manually copy audit inquiry scope" ' +
+      'readonly hidden rows="8"></textarea>' +
       '<p id="work-audit-privacy" class="site-evidence-limit">' +
       'Your browser requests public data directly from api.github.com. No token, private source or customer data is sent to 561.group. ' +
       'GitHub may apply its own unauthenticated limits. No cookies, contact message, account access, payment or Work modification are required.' +
