@@ -271,6 +271,34 @@ export async function inspectPublicGitHub(value, fetcher = fetch, clock = () => 
   });
 }
 
+/**
+ * A visitor-authored lead handoff, not an automated quote or contact event.
+ * The sender chooses what to copy and whether to send it to the original
+ * Causeway seller through the existing 561 Group contact channel.
+ */
+export function buyerScopeSummary(report) {
+  if(report?.kind!=="561.group.work-continuity-public-preview.v1" ||
+     !Array.isArray(report.records) || !exact(report.repository))
+    throw new TypeError("A real source-attributed Work reading is required for an inquiry");
+  const selected=report.records.slice(0,6);
+  return [
+    "Request for a scoped Work-continuity audit (not an accepted order)",
+    "Public source: https://github.com/" + report.repository,
+    "Observed: " + report.source.observation,
+    "Recent bounded Work: " + report.counts.examined + " records, including " +
+      report.counts.issuesExamined + " Issues and " +
+      report.counts.pullRequestsExamined + " pull requests.",
+    "Observed in the public source:",
+    ...selected.map(item=>"- " + item.workKind + " #" + item.number + ": " +
+      item.title + " [" + item.state + "]" +
+      (item.gaps.length ? "; examine " + item.gaps[0] : "")),
+    ...(report.truncated?["The sample is truncated; earlier work may remain uninspected."]:[]),
+    "Please scope an independently reviewable result, access/rights, acceptance conditions,",
+    "resource costs, price/terms and a separate buyer receipt before any customer-system change.",
+    "This browser snapshot does not prove deployment, independent acceptance or payment."
+  ].join("\n");
+}
+
 // The following is the actual free customer interface, not a stub form.
 function node(doc, tag, text, className) {
   const result = doc.createElement(tag);
@@ -320,6 +348,8 @@ export function installWorkPreview(doc = globalThis.document, loc = globalThis.l
   const field = doc.getElementById("work-audit-repository");
   const status = doc.getElementById("work-audit-status");
   const download = doc.getElementById("work-audit-download");
+  const copy = doc.getElementById("work-audit-copy");
+  const summary = doc.getElementById("work-audit-summary");
   const pending = new URLSearchParams(loc.search).get("repo");
   if (pending) field.value = pending;
   let report = null;
@@ -327,6 +357,9 @@ export function installWorkPreview(doc = globalThis.document, loc = globalThis.l
     event?.preventDefault?.();
     status.textContent = "Reading a bounded public GitHub source in this browser...";
     download.disabled = true;
+    copy.disabled = true;
+    summary.hidden = true;
+    summary.value = "";
     report = null;
     try {
       const selected = publicRepositoryOf(field.value);
@@ -334,6 +367,7 @@ export function installWorkPreview(doc = globalThis.document, loc = globalThis.l
       report = result;
       displayWorkPreview(doc,result);
       download.disabled = false;
+      copy.disabled = false;
       status.textContent = "Read completed; source and uncertainty remain visible. No report or credentials were uploaded to 561.group.";
     } catch(error) {
       status.textContent = error instanceof Error ? error.message : "The public source could not be read.";
@@ -341,6 +375,23 @@ export function installWorkPreview(doc = globalThis.document, loc = globalThis.l
     }
   };
   form.addEventListener("submit",submit);
+  copy.addEventListener("click",async()=>{
+    if(!report)return;
+    const text=buyerScopeSummary(report);
+    try{
+      if(typeof globalThis.navigator?.clipboard?.writeText!=="function")
+        throw new Error("Browser clipboard unavailable");
+      await globalThis.navigator.clipboard.writeText(text);
+      status.textContent="Inquiry scope copied. Choose whether to paste it into the existing Group contact inquiry.";
+    }catch{
+      // Permission denied is not a falsely reported successful copy.
+      summary.hidden=false;
+      summary.value=text;
+      summary.focus();
+      summary.select();
+      status.textContent="Browser clipboard permission unavailable. Select/copy the shown scope and send it only if you choose.";
+    }
+  });
   download.addEventListener("click",() => {
     if (!report) return;
     const file = new Blob([JSON.stringify(report,null,2)+"\n"],{type:"application/json"});
