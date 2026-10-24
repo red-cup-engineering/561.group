@@ -144,7 +144,7 @@ async function receiveBrowserWorkPreview(browser, host) {
     await page.locator("#work-audit-repository").fill("example/public-work");
     await page.locator("#work-audit-form button[type=submit]").click();
     await page.waitForFunction(()=>
-      document.getElementById("work-audit-status")?.textContent?.includes("Read completed"),{
+      document.getElementById("work-audit-status")?.textContent?.includes("Read completed"),null,{
       timeout:12000
     });
     const output=await page.locator("#work-audit-results").innerText();
