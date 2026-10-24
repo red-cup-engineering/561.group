@@ -67,11 +67,12 @@ test("public GitHub reading performs an actual three-source job with no account 
     const data=url.includes("/pulls?")?[pr(17)]:
       url.includes("/actions/runs?")?{workflow_runs:[{id:30,head_sha:SHA_B,status:"completed",conclusion:"success"}]}:
       url.includes("/deployments?")?[{id:40,sha:SHA_B}]:
+      url.includes("/issues?")?[]:
       {full_name:"example/public-code",private:false};
     return Response.json(data);
   };
   const report=await inspectPublicGitHub("https://github.com/example/public-code",route,()=>when);
-  assert.equal(seen.length,4);
+  assert.equal(seen.length,5);
   assert.equal(report.source.observation,when);
   assert.equal(report.counts.actionsReportedSuccess,1);
   assert.equal(report.records[0].sourceUrl,"https://github.com/example/public-code/pull/17");
@@ -83,6 +84,7 @@ test("a denied optional Actions read does not erase legitimate PR Work source",a
     if(url.includes("/actions/runs?"))return new Response("denied",{status:403});
     if(url.includes("/deployments?"))return new Response("unavailable",{status:503});
     if(url.includes("/pulls?"))return Response.json([pr(1)]);
+    if(url.includes("/issues?"))return Response.json([]);
     return Response.json({full_name:"example/repo",private:false});
   };
   const report=await inspectPublicGitHub("example/repo",reader,()=>when);
@@ -98,4 +100,54 @@ test("the free preview never silently widens past its contracted Work set",()=>{
   assert.equal(report.truncated,true);
   assert.equal(report.records.length,PREVIEW_LIMIT);
   assert.throws(()=>workContinuityPreview({repository:"example/repo",pulls:[...pulls,pr(21)],observedAt:when}),/bounded/u);
+});
+
+
+test("the paid-audit preview covers original Issues and author-claimed PR realization, not just code PRs",()=>{
+  const issue={number:31,title:"Customer order stays unreconciled",state:"open",state_reason:null,
+    updated_at:"2026-10-24T14:00:00Z",closed_at:null};
+  const report=workContinuityPreview({
+    repository:"example/repo",
+    pulls:[pr(42,{updated_at:"2026-10-24T13:00:00Z",body:"Fixes #31 after acceptance"})],
+    issues:[issue,{...pr(42),pull_request:{url:"https://api.github.com/repos/example/repo/pulls/42"}}],
+    actions:{workflow_runs:[]},deployments:[],observedAt:when
+  });
+  assert.equal(report.counts.examined,2);
+  assert.equal(report.counts.issuesExamined,1);
+  assert.equal(report.counts.pullRequestsExamined,1);
+  assert.equal(report.counts.openIssues,1);
+  const issueResult=report.records[0];
+  assert.equal(issueResult.workKind,"issue");
+  assert.equal(issueResult.sourceUrl,"https://github.com/example/repo/issues/31");
+  assert.deepEqual(issueResult.authoredFixClaims,[42]);
+  assert.equal(issueResult.recipientAcceptance,"not-observed-by-public-github-api");
+  assert.ok(issueResult.gaps.some(g=>g.includes("confirm source/effect")));
+});
+
+test("issue and PR order is a single bounded recent Work sample, not two 20-row audit promises",()=>{
+  const pulls=Array.from({length:PREVIEW_LIMIT},(_,i)=>pr(i+1,{
+    updated_at:"2026-10-24T12:00:00Z"
+  }));
+  const issues=Array.from({length:PREVIEW_LIMIT},(_,i)=>({
+    number:i+101,title:"Demand "+i,state:"open",updated_at:"2026-10-24T13:00:00Z"
+  }));
+  const report=workContinuityPreview({repository:"example/repo",pulls,issues,observedAt:when});
+  assert.equal(report.records.length,20);
+  assert.equal(report.counts.issuesExamined,20);
+  assert.equal(report.counts.pullRequestsExamined,0);
+  assert.equal(report.truncated,true);
+});
+
+test("denied public issue access does not invent a Work-closed status",async()=>{
+  const reader=async url=>{
+    if(url.includes("/issues?"))return new Response("rate limited",{status:403});
+    if(url.includes("/pulls?"))return Response.json([pr(1)]);
+    if(url.includes("/actions/runs?"))return Response.json({workflow_runs:[]});
+    if(url.includes("/deployments?"))return Response.json([]);
+    return Response.json({full_name:"example/repo",private:false});
+  };
+  const result=await inspectPublicGitHub("example/repo",reader,()=>when);
+  assert.equal(result.records.length,1);
+  assert.equal(result.source.issuesAvailable,false);
+  assert.ok(result.sourceWarnings.some(message=>message.includes("Issue")));
 });
