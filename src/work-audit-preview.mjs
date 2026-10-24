@@ -271,7 +271,7 @@ export function installWorkPreview(doc = globalThis.document, loc = globalThis.l
       report = result;
       displayWorkPreview(doc,result);
       download.disabled = false;
-      status.textContent = "Read completed; source and uncertainty remain visible. No information was sent to 561.group.";
+      status.textContent = "Read completed; source and uncertainty remain visible. No report or credentials were uploaded to 561.group.";
     } catch(error) {
       status.textContent = error instanceof Error ? error.message : "The public source could not be read.";
       doc.getElementById("work-audit-results").replaceChildren();
