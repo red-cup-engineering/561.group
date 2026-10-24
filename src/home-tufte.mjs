@@ -6,7 +6,7 @@ import { HOUSE_STYLES } from "./apex-house-style.mjs";
 import { SITE_STYLES } from "./public-home-style.mjs";
 
 const ORIGIN = "https://561.group";
-export const PUBLIC_ROUTES = Object.freeze(["/", "/work/", "/projects/", "/about/", "/for-agents/"]);
+export const PUBLIC_ROUTES = Object.freeze(["/", "/work/", "/work/audit/", "/projects/", "/about/", "/for-agents/"]);
 const esc = value => String(value ?? "").replace(/[&<>"']/gu,
   c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"})[c]);
 const slug = /^[a-z][a-z0-9-]*$/u;
@@ -216,6 +216,9 @@ function serviceEntries(frontdoor, providers, items = frontdoor.offers) {
         para(service.evidence.qualification, "site-evidence-limit") : "") +
       (service.paidProposal ? anchor(service.paidProposal.href, service.paidProposal.label) +
         para(service.paidProposal.qualification, "site-evidence-limit") : "") +
+      (service.id === "agent-operations" && service.provider === "services" ?
+        anchor("/work/audit/", "Run a free public GitHub Work preview") +
+        para("A source-limited browser diagnostic, not an order, private audit or verified deployment.", "site-evidence-limit") : "") +
       anchor("/contact/?service=" + encodeURIComponent(service.title) + "#work", "Ask about this work") +
       "</li>";
   }).join("") + "</ul>";
@@ -319,6 +322,43 @@ function workPage(home, frontdoor, source) {
       note("A submitted inquiry does not create an order, transfer authority or authorize payment."),12)
   ];
 }
+// Real first-party product surface using the original agent-operations
+// seller and normal TUFTE/LivingWebServer public page producer.
+function workAuditPage(frontdoor) {
+  const service = frontdoor.offers.find(item => item.id === "agent-operations");
+  if (!service || service.provider !== "services")
+    throw new TypeError("Public Work preview requires the original accountable Causeway seller");
+  return [
+    panel("lead", "Read real Work evidence", lead(
+      "FREE / PUBLIC GITHUB SOURCE ONLY",
+      "See where a merge stops being a delivered outcome.",
+      "Inspect up to 20 recent pull requests against sampled Actions and deployment records. Get a source-linked report you can keep. This is a useful preliminary observation, not a certification or paid engagement.",
+      [{href:"#audit-reader",label:"Inspect a public repository"},
+       {href:"/contact/?service=" + encodeURIComponent(service.title) + "#work",label:"Discuss an actual paid audit"}]
+    ), 12),
+    panel("audit-reader", "Inspect a public GitHub repository",
+      '<form id="work-audit-form" method="get" action="/work/audit/">' +
+      '<label for="work-audit-repository">Public GitHub owner/repository or repository URL</label>' +
+      '<div class="site-actions"><input id="work-audit-repository" name="repo" type="text" required maxlength="240" ' +
+      'placeholder="owner/repository" spellcheck="false" autocomplete="off" ' +
+      'aria-describedby="work-audit-privacy">' +
+      '<button type="submit">Read public Work</button>' +
+      '<button type="button" id="work-audit-download" disabled>Save report as JSON</button></div></form>' +
+      '<p id="work-audit-privacy" class="site-evidence-limit">' +
+      'Your browser requests public data directly from api.github.com. No token, private source or customer data is sent to 561.group. ' +
+      'GitHub may apply its own unauthenticated limits. No cookies, contact message, account access, payment or Work modification are required.' +
+      '</p>' +
+      '<p id="work-audit-status" role="status" aria-live="polite">Enter a public repository and select Read public Work.</p>' +
+      '<div id="work-audit-results" aria-live="polite" aria-label="Attributed Work continuity reading"></div>' +
+      '<script type="module" src="/work/audit/preview.mjs"></script>', 12),
+    panel("boundary", "What a deeper engagement would actually qualify",
+      para(service.scope) +
+      para(service.example) +
+      note("A merged PR, reported CI success, an environment deployment, buyer acceptance and economic settlement are separate evidence. The preview does not authenticate executing jobs or independently accepted customer value.") +
+      anchor("/contact/?service=" + encodeURIComponent(service.title) + "#work", "Request a scoped human-reviewed audit"),
+      12)
+  ];
+}
 function projectsPage(home, estate, frontdoor, source) {
   const groups = estate.groups.map(group => {
     const nodes = estate.nodes.filter(item => item.group === group.id);
@@ -389,12 +429,14 @@ export function project561GroupPage({home,estate,frontdoor,path = "/"}) {
   const page = {
     "/": {title:home.name,subtitle:"Indigenous-grounded governance · Artificial abiogenesis · Practical services"},
     "/work/": {title:"Work with the 561 Group",subtitle:"Capabilities, scoping, providers and actual terms"},
+    "/work/audit/": {title:"Public Work continuity preview · 561 Group",subtitle:"Live public GitHub evidence, delivery uncertainty and an exportable report"},
     "/projects/": {title:"Explore the 561 Group",subtitle:"Public projects, commerce, worlds and publications"},
     "/about/": {title:"About the 561 Group",subtitle:"Four companies, one accountable source of work"},
     "/for-agents/": {title:"For agents · 561 Group",subtitle:"Public machine endpoints and authorization boundaries"}
   }[path];
   const tiles = path === "/" ? homepage(home,estate,frontdoor,source) :
     path === "/work/" ? workPage(home,frontdoor,source) :
+    path === "/work/audit/" ? workAuditPage(frontdoor) :
     path === "/projects/" ? projectsPage(home,estate,frontdoor,source) :
     path === "/about/" ? aboutPage(home,frontdoor) :
     agentPage(home,estate,frontdoor);
