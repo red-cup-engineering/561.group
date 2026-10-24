@@ -16,7 +16,7 @@ const frontdoorModule=new vm.SyntheticModule(['default'],function(){this.setExpo
 const homeModule=new vm.SyntheticModule(['default'],function(){this.setExport('default',homeData)},{context,identifier:'fixture-public-home'});
 const livingCalls=[];
 const livingModule=new vm.SyntheticModule(['create561GroupLivingApplication','PUBLIC_ROUTES'],function(){
-  this.setExport('PUBLIC_ROUTES',['/','/work/','/projects/','/about/','/for-agents/']);
+  this.setExport('PUBLIC_ROUTES',['/','/work/','/work/audit/','/projects/','/about/','/for-agents/']);
   this.setExport('create561GroupLivingApplication', ({readHome,readEstate,readFrontdoor}) => ({
     fetch: async request => {
       livingCalls.push({url:request.url,accept:request.headers.get('accept'),home:readHome(),estate:readEstate(),frontdoor:readFrontdoor()});
@@ -67,7 +67,7 @@ check('a stored English choice reaches the one TUFTE Living Web site',()=>{asser
 check('root response comes from the TUFTE source, not static assets',()=>assert.equal(response.headers.get('content-type'),'text/html; charset=utf-8'));
 response=await fetchWorker(new Request('https://561.group/',{headers:{'accept':'application/json',cookie:'lang=en'}}),env,ctx);
 check('the same root preserves machine JSON negotiation',()=>{assert.equal(response.status,200);assert.equal(response.headers.get('content-language'),'en');assert.equal(livingCalls[1].accept,'application/json')});
-for(const path of ['/work/','/projects/','/about/','/for-agents/']){
+for(const path of ['/work/','/work/audit/','/projects/','/about/','/for-agents/']){
   response=await fetchWorker(new Request('https://561.group'+path),env,ctx);
   check('public Work/Projects/About/Agents page '+path+' is served by one original TUFTE application',()=>{
     assert.equal(response.status,200);
