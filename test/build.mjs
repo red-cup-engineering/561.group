@@ -32,7 +32,9 @@ check("actual original build executes with authored ARB inputs and no unavailabl
 const obsolete=await readFile(path.join(app,"public/index.html"),"utf8").then(()=>true,
   error=>{if(error.code==="ENOENT")return false;throw error;});
 check("root has one TUFTE authority and stale static index is removed",()=>assert.equal(obsolete,false));
-const names=["source-revision.json","estate-records.json","work/audit/preview.mjs","zh-hans/index.html",
+const names=["source-revision.json","estate-records.json","work/audit/preview.mjs",
+  "work/audit/math-preview.mjs","work/audit/critical-intervention.mjs","work/audit/critical-certificate.mjs",
+  "zh-hans/index.html",
   "lkt/index.html","llms.txt","llms-full.txt","feed.json","feed.atom.xml",
   "feed.rss.xml",".well-known/security.txt","8d232583e7cba18a83bf5c0325fcc7c9.txt",
   "humans.txt","robots.txt","sitemap.xml"];
@@ -42,6 +44,19 @@ const before=await readOutputs();
 check("the authored application builds a real public Work audit browser module",()=>{
   assert.ok(before["work/audit/preview.mjs"].includes("inspectPublicGitHub"));
   assert.ok(before["sitemap.xml"].includes("<loc>https://561.group/work/audit/</loc>"));
+});
+const originalMathSources=Object.fromEntries(await Promise.all([
+  "src/work-critical-intervention.mjs",
+  "src/work-intervention-certificate.mjs"
+].map(async sourcePath=>[
+  sourcePath,await readFile(path.join(ROOT,".math-source",sourcePath),"utf8")
+])));
+check("the published Work mathematics retains exact mathematical owner source bytes",()=>{
+  assert.ok(before["work/audit/math-preview.mjs"].includes("analyzeLocalWorkModel"));
+  assert.equal(before["work/audit/critical-intervention.mjs"],
+    originalMathSources["src/work-critical-intervention.mjs"]);
+  assert.equal(before["work/audit/critical-certificate.mjs"],
+    originalMathSources["src/work-intervention-certificate.mjs"]);
 });
 check("the published site guides humans and agents to every real public page",()=>{
   for(const route of ["/work/","/projects/","/about/","/for-agents/"]){
