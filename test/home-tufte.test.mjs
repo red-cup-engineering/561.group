@@ -125,6 +125,21 @@ test("services are tied to an existing accountable company, and only inquiry is 
   assert.doesNotMatch(list,/Buy now|guaranteed revenue|instant acceptance/u);
 });
 
+test("original agent-operations Work includes one real browser-local public audit entry",()=>{
+  const work=tile(model("/work/"),"services").html;
+  assert.ok(work.includes('href="/work/audit/"'));
+  const preview=model("/work/audit/");
+  assert.equal(preview.metadata.canonical,"https://561.group/work/audit/");
+  const html=tile(preview,"audit-reader").html;
+  for(const name of ["work-audit-form","work-audit-repository","work-audit-results",
+    "work-audit-download","/work/audit/preview.mjs"]){
+    assert.ok(html.includes(name),"read-only consumer needs "+name);
+  }
+  assert.ok(preview.tiles.some(x=>x.id==="boundary" &&
+    x.html.includes("Provisional $200 pilot estimate")));
+  assert.ok(!html.includes('name="token"'),"no customer credential is solicited");
+});
+
 test("real named projects and distinct buying venues are prominent, not inferred offers",()=>{
   const root=model("/");
   const featured=tile(root,"explore").html;
@@ -176,7 +191,7 @@ test("about and agent pages give real source identities and safe action boundari
 });
 
 test("a single original TUFTE application has only exact known public routes",()=>{
-  assert.deepEqual(PUBLIC_ROUTES,["/","/work/","/projects/","/about/","/for-agents/"]);
+  assert.deepEqual(PUBLIC_ROUTES,["/","/work/","/work/audit/","/projects/","/about/","/for-agents/"]);
   for(const route of PUBLIC_ROUTES) {
     const page=model(route);
     assert.equal(page.metadata.canonical,"https://561.group"+route);
