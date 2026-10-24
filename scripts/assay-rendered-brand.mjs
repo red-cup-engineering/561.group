@@ -148,11 +148,11 @@ async function receiveBrowserWorkPreview(browser, host, output) {
       document.getElementById("work-audit-status")?.textContent?.includes("Read completed"),null,{
       timeout:12000
     });
-    const output=await page.locator("#work-audit-results").innerText();
-    if(!output.includes("Concrete source-to-code delivery") ||
-       !output.includes("Customer Work still needs acceptance") ||
-       !output.includes("reported-success") ||
-       !output.includes("independent beneficiary acceptance")){
+    const displayedReport=await page.locator("#work-audit-results").innerText();
+    if(!displayedReport.includes("Concrete source-to-code delivery") ||
+       !displayedReport.includes("Customer Work still needs acceptance") ||
+       !displayedReport.includes("reported-success") ||
+       !displayedReport.includes("independent beneficiary acceptance")){
       throw Error("Original browser Work report did not deliver the source/recipient distinction");
     }
     await page.locator("#work-audit-copy").click();
