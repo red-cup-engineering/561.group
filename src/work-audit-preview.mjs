@@ -37,10 +37,15 @@ export function publicRepositoryOf(value) {
 }
 
 function sourceInstant(value) {
-  if (typeof value !== "string" || !/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ$/u.test(value))
+  // GitHub REST emits UTC seconds without milliseconds; Date#toISOString
+  // always adds .000. A valid provider time must not lose its sort order
+  // merely because those equivalent representations differ.
+  if (typeof value !== "string" ||
+      !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/u.test(value))
     return null;
   const date = new Date(value);
-  return Number.isFinite(date.getTime()) && date.toISOString() === value ? value : null;
+  return Number.isFinite(date.getTime()) &&
+    date.toISOString().slice(0,19) === value.slice(0,19) ? value : null;
 }
 function sha(value) {
   return typeof value === "string" && /^[0-9a-f]{40}$/iu.test(value) ? value.toLowerCase() : null;
