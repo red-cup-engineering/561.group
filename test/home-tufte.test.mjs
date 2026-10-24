@@ -132,7 +132,8 @@ test("original agent-operations Work includes one real browser-local public audi
   assert.equal(preview.metadata.canonical,"https://561.group/work/audit/");
   const html=tile(preview,"audit-reader").html;
   for(const name of ["work-audit-form","work-audit-repository","work-audit-results",
-    "work-audit-download","/work/audit/preview.mjs"]){
+    "work-audit-download","work-audit-copy","work-audit-summary",
+    "/work/audit/preview.mjs"]){
     assert.ok(html.includes(name),"read-only consumer needs "+name);
   }
   assert.ok(preview.tiles.some(x=>x.id==="boundary" &&
