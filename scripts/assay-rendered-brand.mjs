@@ -109,6 +109,7 @@ async function receiveBrowserWorkPreview(browser, host, output) {
   const context=await browser.newContext({
     viewport:{width:390,height:844},javaScriptEnabled:true,acceptDownloads:true
   });
+  await context.grantPermissions(["clipboard-read","clipboard-write"],{origin:host.origin});
   const seen=[];
   const target="https://api.github.com/repos/example/public-work";
   const head="a".repeat(40),merged="b".repeat(40);
