@@ -164,3 +164,16 @@ test("commercial handoff is an attributable, voluntarily copied request for scop
  assert.match(value,/not an accepted order/u);
  assert.match(value,/independent acceptance or payment/u);
 });
+
+test("genuine GitHub UTC-second timestamps preserve newest Work order without inventing calendar days",()=>{
+ const report=workContinuityPreview({repository:"example/repo",
+   pulls:[pr(7,{updated_at:"2026-10-24T21:35:19Z"})],
+   issues:[{number:31,title:"Older customer need",state:"open",
+     updated_at:"2026-10-24T05:33:30Z"}],observedAt:when});
+ assert.equal(report.records[0].workKind,"pull-request");
+ assert.equal(report.records[0].updatedAt,"2026-10-24T21:35:19Z");
+ assert.equal(report.records[1].updatedAt,"2026-10-24T05:33:30Z");
+ const invalid=workContinuityPreview({repository:"example/repo",
+    pulls:[pr(8,{updated_at:"2026-02-30T13:00:00Z"})],observedAt:when});
+ assert.equal(invalid.records[0].updatedAt,null);
+});
