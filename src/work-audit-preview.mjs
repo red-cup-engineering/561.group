@@ -54,9 +54,11 @@ function extractRuns(input) {
  * acceptance are different events. This bounded reading never infers one from
  * another or interprets a missing API row as proof of a missing event.
  */
-export function workContinuityPreview({repository, pulls, actions, deployments, observedAt} = {}) {
+export function workContinuityPreview({repository, pulls, issues = null, actions, deployments, observedAt} = {}) {
   const repo = typeof repository === "string" ? publicRepositoryOf(repository) : publicRepositoryOf(repository?.fullName);
-  if (!Array.isArray(pulls) || pulls.length > PREVIEW_LIMIT || !exact(observedAt))
+  if (!Array.isArray(pulls) || pulls.length > PREVIEW_LIMIT ||
+      (issues !== null && (!Array.isArray(issues) || issues.length > PREVIEW_LIMIT)) ||
+      !exact(observedAt))
     throw new TypeError("An attributed, bounded GitHub PR source and observation time are required.");
   const actionRows = extractRuns(actions);
   const deploymentRows = Array.isArray(deployments) ? deployments.slice(0, RUN_LIMIT) : null;
@@ -111,35 +113,91 @@ export function workContinuityPreview({repository, pulls, actions, deployments, 
       gaps: Object.freeze(gaps),
     });
   });
-  const unique = new Set(rows.map(row => row.number));
-  if (unique.size !== rows.length) throw new TypeError("GitHub returned duplicate PR identities.");
+  // GitHub Issues are original customer/maintainer Work distinct from the
+  // code proposals that may later realize them. The Issues API includes PRs;
+  // discard those duplicates before forming the bounded Work union.
+  const sourceIssues = issues?.filter(item => !item.pull_request) ?? [];
+  const claimedBy = new Map();
+  for (const pull of pulls) {
+    if (typeof pull.body !== "string") continue;
+    const references = pull.body.matchAll(/\b(?:closes|fixes|resolves)\s+#([1-9][0-9]*)\b/giu);
+    for (const match of references) {
+      const number = Number(match[1]);
+      if (!Number.isSafeInteger(number)) continue;
+      if (!claimedBy.has(number)) claimedBy.set(number,new Set());
+      claimedBy.get(number).add(pull.number);
+    }
+  }
+  const issueRows = sourceIssues.map(source => {
+    if (!Number.isSafeInteger(source?.number) || source.number < 1 ||
+        !exact(source.title) || !["open","closed"].includes(source.state))
+      throw new TypeError("GitHub returned an unrecognized original Issue or lifecycle.");
+    const state = source.state === "open" ? "open" :
+      source.state_reason === "not_planned" ? "closed-not-planned" : "closed-reason-unverified";
+    const related = [...(claimedBy.get(source.number) ?? [])].sort((a,b)=>a-b);
+    const gaps = [];
+    if (state === "open") gaps.push("confirm owner, actionable requirement and promised delivery");
+    if (state.startsWith("closed")) gaps.push("verify closure basis and beneficiary acceptance independently");
+    if (related.length) gaps.push("pull request description asserts a connection; confirm source/effect and receiving");
+    else gaps.push("no linking PR in sampled source; later work may exist outside this window");
+    return Object.freeze({
+      workKind:"issue",number:source.number,title:source.title.slice(0,240),state,
+      updatedAt:sourceInstant(source.updated_at),closedAt:sourceInstant(source.closed_at),
+      stateReason:exact(source.state_reason) ? source.state_reason : null,
+      sourceUrl:repo.url + "/issues/" + source.number,
+      authoredFixClaims:Object.freeze(related),
+      actions:Object.freeze({reading:"not-directly-measured",source:null,url:null}),
+      deployment:"not-directly-measured",
+      recipientAcceptance:"not-observed-by-public-github-api",
+      gaps:Object.freeze(gaps)
+    });
+  });
+  const all = [
+    ...rows.map(row=>Object.freeze({workKind:"pull-request",...row})),
+    ...issueRows,
+  ].sort((a,b)=>
+    (b.updatedAt??"").localeCompare(a.updatedAt??"") ||
+    a.workKind.localeCompare(b.workKind) || a.number-b.number);
+  const selected = Object.freeze(all.slice(0,PREVIEW_LIMIT));
+  const unique = new Set(all.map(row => row.workKind + ":" + row.number));
+  if (unique.size !== all.length) throw new TypeError("GitHub returned duplicate Work identities.");
   return Object.freeze({
     kind: "561.group.work-continuity-public-preview.v1",
     repository: repo.fullName,
     source: Object.freeze({
       pullRequests: repo.url + "/pulls?q=is%3Apr",
+      issues: repo.url + "/issues",
       workflowRuns: repo.url + "/actions",
       deployments: repo.url + "/deployments",
-      limits: Object.freeze({pullRequests:PREVIEW_LIMIT,workflowRuns:RUN_LIMIT,deployments:RUN_LIMIT}),
+      limits: Object.freeze({pullRequests:PREVIEW_LIMIT,issues:PREVIEW_LIMIT,
+        totalWork:PREVIEW_LIMIT,workflowRuns:RUN_LIMIT,deployments:RUN_LIMIT}),
       observation: observedAt,
       actionsAvailable: actionRows !== null,
+      issuesAvailable: issues !== null,
       deploymentsAvailable: deploymentRows !== null,
-      scope: "newest updated public pull requests only, not all issues, Projects or external work",
+      scope: "newest updated public Issues and pull requests sampled; not all Projects, original Work or external receiving",
     }),
     counts: Object.freeze({
-      examined: rows.length,
-      merged: rows.filter(row => row.state === "merged").length,
-      openOrDraft: rows.filter(row => row.state === "open" || row.state === "draft").length,
-      closedWithoutMerge: rows.filter(row => row.state === "closed-without-merge").length,
-      actionsReportedSuccess: rows.filter(row => row.actions.reading === "reported-success").length,
-      actionsUnobserved: rows.filter(row => row.actions.reading === "unobserved-in-sample" ||
-        row.actions.reading === "source-unavailable").length,
+      examined: selected.length,
+      issuesExamined: selected.filter(row=>row.workKind==="issue").length,
+      pullRequestsExamined: selected.filter(row=>row.workKind==="pull-request").length,
+      openIssues: selected.filter(row=>row.workKind==="issue" && row.state==="open").length,
+      merged: selected.filter(row => row.state === "merged").length,
+      openOrDraft: selected.filter(row => row.workKind==="pull-request" &&
+        (row.state === "open" || row.state === "draft")).length,
+      closedWithoutMerge: selected.filter(row => row.state === "closed-without-merge").length,
+      actionsReportedSuccess: selected.filter(row => row.actions.reading === "reported-success").length,
+      actionsUnobserved: selected.filter(row => row.workKind==="pull-request" &&
+        (row.actions.reading === "unobserved-in-sample" ||
+         row.actions.reading === "source-unavailable")).length,
       independentCustomerAcceptance: null,
     }),
-    truncated: pulls.length === PREVIEW_LIMIT,
-    records: Object.freeze(rows),
+    truncated: all.length > PREVIEW_LIMIT || pulls.length === PREVIEW_LIMIT ||
+      (issues?.length ?? 0) === PREVIEW_LIMIT,
+    records: selected,
     limits: Object.freeze([
       "GitHub check success is self-reported by the workflow API; executed test steps are not verified here.",
+      "Issue closure and a PR author\u0027s Fixes #number claim do not establish useful delivery or beneficiary acceptance.",
       "A deployment object is not a successful live release, operating service or recipient acceptance.",
       "No private source, independent buyer testimony, resource use, monetary cost or settlement is accessed.",
       "Recent records and runs are sampled; an unobserved record is unknown, not proof of nonperformance.",
@@ -192,12 +250,13 @@ export async function inspectPublicGitHub(value, fetcher = fetch, clock = () => 
     throw new Error("Only an exact, freely readable public repository is supported.");
   const pulls = await readJson(fetcher, root + "/pulls?state=all&sort=updated&direction=desc&per_page=" + PREVIEW_LIMIT);
   if (!Array.isArray(pulls)) throw new TypeError("GitHub PR evidence did not contain an array.");
-  const [runs, deployed] = await Promise.allSettled([
+  const [issueRead, runs, deployed] = await Promise.allSettled([
+    readJson(fetcher, root + "/issues?state=all&sort=updated&direction=desc&per_page=" + PREVIEW_LIMIT, {optional:true}),
     readJson(fetcher, root + "/actions/runs?per_page=" + RUN_LIMIT, {optional:true}),
     readJson(fetcher, root + "/deployments?per_page=" + RUN_LIMIT, {optional:true}),
   ]);
   const report = workContinuityPreview({
-    repository:repo, pulls,
+    repository:repo, pulls, issues:issueRead.status === "fulfilled" ? issueRead.value : null,
     actions:runs.status === "fulfilled" ? runs.value : null,
     deployments:deployed.status === "fulfilled" ? deployed.value : null,
     observedAt:clock(),
@@ -205,6 +264,7 @@ export async function inspectPublicGitHub(value, fetcher = fetch, clock = () => 
   return Object.freeze({
     ...report,
     sourceWarnings: Object.freeze([
+      ...(issueRead.status === "rejected" ? [String(issueRead.reason?.message ?? "Issue source unavailable")] : []),
       ...(runs.status === "rejected" ? [String(runs.reason?.message ?? "Actions source unavailable")] : []),
       ...(deployed.status === "rejected" ? [String(deployed.reason?.message ?? "Deployment source unavailable")] : []),
     ])
@@ -223,27 +283,30 @@ export function displayWorkPreview(doc, report) {
   if (!root) throw new TypeError("Original Work preview result container is missing.");
   root.replaceChildren();
   root.append(node(doc,"h3","Source-limited Work continuity for " + report.repository));
-  root.append(node(doc,"p","Examined " + report.counts.examined + " newest updated pull requests. " +
-    report.counts.merged + " merged, " + report.counts.openOrDraft + " open/draft, " +
-    report.counts.closedWithoutMerge + " closed without merge; " +
-    report.counts.actionsReportedSuccess + " have a sampled reported-success Actions run."));
-  if (report.truncated) root.append(node(doc,"p","Other older Work was not inspected. This is a 20-record preview."));
+  root.append(node(doc,"p","Examined " + report.counts.examined + " recent GitHub Work records: " +
+    report.counts.issuesExamined + " issues (" + report.counts.openIssues + " open), " +
+    report.counts.pullRequestsExamined + " pull requests (" + report.counts.merged + " merged). " +
+    report.counts.actionsReportedSuccess + " sampled PRs have reported-success Actions runs."));
+  if (report.truncated) root.append(node(doc,"p","Other Work was not inspected. This is a 20-record source sample."));
   if (report.sourceWarnings.length) root.append(node(doc,"p",
     "Unavailable evidence: " + report.sourceWarnings.join(" "), "site-evidence-limit"));
   const list = node(doc,"ol");
   for (const record of report.records) {
     const item = node(doc,"li");
-    const link = node(doc,"a","#" + record.number + " · " + record.title);
+    const link = node(doc,"a",record.workKind + " #" + record.number + " · " + record.title);
     link.href = record.sourceUrl; link.rel = "noopener noreferrer";link.target="_blank";
     item.append(link);
     item.append(node(doc,"p",record.state + " · Actions: " + record.actions.reading +
       (record.actions.source ? " (" + record.actions.source + ")" : "") +
       " · deployment: " + record.deployment));
+    if(record.workKind==="issue" && record.authoredFixClaims.length)
+      item.append(node(doc,"p","PR description(s) claim to fix this issue: #" +
+        record.authoredFixClaims.join(", #") + ". Confirmation outstanding."));
     const notes = node(doc,"ul");
     for (const gap of record.gaps) notes.append(node(doc,"li",gap));
     item.append(notes);list.append(item);
   }
-  if (!report.records.length) root.append(node(doc,"p","No pull requests appeared in the bounded public source."));
+  if (!report.records.length) root.append(node(doc,"p","No issues or pull requests appeared in the bounded public source."));
   else root.append(list);
   root.append(node(doc,"p",
     "Merge ≠ verified deployment ≠ accepted customer Work. No credential, private Work or payment was requested.",
