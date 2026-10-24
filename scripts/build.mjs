@@ -4,6 +4,7 @@
 import { mkdir, readFile, writeFile, rename, rm } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { createHash } from "node:crypto";
+import { execFileSync } from "node:child_process";
 import { renderHumans, renderSecurity, renderIndex, renderLlms, renderLlmsFull, renderRobots, renderSitemap } from "../src/render.mjs";
 import { readFeeds, mergeItems, renderJsonFeed, renderAtom, renderRss } from "../src/feed.mjs";
 import { LOCALES, localePath, siteSpace, speaker } from "../src/locales.mjs";
@@ -53,6 +54,24 @@ if (estate.nodes.length + (estate.machines ?? []).length > 45) throw new Error("
 // Upstream x-l-space attribution remains evidence only; unverified witness hashes
 // never become new "current" claims in the site's limited locale adapter.
 const readText = (path) => readFile(new URL(path, root), "utf8");
+// Engineering executable is source-pinned, not copied/reimplemented as a
+// second site-local optimizer. A release must select the EXACT public source
+// revision whose mathematical solver and independent verifier are reproduced
+// byte-for-byte in its generated browser assets.
+const MATH_SOURCE_REVISION="767ab0c3bdaccc05f425f8ac1ca465f306203cb8";
+const mathSourceRoot=new URL(".math-source/",root);
+let mathHead;
+try {
+  mathHead=execFileSync("git",["-C",fileURLToPath(mathSourceRoot),"rev-parse","HEAD"],{
+    encoding:"utf8",timeout:10000,
+  }).trim();
+}catch{
+  throw new Error("A complete public Mathematical Readout Exchange checkout is required at .math-source before site build");
+}
+if(mathHead!==MATH_SOURCE_REVISION)
+  throw new Error("The source selected by public Work mathematics is not the exact qualified mathematical revision");
+const readMathSource=path=>readFile(new URL(path,mathSourceRoot),"utf8");
+
 const space = siteSpace({
   interfaceSource: await readText("locales/en.arb"),
   renderings: await Promise.all(LOCALES.slice(1).map((tag) => readText(`locales/${tag}.arb`))),
@@ -64,6 +83,9 @@ const files = {
   // Read-only GitHub Work preview is an original application asset, generated
   // from this exact Code source into the existing public assets binding.
   "public/work/audit/preview.mjs": await readText("src/work-audit-preview.mjs"),
+  "public/work/audit/math-preview.mjs": await readText("src/work-math-preview.mjs"),
+  "public/work/audit/critical-intervention.mjs": await readMathSource("src/work-critical-intervention.mjs"),
+  "public/work/audit/critical-certificate.mjs": await readMathSource("src/work-intervention-certificate.mjs"),
   "public/estate-records.json": JSON.stringify(estate, null, 2) + "\n",
   // English / is served by TUFTE + LivingWebServer, never by a competing static index.
   ...Object.fromEntries(LOCALES.filter(tag => tag !== "en").map((tag) => [`public${localePath(tag)}index.html`, renderIndex(home, estate, speakers[tag], items)])),
