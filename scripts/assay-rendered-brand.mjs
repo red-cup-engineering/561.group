@@ -105,7 +105,7 @@ async function servedOriginalApplication() {
  * and the source-generated JS asset. Only GitHub's public read API is mocked;
  * Work/TUFTE rendering and the generated browser program are source-exact.
  */
-async function receiveBrowserWorkPreview(browser, host) {
+async function receiveBrowserWorkPreview(browser, host, output) {
   const context=await browser.newContext({
     viewport:{width:390,height:844},javaScriptEnabled:true,acceptDownloads:true
   });
@@ -154,6 +154,21 @@ async function receiveBrowserWorkPreview(browser, host) {
        !output.includes("independent beneficiary acceptance")){
       throw Error("Original browser Work report did not deliver the source/recipient distinction");
     }
+    await page.locator("#work-audit-copy").click();
+    const copyState=await page.locator("#work-audit-status").innerText();
+    const copiedText=copyState.includes("Inquiry scope copied")
+      ? await page.evaluate(()=>navigator.clipboard.readText()).catch(()=>null)
+      : await page.locator("#work-audit-summary").inputValue();
+    if(!copiedText || !copiedText.includes("Request for a scoped Work-continuity audit") ||
+       !copiedText.includes("example/public-work") ||
+       !copiedText.includes("independent acceptance or payment")) {
+      throw Error("The original buyer could not retain a source-specific inquiry scope");
+    }
+    const overflow=await page.evaluate(()=>
+      document.documentElement.scrollWidth>window.innerWidth+1);
+    if(overflow)throw Error("Real 390px Work preview has horizontal overflow");
+    const screenshot=join(output,"work-audit-mobile.png");
+    await page.screenshot({path:screenshot,fullPage:true,animations:"disabled"});
     const downloadPromise=page.waitForEvent("download",{timeout:10000});
     await page.locator("#work-audit-download").click();
     const download=await downloadPromise;
@@ -169,7 +184,9 @@ async function receiveBrowserWorkPreview(browser, host) {
         JSON.stringify({seen,thrown}));
     }
     return {qualifiedBrowserRead:true,customerReceiving:false,
-      sourceRequests:seen.length,download:download.suggestedFilename()};
+      sourceRequests:seen.length,download:download.suggestedFilename(),
+      inquiryScopeCopiedOrSelectable:true,screenshot:"work-audit-mobile.png",
+      screenshotSha256:createHash("sha256").update(await readFile(screenshot)).digest("hex")};
   }finally{await context.close()}
 }
 
@@ -287,7 +304,7 @@ export async function receiveBrowserVisuals({output="artifacts/brand-visual",sou
           ...result,reading,screenshot:item.name+".png",sha256:hash});
       }finally{await context.close()}
     }
-    const workPreview=await receiveBrowserWorkPreview(browser,host);
+    const workPreview=await receiveBrowserWorkPreview(browser,host,output);
     const sourceRole=process.env.GITHUB_EVENT_NAME==="pull_request"?
       "pull-request-merge-evaluation":"source-commit";
     const originalPrHead=process.env.ORIGINAL_PR_HEAD_SHA??null;
