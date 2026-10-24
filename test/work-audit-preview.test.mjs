@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
-  PREVIEW_LIMIT,publicRepositoryOf,workContinuityPreview,inspectPublicGitHub
+  PREVIEW_LIMIT,publicRepositoryOf,workContinuityPreview,inspectPublicGitHub,buyerScopeSummary
 } from "../src/work-audit-preview.mjs";
 
 const SHA_A="a".repeat(40),SHA_B="b".repeat(40);
@@ -150,4 +150,17 @@ test("denied public issue access does not invent a Work-closed status",async()=>
   assert.equal(result.records.length,1);
   assert.equal(result.source.issuesAvailable,false);
   assert.ok(result.sourceWarnings.some(message=>message.includes("Issue")));
+});
+
+test("commercial handoff is an attributable, voluntarily copied request for scope not an order",()=>{
+ const report=workContinuityPreview({repository:"example/repo",
+   pulls:[pr(6)],issues:[{number:9,title:"Buyer sees no delivered data",state:"open",
+      updated_at:"2026-10-24T14:00:00Z"}],observedAt:when});
+ const value=buyerScopeSummary(report);
+ assert.match(value,/Request for a scoped Work-continuity audit/u);
+ assert.match(value,/https:\/\/github\.com\/example\/repo/u);
+ assert.match(value,/issue #9/u);
+ assert.match(value,/pull-request #6/u);
+ assert.match(value,/not an accepted order/u);
+ assert.match(value,/independent acceptance or payment/u);
 });
