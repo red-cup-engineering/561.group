@@ -125,6 +125,7 @@ jobs:
         run: |
           test -s package-lock.json || { echo '::error::Missing received source lockfile'; exit 1; }
           npm ci --ignore-scripts --no-audit --no-fund
+          npm run install:observation
       - name: Qualify one original Worker, renderer and generated public artifact graph
         run: |
           npm run check

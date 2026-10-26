@@ -37,6 +37,10 @@ jobs:
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: '24'
+          cache: npm
+      - name: Install the locked native observation supplier before recovery
+        timeout-minutes: 7
+        run: npm run install:observation
       - name: Qualify recovery inputs, exact historical provider version and current deployment
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}

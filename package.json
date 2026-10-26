@@ -14,7 +14,7 @@
     "dev": "node scripts/build.mjs && wrangler dev",
     "deploy": "npm run check && npm test && npm run build && node scripts/release-preflight.mjs && wrangler deploy",
     "pretest": "npm run bind",
-    "test": "node --test test/brand-source.test.mjs && node --test test/source-revision.test.mjs && node --test test/release-preflight.test.mjs test/locales-runtime.test.mjs test/home-tufte.test.mjs && node test/market-discovery.test.mjs && node --test test/feed.test.mjs && node --test test/i18n.test.mjs && node test/build.mjs && node --experimental-vm-modules test/worker.mjs && node --test test/native-home.test.mjs && node --test test/rendered-brand.test.mjs",
+    "test": "node --test test/brand-source.test.mjs && node --test test/source-revision.test.mjs && node --test test/release-preflight.test.mjs test/observe-production.test.mjs test/locales-runtime.test.mjs test/home-tufte.test.mjs && node test/market-discovery.test.mjs && node --test test/feed.test.mjs && node --test test/i18n.test.mjs && node test/build.mjs && node --experimental-vm-modules test/worker.mjs && node --test test/native-home.test.mjs && node --test test/rendered-brand.test.mjs",
     "presource-catalog": "npm run bind",
     "source-catalog": "node scripts/source-catalog.mjs",
     "pretest:source": "npm run bind",
@@ -22,7 +22,8 @@
     "precheck:brand-source": "npm run bind",
     "check:brand-source": "node scripts/verify-brand-source.mjs .brand-source",
     "pretest:visual": "npm run bind",
-    "test:visual": "node --test test/rendered-brand.test.mjs && node scripts/assay-rendered-brand.mjs"
+    "test:visual": "node --test test/rendered-brand.test.mjs && node scripts/assay-rendered-brand.mjs",
+    "install:observation": "npm ci --prefix scripts/site-observation --ignore-scripts --no-audit --no-fund"
   },
   "engines": {
     "node": ">=24.2.0"

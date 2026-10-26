@@ -85,7 +85,9 @@ jobs:
           npm_config_fetch_retry_mintimeout: '1500'
           npm_config_fetch_retry_maxtimeout: '8000'
           npm_config_fetch_timeout: '45000'
-        run: npm ci --ignore-scripts --no-audit --no-fund
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          npm run install:observation
       - name: Qualify the actual original Worker, TUFTE and other retained routes
         run: |
           npm run check

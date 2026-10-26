@@ -2,9 +2,9 @@
 // Read-only public delivery witness for the original 561.group site.
 // A successful HTTP probe is NOT an authenticated Cloudflare deployment receipt,
 // an accepted human journey, or proof that the current source was published.
-import { createHash } from 'node:crypto';
 import { appendFile, mkdir, writeFile } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
+import { observeSiteOperation, projectSiteConformance } from './site-observation/upstream.mjs';
 
 const ORIGIN = 'https://561.group';
 const MAX_BYTES = 2 * 1024 * 1024;
@@ -39,7 +39,7 @@ const RESEARCH_CHECK = Object.freeze({
 
 async function limitedBytes(response) {
   const length = Number(response.headers.get('content-length'));
-  if (Number.isFinite(length) && length > MAX_BYTES) throw new RangeError('body too large');
+  if (Number.isFinite(length) && length > MAX_BYTES) throw Object.assign(new RangeError('body too large'), { code: 'BODY_LIMIT' });
   const reader = response.body?.getReader();
   if (!reader) return new Uint8Array(0);
   const parts = [];
@@ -49,7 +49,7 @@ async function limitedBytes(response) {
       const { done, value } = await reader.read();
       if (done) break;
       size += value.byteLength;
-      if (size > MAX_BYTES) throw new RangeError('body too large');
+      if (size > MAX_BYTES) throw Object.assign(new RangeError('body too large'), { code: 'BODY_LIMIT' });
       parts.push(value);
     }
   } finally {
@@ -61,28 +61,33 @@ async function limitedBytes(response) {
   return result;
 }
 
-async function observe(url, accept, fetchImpl, timeoutMs) {
-  try {
-    const response = await fetchImpl(url, {
-      method: 'GET', redirect: 'manual', cache: 'no-store',
-      headers: { accept, 'cache-control': 'no-cache', 'user-agent': '561-group-public-delivery-witness/1' },
-      signal: AbortSignal.timeout(timeoutMs),
-    });
-    const bytes = await limitedBytes(response);
-    return {
-      status: response.status,
-      contentType: response.headers.get('content-type') ?? '',
-      location: response.headers.get('location') ?? '',
-      nosniff: response.headers.get('x-content-type-options') === 'nosniff',
-      hsts: Boolean(response.headers.get('strict-transport-security')),
-      contentSha256: createHash('sha256').update(bytes).digest('hex'),
-      bytes: bytes.byteLength,
-      body: new TextDecoder().decode(bytes),
-    };
-  } catch (error) {
-    // A probe failure is coverage uncertainty, not evidence that the site is down.
-    return { unknown: true, errorKind: error?.name === 'TimeoutError' ? 'timeout' : error instanceof RangeError ? 'body-limit' : 'transport' };
+async function observe(url, accept, fetchImpl, timeoutMs, clock) {
+  let nosniff = false, hsts = false;
+  const observation = await observeSiteOperation({
+    endpoint: '561-group-public-delivery', url, method: 'GET', redirect: 'manual',
+    responseType: 'text', timeoutMs, maxBodyBytes: MAX_BYTES,
+  }, {
+    clock, safeErrors: true, readResponseBody: limitedBytes,
+    userAgent: '561-group-public-delivery-witness/1',
+    fetchImpl: async (target, options) => {
+      const headers = new Headers(options.headers);
+      headers.set('accept', accept);
+      headers.set('cache-control', 'no-cache');
+      const response = await fetchImpl(target, { ...options, cache: 'no-store', headers });
+      nosniff = response.headers.get('x-content-type-options') === 'nosniff';
+      hsts = Boolean(response.headers.get('strict-transport-security'));
+      return response;
+    },
+  });
+  if (observation.status === 'obstruction' && !/^HTTP \d{3}$/u.test(observation.reason ?? '')) {
+    return { observation, unknown: true, errorKind: observation.reason === 'operation-timeout' ? 'timeout'
+      : observation.reason === 'response-body-limit' ? 'body-limit' : 'transport' };
   }
+  return { observation, status: observation.httpStatus,
+    contentType: observation.headers['content-type'] ?? '',
+    location: observation.headers.location ?? '', nosniff, hsts,
+    contentSha256: observation.bodyDigest?.value, bytes: observation.bodyBytes ?? 0,
+    body: observation.body ?? '' };
 }
 
 function evaluateSimple(def, sample) {
@@ -158,33 +163,54 @@ function evaluateRevision(sample, expectedSourceSha) {
  * from the current repository's default branch.
  */
 export async function observeProduction({ fetchImpl = fetch, expectedSourceSha = null,
-  timeoutMs = 10000, now = () => new Date().toISOString() } = {}) {
+  timeoutMs = 10000, now = () => new Date().toISOString(), searchConsole = null } = {}) {
   if (expectedSourceSha !== null && !EXACT_SHA.test(expectedSourceSha))
     throw new TypeError('expected source must be a 40-character hexadecimal commit');
   if (!Number.isSafeInteger(timeoutMs) || timeoutMs < 500 || timeoutMs > 60000)
     throw new RangeError('timeout must be between 500 and 60000ms');
   const [simpleSamples, alias, revision] = await Promise.all([
     Promise.all(SIMPLE_CHECKS.map(def =>
-      observe(`${ORIGIN}${def.path}`, def.accept, fetchImpl, timeoutMs))),
-    observe('https://www.561.group/contact/?witness=1', 'text/html', fetchImpl, timeoutMs),
-    observe(`${ORIGIN}/source-revision.json`, 'application/json', fetchImpl, timeoutMs),
+      observe(`${ORIGIN}${def.path}`, def.accept, fetchImpl, timeoutMs, now))),
+    observe('https://www.561.group/contact/?witness=1', 'text/html', fetchImpl, timeoutMs, now),
+    observe(`${ORIGIN}/source-revision.json`, 'application/json', fetchImpl, timeoutMs, now),
   ]);
+  const observedAt = now();
+  // The same exact HTTP responses feed the original conformance engine. This
+  // owner declares six public entrypoints indexable and self-canonical; the
+  // engine owns Googlebot, noindex and canonical semantics, including unknowns.
+  const searchConformance = projectSiteConformance({
+    site: ORIGIN + '/', owner: '561-group/561-group-frontdoor-services-section',
+    sourceContext: { policyRevision: '561.group/public-indexable-entrypoints.v1' },
+    evaluatedAt: observedAt, maxAgeMs: 600000, robotsUserAgent: 'Googlebot',
+    routes: SIMPLE_CHECKS.filter(def => def.type === 'html').map(def => ({
+      url: ORIGIN + def.path, method: 'GET', intent: 'index', canonicalUrl: ORIGIN + def.path,
+    })),
+    observations: simpleSamples.map(sample => sample.observation),
+    ...(searchConsole === null ? {} : { searchConsole }),
+  });
+  const searchChecks = searchConformance.records.map(record => ({
+    name: 'search-indexability:' + new URL(record.url).pathname, url: record.url, required: true,
+    outcome: record.status === 'conformant' ? 'pass' : record.status === 'nonconformant' ? 'fail' : 'unknown',
+    observationId: record.observation?.id,
+    reason: record.checks.filter(check => check.status !== 'conformant').map(check => check.code).join(', ') || undefined,
+  }));
   const simple = SIMPLE_CHECKS.map((def, i) => evaluateSimple(def, simpleSamples[i]));
   const researchRaw = evaluateSimple(RESEARCH_CHECK, simpleSamples[0]);
   const research = researchRaw.reason === 'missing-useful-visitor-page'
     ? { ...researchRaw, reason: 'missing-research-discovery-link' } : researchRaw;
-  const checks = [simple[0], research, ...simple.slice(1),
+  const checks = [simple[0], research, ...simple.slice(1), ...searchChecks,
     evaluateAlias(alias), evaluateRevision(revision, expectedSourceSha)];
   const requiredChecks = checks.filter(check => check.required);
-  const passed = requiredChecks.every(check => check.outcome === 'pass') && !checks.some(check => check.outcome === 'fail');
-  const uncertain = requiredChecks.some(check => check.outcome === 'unknown');
+  const failed = checks.some(check => check.outcome === 'fail');
+  const passed = requiredChecks.every(check => check.outcome === 'pass');
   return {
     schema: '561.group.public-delivery-observation/v1',
-    observedAt: now(), origin: ORIGIN, observerKind: 'read-only-external-http',
+    observedAt, origin: ORIGIN, observerKind: 'read-only-external-http',
     selectedReleaseSource: expectedSourceSha, sourceSelection: expectedSourceSha ? 'operator-supplied' : 'not-selected',
-    overall: passed ? 'public-checks-passed' : uncertain ? 'receiving-incomplete' : 'public-checks-failed',
+    overall: failed ? 'public-checks-failed' : passed ? 'public-checks-passed' : 'receiving-incomplete',
     providerDeploymentVerified: false, independentHumanAcceptance: false,
-    checks,
+    checks, searchConformance,
+    providerNoticeCoverage: searchConsole === null ? 'not-supplied' : 'source-selected-notices',
   };
 }
 
@@ -194,6 +220,7 @@ export function markdownSummary(result) {
     `### 561.group public delivery observation: ${result.overall}`,
     '', `Observed: ${result.observedAt}; selected release source: ${result.selectedReleaseSource ?? 'none'}.`,
     'Provider-native deployment and independent human acceptance are **not** established by these HTTP checks.',
+    `Search evidence: ${result.searchConformance.summary.routes} declared entrypoints; ${result.searchConformance.summary.findings} findings; provider notices ${result.providerNoticeCoverage}. Google indexing and unresolved provider notices remain separate from current HTTP checks.`,
     '', '| Check | Outcome | HTTP | Notes |', '|---|---|---:|---|',
     ...result.checks.map(c => `| ${escape(c.name)} | ${escape(c.outcome)} | ${c.httpStatus ?? '—'} | ${escape(c.reason ?? (c.claimedSourceCommit ?? ''))} |`),
   ].join('\n') + '\n';
