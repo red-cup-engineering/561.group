@@ -278,6 +278,28 @@ jobs:
               throw Error('Visitor and agent read different or incomplete site models: '+page.path);
             }
           }
+          // Receive the same original source through the opt-in agent carrier.
+          // A successful HTML release must not hide an unavailable Markdown path.
+          for(const path of ['/','/work/','/projects/','/about/','/for-agents/']) {
+            const response=await read(path,'text/markdown');
+            const markdown=await response.text();
+            if(response.status!==200 ||
+               !(response.headers.get('content-type')??'').startsWith('text/markdown') ||
+               !/(?:^|,)\s*Accept\s*(?:,|$)/iu.test(response.headers.get('vary')??'') ||
+               !/^# .+/mu.test(markdown) ||
+               !markdown.includes('https://561.group/work/') ||
+               /<script|<style/u.test(markdown)) {
+              throw Error('Original public Markdown representation was not received: '+path);
+            }
+            if(['/','/work/','/for-agents/'].includes(path))
+              for(const offer of frontdoor.selfService.examples)
+                if(!markdown.includes(offer.href))throw Error('Markdown lost original merchant link: '+offer.sku);
+            console.log('Independent public Markdown received: '+path+' '+new TextEncoder().encode(markdown).byteLength+' bytes');
+          }
+          const markdownHead=await fetch(host+'/',{method:'HEAD',headers:{accept:'text/markdown'}});
+          if(markdownHead.status!==200 ||
+             !(markdownHead.headers.get('content-type')??'').startsWith('text/markdown') ||
+             await markdownHead.text()!=='')throw Error('Public Markdown HEAD was not received');
           const oldRoute=await fetch(host+'/work',{redirect:'manual'});
           if(oldRoute.status!==308 || oldRoute.headers.get('location')!==host+'/work/') {
             throw Error('Human-friendly work route lacks canonical slash redirect');

@@ -1,4 +1,5 @@
 import { createLivingWebServer } from "@red-cup-engineering/living-web-server/fetch";
+import { createLivingWebMarkdownProjection } from "@red-cup-engineering/living-web-server/markdown";
 import { project561GroupPage, project561GroupHead, PUBLIC_ROUTES } from "./home-tufte.mjs";
 
 export { PUBLIC_ROUTES } from "./home-tufte.mjs";
@@ -24,6 +25,7 @@ export function create561GroupLivingApplication({
   const permitted = new Set(["home","work","projects","about","agents"]);
   return createLivingWebServer({
     origin:"https://561.group",
+    markdown:createLivingWebMarkdownProjection(),
     document:{headHtml:project561GroupHead(releaseHome)},
     authorizePublicRead:({resource,context}) =>
       permitted.has(resource) && ["GET","HEAD"].includes(context.request.method),

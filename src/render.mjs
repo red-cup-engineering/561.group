@@ -583,6 +583,8 @@ function publicGuide(home, editorial) {
     "- [About](" + home.origin + "/about/): four companies and work method.",
     "- [For agents](" + home.origin + "/for-agents/): public machine interfaces and permissions.",
     "- [Contact](" + home.origin + "/contact/): human inquiries and public reports.", "",
+    "The public pages " + PUBLIC_ROUTES.map(path => home.origin + path).join(", ") +
+      " accept text/markdown, application/json and text/html through the same authorized Living Web Server. Use the Accept header to select a representation; it grants no additional source access or AI training rights.", "",
     "## " + editorial.selfService.title, "",
     editorial.selfService.summary, "",
     ...editorial.selfService.examples.map(example =>
