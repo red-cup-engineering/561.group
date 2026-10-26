@@ -1,0 +1,97 @@
+name: Deploy and receive the original Play catalog
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/deploy-play.yml'
+      - 'scripts/receive-play-release.mjs'
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/deploy-play.yml'
+      - 'scripts/receive-play-release.mjs'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: play-production
+  cancel-in-progress: false
+
+jobs:
+  source:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '24'
+      - name: Check the Play receiver
+        run: node --check scripts/receive-play-release.mjs
+
+  release:
+    needs: source
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      RELEASE_DIRECTORY: .play-release/.service-releases/play/20261026
+      RELEASE_MANIFEST: 43303bc5a38d506f25571edcbd82197e344468795db3e55318d05f43c954d6ab
+      WRANGLER_SEND_METRICS: 'false'
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Select the current reviewed main revision
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          latest="$(git ls-remote origin refs/heads/main | awk '{print $1}')"
+          test "$latest" = "$GITHUB_SHA" || { echo '::error::Play release source superseded'; exit 1; }
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '24'
+      - name: Read the private original Play build
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: 561-group/561-group-frontdoor-services-section
+          ref: b239c0303b74ec0608738e03f74c9c5f61d786f1
+          path: .play-release
+          ssh-key: ${{ secrets.SITE_CONTENT_DEPLOY_KEY }}
+          persist-credentials: false
+      - name: Receive every built file, the original source bindings and the existing target
+        run: node scripts/receive-play-release.mjs verify "$RELEASE_DIRECTORY" "$RELEASE_MANIFEST"
+      - name: Qualify the original pinned deployment tool before using provider credentials
+        run: npx --yes wrangler@4.123.0 deploy --config "$RELEASE_DIRECTORY/wrangler.jsonc" --dry-run --outdir "$RUNNER_TEMP/play-dry-run"
+      - name: Check that the reviewed release is still current
+        run: |
+          set -euo pipefail
+          latest="$(git ls-remote origin refs/heads/main | awk '{print $1}')"
+          test "$latest" = "$GITHUB_SHA" || { echo '::error::Play release source superseded'; exit 1; }
+      - name: Receive the existing Play target before replacing its version
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: node scripts/receive-play-release.mjs target "$RELEASE_DIRECTORY" "$RELEASE_MANIFEST"
+      - name: Deploy the existing Play Worker once
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: npx --yes wrangler@4.123.0 deploy --config "$RELEASE_DIRECTORY/wrangler.jsonc" --tag "play-${RELEASE_MANIFEST:0:32}"
+      - name: Receive the active provider version, original public pages and missing feeds
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: node scripts/receive-play-release.mjs receive "$RELEASE_DIRECTORY" "$RELEASE_MANIFEST" observations/play-production.json
+      - name: Retain the provider and public receiving result
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: play-production-${{ github.run_id }}-${{ github.run_attempt }}
+          path: observations/play-production.json
+          if-no-files-found: warn
+          retention-days: 14
