@@ -38,8 +38,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
-      RELEASE_DIRECTORY: .play-release/.service-releases/play/20261026-canonical
-      RELEASE_MANIFEST: c177876531d115c618c5b4ce274f325c058e8f82509ac3f067c02fa7b52e7a1f
+      RELEASE_DIRECTORY: .play-release/.service-releases/play/20261026-discovery-6e338bb6
+      RELEASE_MANIFEST: 2f84c68e4505c1e3793354cbe7b24320d585382489eae3b61960d7aea79f24f7
       WRANGLER_SEND_METRICS: 'false'
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -60,7 +60,7 @@ jobs:
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           repository: 561-group/561-group-frontdoor-services-section
-          ref: a1ea3bd916e795cf698399a5e1646b24c9e7f022
+          ref: 78c86c3ca9cdd75be9dd06354f85abe8e1b0879e
           path: .play-release
           ssh-key: ${{ secrets.SITE_CONTENT_DEPLOY_KEY }}
           persist-credentials: false
