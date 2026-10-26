@@ -38,7 +38,7 @@ jobs:
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           repository: red-cup-engineering/house-ads-server-site
-          ref: ec49ae088d0f12c5fe9ec647cb81ec0f58e86e55
+          ref: 1a58fb576420a0cafc9525b0a1934750b798090e
           path: house-ads
           persist-credentials: false
       - name: Receive the immutable original advertising supplier and lock
@@ -77,7 +77,7 @@ jobs:
         run: |
           set -euo pipefail
           npm run deploy -- --keep-vars --tag ads-0.3.0-dev.2 \
-            --message 'host ec49ae088d0f; advertising 2fa6576097ac 0.3.0-dev.2' \
+            --message 'host 1a58fb576420; advertising 2fa6576097ac 0.3.0-dev.2' \
             | tee "$RUNNER_TEMP/house-ads-release/deploy.log"
       - name: Receive active Cloudflare version and exact public catalog
         if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
