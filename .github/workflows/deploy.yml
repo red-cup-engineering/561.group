@@ -52,12 +52,17 @@ jobs:
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           repository: 561-group/561-group-frontdoor-services-section
-          ref: e6ada576cddfab9334ad1c80fd30b92c97ea21aa
+          ref: 849939bf65397d248c1719dec019f4ebe6055151
           path: content
           ssh-key: ${{ secrets.SITE_CONTENT_DEPLOY_KEY }}
           persist-credentials: false
       - name: Bind front-door content (data/, locales/, authored public/ assets) into the application
         run: node scripts/bind-content.mjs
+      - name: Verify and unpack accepted Services and Science release output
+        run: |
+          node scripts/receive-section-release.mjs \
+            content/.section-releases/black-october-20261025.json.gz \
+            e814489f534cbd595f9d970651f5c1fe8ff20f02dfc80315b527f0aa94c90db8 "$RUNNER_TEMP/section-release-$GITHUB_RUN_ID" d116b8db9eaaa24c4a270b5e91c9a0f36c365ba8eec3b10c9ec3f23c74298978
       - name: Select one source-qualified UTC publication day
         run: |
           node --input-type=module <<'NODE'
@@ -86,6 +91,17 @@ jobs:
           npm run check
           npm test
           npm run build
+      - name: Publish selected sections through their original publisher
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          node "$RUNNER_TEMP/section-release-$GITHUB_RUN_ID/engine/sites/release-bundle.mjs" receive \
+            --bundle "$RUNNER_TEMP/section-release-$GITHUB_RUN_ID" \
+            --manifest d116b8db9eaaa24c4a270b5e91c9a0f36c365ba8eec3b10c9ec3f23c74298978 \
+            --wrangler "$GITHUB_WORKSPACE/node_modules/.bin/wrangler"
+      - name: Refresh original apex feeds from the newly published sections
+        run: npm run build
       - name: Read pinned original Group brand authority before deploy
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
@@ -292,5 +308,13 @@ jobs:
         with:
           name: 561-group-post-release-public-observation
           path: observations/561.group-public-delivery.json
+          if-no-files-found: warn
+          retention-days: 30
+      - name: Retain original section publication receipts
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: original-section-publication-receipts
+          path: ${{ runner.temp }}/section-release-${{ github.run_id }}/instance/data/records/section-site-releases/*.json
           if-no-files-found: warn
           retention-days: 30
