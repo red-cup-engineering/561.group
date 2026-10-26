@@ -46,12 +46,17 @@ jobs:
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           repository: 561-group/561-group-frontdoor-services-section
-          ref: 189b06e6841c7c172f2903222dfcd73e94c248e9
+          ref: bb3f3db79d5d8005953fa5e88178a50e29d97d3a
           path: content
           ssh-key: ${{ secrets.SITE_CONTENT_DEPLOY_KEY }}
           persist-credentials: false
       - name: Bind front-door content (data/, locales/, authored public/ assets) into the application
         run: node scripts/bind-content.mjs
+      - name: Verify and unpack accepted Services and Science release output
+        run: |
+          node scripts/receive-section-release.mjs \
+            content/.section-releases/black-october-20261025.json.gz \
+            e814489f534cbd595f9d970651f5c1fe8ff20f02dfc80315b527f0aa94c90db8 "$RUNNER_TEMP/section-release-$GITHUB_RUN_ID" d116b8db9eaaa24c4a270b5e91c9a0f36c365ba8eec3b10c9ec3f23c74298978
       - name: Select one source-qualified UTC publication day
         run: |
           node --input-type=module <<'NODE'

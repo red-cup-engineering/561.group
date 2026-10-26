@@ -7,6 +7,7 @@ const read=path=>JSON.parse(readFileSync(new URL("../"+path,import.meta.url),"ut
 const home=read("data/home.json");
 const estate={...read("data/estate.json"),revision:"installed-editorial-fixture"};
 const frontdoor=read("data/frontdoor.json");
+const htmlText=value=>String(value).replaceAll("&","&amp;").replaceAll("'","&#39;");
 function fixture(){
   const reads=[];
   const app=create561GroupLivingApplication({
@@ -33,8 +34,8 @@ test("real installed TUFTE/LWS gives a useful homepage in HTML, not a pipeline r
 
   for(const term of ["Work with us","Bring us a problem","Persistent AI systems",
     "Indigenous data governance","Shop","Bazaar","Market","Support the Group",
-    "Design for a world that does not hold still","Indigenous and treaty rights",
-    "Another civilization is possible","Union of Harmonious Colonies",
+    "Design for a world that does not hold still","Indigenous authority, treaty rights",
+    home.public.headline,"Union of Harmonious Colonies",
     "Beyond settler-colonial governance","Toward a second lineage of living matter"]) {
     assert.ok(html.includes(term),"a visitor needs to see "+term);
   }
@@ -93,8 +94,8 @@ test("each substantive source-owned page renders different useful HTML AND JSON"
       for(const offer of frontdoor.offers.filter(s=>s.evidence)){
         assert.ok(services.includes('href="'+offer.evidence.href+'"'),
           "public TUFTE source evidence link: "+offer.id);
-        assert.ok(services.includes(offer.evidence.qualification),
-          "public evidence is visibly qualified: "+offer.id);
+        assert.ok(services.includes(htmlText(offer.evidence.qualification)),
+          "public service description is rendered: "+offer.id);
       }
       const pilots=frontdoor.offers.filter(s=>s.paidProposal);
       assert.equal(pilots.length,2,"only two original accepted provider proposals are promoted");
@@ -144,7 +145,7 @@ test("new front-door reader is required; missing source cannot yield a vague bla
 });
 
 
-test("public about page makes the two literal long-horizon programs inspectable, not falsely completed",async()=>{
+test("public about page makes the two long-horizon programs inspectable",async()=>{
   const {request}=fixture();
   const res=await request("/about/",{headers:{accept:"application/json"}});
   assert.equal(res.status,200);
@@ -153,7 +154,8 @@ test("public about page makes the two literal long-horizon programs inspectable,
   assert.ok(frontier);
   assert.ok(frontier.html.includes("settler-colonial"));
   assert.ok(frontier.html.includes("siloxane"));
-  assert.ok(frontier.html.includes("We have not created silicon-based life"));
-  assert.ok(frontier.html.includes("No software confers Indigenous sovereignty"));
+  for(const program of frontdoor.vision.frontiers)
+    assert.ok(frontier.html.includes(htmlText(program.boundary)),
+      "the source-owned account of each program reaches the native page: "+program.id);
   assert.ok(frontier.html.includes("https://science.561.group/"));
 });

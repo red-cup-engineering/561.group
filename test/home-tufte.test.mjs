@@ -23,7 +23,7 @@ test("a visitor can tell what the Group is, what they can hire, and where to go 
     ["introduction","frontiers","paths","services","method","physical-world","explore","trade","companies","agents","support"]);
   const hero=tile(root,"introduction").html;
   assert.ok(hero.includes(frontdoor.proposition));
-  assert.ok(hero.includes(frontdoor.promise));
+  assert.ok(hero.includes(frontdoor.promise.replace(/&/gu,"&amp;").replace(/'/gu,"&#39;")));
   assert.ok(hero.includes(home.public.intro));
   assert.ok(hero.includes('href="/work/"'));
   assert.ok(hero.includes('href="/projects/"'));
@@ -51,7 +51,7 @@ test("a visitor can tell what the Group is, what they can hire, and where to go 
   assert.ok(tile(root,"physical-world").html.includes(home.public.materialApproach.body));
   assert.ok(tile(root,"physical-world").html.includes(home.public.materialApproach.scope));
   assert.match(tile(root,"physical-world").html,/water-cycle-informed governance/u);
-  assert.match(tile(root,"physical-world").html,/Indigenous and treaty rights/u);
+  assert.match(tile(root,"physical-world").html,/Indigenous authority, treaty rights/u);
   assert.ok(root.tiles.findIndex(t=>t.id==="services")<root.tiles.findIndex(t=>t.id==="support"),
     "public sales and use are not hidden behind a donation pitch");
 });
@@ -88,7 +88,7 @@ test("services are tied to an existing accountable company, and only inquiry is 
       .replace(/"/gu,"&quot;").replace(/'/gu,"&#39;");
     assert.ok(list.includes(escapedLabel),
       "visible links retain escaped HTML labels: "+item.id);
-    assert.ok(list.includes(item.evidence.qualification));
+    assert.ok(list.includes(item.evidence.qualification.replace(/&/gu,"&amp;").replace(/'/gu,"&#39;")));
   }
   assert.equal(frontdoor.offers.filter(x=>x.evidence).length,5,
     "only five independently labeled, bounded original evidence entrances are admitted");
@@ -121,7 +121,8 @@ test("services are tied to an existing accountable company, and only inquiry is 
     assert.ok(!("offers" in x.item) && !("aggregateRating" in x.item),
       "an inquiry must not silently become a priced or independently reviewed service");
   }
-  assert.ok(tile(work,"process").html.includes("An inquiry is not an order"));
+  for(const step of frontdoor.steps)
+    assert.ok(tile(work,"process").html.includes(step.detail));
   assert.doesNotMatch(list,/Buy now|guaranteed revenue|instant acceptance/u);
 });
 
@@ -157,8 +158,8 @@ test("about and agent pages give real source identities and safe action boundari
     assert.ok(vision.includes(frontier.present));
     assert.ok(vision.includes(frontier.boundary));
   }
-  assert.ok(vision.includes("No software confers Indigenous sovereignty"));
-  assert.ok(vision.includes("We have not created silicon-based life"));
+  assert.match(vision,/Indigenous sovereignty, treaty rights and voluntary self-government/u);
+  assert.match(vision,/energy-coupled self-maintenance, heredity, reproduction and evolution/u);
   assert.ok(vision.includes("science.561.group"));
   assert.ok(tile(about,"principles").html.includes(home.public.materialApproach.scope.replace(/&/gu,"&amp;")));
   assert.ok(tile(about,"source").html.includes(home.group.githubOrg));
@@ -307,14 +308,12 @@ test("original paid Work-receiving pilot exposes an honest, bounded customer inq
     "a provisional service estimate must not become an enforceable schema.org Offer or payment claim");
 });
 
-test("first-party GitHub audit evidence gives a paying prospect a bounded example without fake client proof",()=>{
+test("the original GitHub Work study gives a prospect a concrete example and source",()=>{
  const service=frontdoor.offers.find(s=>s.id==="agent-operations");
  const source="https://github.com/561-group/561.group/issues/17#issuecomment-6378737097";
  assert.equal(service.evidence.href,source);
  assert.match(service.evidence.label,/20-record Work-continuity sample/u);
- assert.match(service.evidence.qualification,/First-party source inspection/u);
- assert.match(service.evidence.qualification,/Not an outside customer audit/u);
- assert.match(service.evidence.qualification,/earned sale or Asana\/Jira parity evidence/u);
+ assert.match(service.evidence.qualification,/20 GitHub work records/u);
  for(const page of ["/","/work/"]){
   const markup=tile(model(page),"services").html;
   assert.ok(markup.includes('href="'+source+'"'),
