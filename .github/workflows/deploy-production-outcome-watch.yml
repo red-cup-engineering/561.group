@@ -36,10 +36,10 @@ jobs:
     needs: source
     if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 20
     env:
-      RELEASE_DIRECTORY: .watch-release/.service-releases/production-outcome-watch/20261026
-      RELEASE_MANIFEST: 6051eac022feea2c2b60cbbad52e5d436662d16b95dbc74ac8090619bd7918ef
+      RELEASE_DIRECTORY: .watch-release/.service-releases/production-outcome-watch/20261026-r2
+      RELEASE_MANIFEST: 928dca2f898fe62f2e369b6ea76469a60fb3afe9ab2cfdcbd1077c8bb00711bb
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
@@ -58,7 +58,7 @@ jobs:
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           repository: 561-group/561-group-frontdoor-services-section
-          ref: 5b0a47ff15b3d584a4d256292821802e5d06ff63
+          ref: a1a8f7f51cb9c3d2d39b45ee4608ede60a5efda2
           path: .watch-release
           ssh-key: ${{ secrets.SITE_CONTENT_DEPLOY_KEY }}
           persist-credentials: false
@@ -76,7 +76,7 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: npx --yes wrangler@4.149.0 deploy --config "$RELEASE_DIRECTORY/wrangler.json" --tag "watch-${RELEASE_MANIFEST:0:32}"
-      - name: Receive the active provider version through the public Worker
+      - name: Receive the active provider version and its scheduled policy refresh
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
