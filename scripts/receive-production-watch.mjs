@@ -60,8 +60,11 @@ if (mode === 'verify') {
 const account = process.env.CLOUDFLARE_ACCOUNT_ID, token = process.env.CLOUDFLARE_API_TOKEN;
 if (!/^[a-f0-9]{32}$/i.test(account ?? '') || !token) throw new Error('Existing deployment credentials unavailable');
 const tag = 'watch-' + expectedManifest.slice(0, 32);
-const deadline = Date.now() + 120000;
-for (let attempt = 0; attempt < 24 && Date.now() < deadline; attempt++) {
+// The existing schedule runs every ten minutes. Receive its actual policy
+// refresh as well as the uploaded version, so a broken cron cannot pass release.
+const deadline = Date.now() + 780000;
+let lastObservation = 'active version pending';
+for (let attempt = 0; attempt < 52 && Date.now() < deadline; attempt++) {
   try {
     // Both the provider record and public edge can take time to converge.
     const provider = await fetch('https://api.cloudflare.com/client/v4/accounts/' + account +
@@ -83,13 +86,23 @@ for (let attempt = 0; attempt < 24 && Date.now() < deadline; attempt++) {
       const health = await response.json();
       if (health.service === manifest.target && health.policyRevision === manifest.policyRevision &&
           health.version?.id?.toLowerCase() === version && health.version?.tag === tag) {
-        console.log(JSON.stringify({ received: true, worker: manifest.target, version,
-          policyRevision: health.policyRevision, observedPolicyRevision: health.observedPolicyRevision,
-          lastRun: health.lastRun, receivedAt: new Date().toISOString() }));
-        process.exit(0);
+        const deployedAt = Date.parse(health.version.timestamp), observedAt = Date.parse(health.lastRun);
+        if (Number.isFinite(deployedAt) && Number.isFinite(observedAt) && observedAt >= deployedAt &&
+            health.observedPolicyRevision === manifest.policyRevision && !health.derivationFailure) {
+          console.log(JSON.stringify({ received: true, worker: manifest.target, version,
+            policyRevision: health.policyRevision, observedPolicyRevision: health.observedPolicyRevision,
+            lastRun: health.lastRun, receivedAt: new Date().toISOString() }));
+          process.exit(0);
+        }
+        const state = health.derivationFailure ? 'scheduled estate refresh failed' : 'scheduled policy refresh pending';
+        if (state !== lastObservation) {
+          console.log(JSON.stringify({ received: false, worker: manifest.target, version, state,
+            policyCurrent: health.observedPolicyRevision === manifest.policyRevision, lastRun: health.lastRun }));
+          lastObservation = state;
+        }
       }
     }
   } catch { /* bounded edge propagation wait */ }
-  if (attempt < 23) await delay(5000);
+  if (attempt < 51) await delay(15000);
 }
-throw new Error('Public Worker has not received the active provider version and selected policy');
+throw new Error('Production watcher release was not received: ' + lastObservation);
