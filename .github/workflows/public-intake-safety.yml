@@ -87,7 +87,7 @@ jobs:
         run: node test/build.mjs
       - name: Verify one site-owned dependency contract before external registry access
         run: node --test test/fetch-source-contract.test.mjs
-      - name: Probe actual TUFTE supplier and pinned LivingWebServer source from locked inputs
+      - name: Probe actual TUFTE supplier and published LivingWebServer from locked inputs
         run: |
           set -eu
           node --input-type=module <<'NODE'
@@ -97,25 +97,12 @@ jobs:
           const cfg=readFileSync('.npmrc','utf8');
           const registry=cfg.match(/^@red-cup-engineering:registry=(https:\/\/[^\s]+)$/mu)?.[1] ??
             cfg.match(/^registry=(https:\/\/[^\s]+)$/mu)?.[1];
-          const selected=pkg.dependencies?.['@red-cup-engineering/living-web-server'];
-          const pinned=/^git\+https:\/\/github\.com\/red-cup-engineering\/living-web-server\.git#([a-f\d]{40})$/iu.exec(selected??'');
-          const living=lock.packages?.['node_modules/@red-cup-engineering/living-web-server'];
-          const tufte=lock.packages?.['node_modules/@red-cup-engineering/web-page-tiling-engine'];
-          const exact= living?.dependencies?.['@red-cup-engineering/web-page-tiling-engine'];
-          if(pkg.dependencies?.['@red-cup-engineering/l-space'] ||
-             !registry || !pinned || !living || !tufte ||
-             !/^\d+\.\d+\.\d+$/u.test(exact??'') ||
-             tufte.version!==exact ||
-             !tufte.resolved?.startsWith(registry) ||
-             !/^sha512-[A-Za-z0-9+/=]+$/u.test(tufte.integrity??'') ||
-             !living.resolved?.endsWith('#'+pinned[1]) ||
-             !/^sha512-[A-Za-z0-9+/=]+$/u.test(living.integrity??'')) {
-            throw Error('Original public site lacks one pinned, integrity-carrying TUFTE and LivingWebServer dependency');
-          }
-          console.log('Source lock identifies real TUFTE '+exact+' and pinned LivingWebServer '+pinned[1]+'.');
-          console.log('Next original npm ci must fetch, verify integrity and install both actual suppliers.');
+          const {qualifySuppliers}=await import('./scripts/release-preflight.mjs');
+          const selected=qualifySuppliers({manifest:pkg,lock,registry});
+          console.log('Source lock selects original published suppliers: '+JSON.stringify(selected));
+          console.log('Next original npm ci must fetch, verify integrity and install the actual suppliers.');
           NODE
-      - name: Install original TUFTE dependencies and pinned LivingWebServer source
+      - name: Install original TUFTE dependencies and published LivingWebServer
         timeout-minutes: 7
         env:
           npm_config_fetch_retries: '2'

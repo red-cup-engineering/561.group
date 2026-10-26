@@ -33,7 +33,8 @@
     "playwright": "1.62.1"
   },
   "dependencies": {
-    "@red-cup-engineering/living-web-server": "git+https://github.com/red-cup-engineering/living-web-server.git#9e6d657fda9df3bd50744294eb3bbd1412b854ad"
+    "@red-cup-engineering/living-web-server": "0.1.1-dev.0",
+    "@red-cup-engineering/markdown-engineering-services-section": "0.5.7-dev.0"
   },
   "repository": {
     "type": "git",

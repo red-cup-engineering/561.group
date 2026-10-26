@@ -69,6 +69,29 @@ test("the SAME real source yields useful machine-readable TUFTE JSON",async()=>{
   assert.ok(model.tiles.some(t=>t.id==="frontiers" && t.html.includes("silica")));
   assert.deepEqual(f.reads.map(x=>x[0]),["home","estate","frontdoor"]);
 });
+test("the original five public pages serve the same source and actionable links as Markdown",async()=>{
+  const f=fixture();
+  for(const path of PUBLIC_ROUTES){
+    const response=await f.request(path,{headers:{accept:"text/markdown"}});
+    assert.equal(response.status,200,path);
+    assert.match(response.headers.get("content-type")??"",/^text\/markdown/u);
+    assert.match(response.headers.get("vary")??"",/Accept/iu);
+    const markdown=await response.text();
+    assert.match(markdown,/^# .+/mu,path+" source title after original skip link and navigation");
+    assert.ok(markdown.includes("https://561.group/work/"),path+" actionable source-owned work link");
+    assert.doesNotMatch(markdown,/<script|<style|application\/ld\+json/u);
+    assert.equal(response.headers.has("content-signal"),false,"no inferred AI training permission");
+    if(["/","/work/","/for-agents/"].includes(path)){
+      for(const offer of frontdoor.selfService.examples) assert.ok(markdown.includes(offer.href),path+" exact merchant URL");
+    }
+    const head=await f.request(path,{method:"HEAD",headers:{accept:"text/markdown"}});
+    assert.equal(head.status,200);assert.equal(await head.text(),"");
+  }
+  assert.equal(f.reads.length,PUBLIC_ROUTES.length*2*3);
+  const offsite=await f.app.fetch(new Request("https://other.example/",{headers:{accept:"text/markdown"}}));
+  assert.equal(offsite.status,421);
+  assert.equal(f.reads.length,PUBLIC_ROUTES.length*2*3);
+});
 test("each substantive source-owned page renders different useful HTML AND JSON",async()=>{
   const f=fixture();
   const cells=[

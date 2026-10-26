@@ -410,6 +410,7 @@ function agentPage(home, estate, frontdoor) {
         [{href:"/llms.txt",label:"Read the machine guide"},{href:"/estate.json",label:"Read the public estate"}]),12),
     selfService(home,frontdoor),
     panel("endpoints","Published machine-readable interfaces",
+      para("Read these same public pages with Accept: text/markdown for readable source text, application/json for the TUFTE model, or text/html for the browser. The same source permissions apply to every representation.") +
       endpoints(estate) +
       note("GET routes can be opened for inspection. POST routes are reference information, not an invitation to invoke them."),12),
     panel("boundaries","What public discovery does not authorize",
