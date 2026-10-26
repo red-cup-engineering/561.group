@@ -37,7 +37,7 @@ export async function verifyMarketCarrier(directory, expectedManifestSha256) {
     manifest.target?.scriptName === 'market-561-group' && manifest.target?.origin === 'https://market.561.group' &&
     manifest.source?.market?.repository === 'red-cup-engineering/market.561.group' && COMMIT.test(manifest.source.market.revision),
   'This credential lane is restricted to the existing original Market target');
-  requireThat(manifest.artifacts?.receiver && [7, 14].includes(Object.keys(manifest.artifacts).length), 'Original Market carrier closure missing');
+  requireThat(manifest.artifacts?.receiver && [7, 15].includes(Object.keys(manifest.artifacts).length), 'Original Market carrier closure missing');
   const seen = new Set();
   for (const [name, item] of Object.entries(manifest.artifacts)) {
     requireThat(typeof item.path === 'string' && /^[a-zA-Z0-9][a-zA-Z0-9_./-]{0,220}$/u.test(item.path) &&
