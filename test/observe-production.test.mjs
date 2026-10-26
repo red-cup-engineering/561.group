@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import {createHash} from 'node:crypto';
 import {readFileSync} from 'node:fs';
 import { observeProduction, markdownSummary } from '../scripts/observe-production.mjs';
 const SHA = '1234567890abcdef1234567890abcdef12345678';
@@ -78,6 +79,47 @@ test('a live primary research pathway is checked separately without duplicate ho
     'native indexing checks reuse the original robots observation');
   assert.equal(r.searchConformance.complete,true);
   assert.equal(r.searchConformance.records.length,6);
+});
+
+test('the original observer requests identity bytes and binds public digests to that received representation',async()=>{
+  const requests=[],source=provider();
+  const expected=Buffer.from(await (await source('https://561.group/')).arrayBuffer());
+  const result=await observeProduction({fetchImpl:(url,options)=>{
+    const headers=new Headers(options.headers);
+    assert.equal(headers.get('accept-encoding'),'identity');
+    assert.equal(headers.get('cache-control'),'no-cache');
+    assert.equal(options.cache,'no-store');
+    assert.equal(options.redirect,'manual');
+    requests.push(url);
+    return source(url,options);
+  },expectedSourceSha:SHA});
+  const homepage=result.checks.find(check=>check.name==='homepage');
+  assert.equal(result.overall,'public-checks-passed');
+  assert.equal(homepage.bytes,expected.byteLength);
+  assert.equal(homepage.contentSha256,createHash('sha256').update(expected).digest('hex'));
+  assert.equal(requests.filter(url=>url==='https://561.group/').length,1);
+});
+
+test('unsupported response coding, charset and invalid UTF-8 remain unread evidence in the original consumer',async()=>{
+  for(const response of [
+    ()=>new Response('<html><head><link rel="canonical" href="https://561.group/"></head></html>',{headers:{'content-type':'text/html','content-encoding':'gzip',...headers}}),
+    ()=>new Response('unreceived charset',{headers:{'content-type':'text/html; charset=utf-16',...headers}}),
+    ()=>new Response(new Uint8Array([0xc3,0x28]),{headers:{'content-type':'text/html; charset=utf-8',...headers}}),
+  ]){
+    const source=provider();let homepageRequests=0;
+    const result=await observeProduction({fetchImpl:(url,options)=>{
+      assert.equal(new Headers(options.headers).get('accept-encoding'),'identity');
+      if(url==='https://561.group/'){homepageRequests++;return response();}
+      return source(url,options);
+    },expectedSourceSha:SHA});
+    const homepage=result.checks.find(check=>check.name==='homepage');
+    assert.equal(homepage.outcome,'unknown');
+    assert.equal(homepage.contentSha256,undefined);
+    assert.equal(result.checks.find(check=>check.name==='research-discovery').outcome,'unknown');
+    assert.equal(result.overall,'receiving-incomplete');
+    assert.equal(result.searchConformance.records.find(record=>record.url==='https://561.group/').status,'unknown');
+    assert.equal(homepageRequests,1,'an unread representation is not authority to retry the public resource');
+  }
 });
 
 test('HTTP200 does not mask noindex, a foreign canonical, or a Googlebot denial',async()=>{

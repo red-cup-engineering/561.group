@@ -67,7 +67,7 @@ async function observe(url, accept, fetchImpl, timeoutMs, clock) {
     endpoint: '561-group-public-delivery', url, method: 'GET', redirect: 'manual',
     responseType: 'text', timeoutMs, maxBodyBytes: MAX_BYTES,
   }, {
-    clock, safeErrors: true, readResponseBody: limitedBytes,
+    clock, safeErrors: true, readResponseBody: limitedBytes, identityContentCoding: true,
     userAgent: '561-group-public-delivery-witness/1',
     fetchImpl: async (target, options) => {
       const headers = new Headers(options.headers);
