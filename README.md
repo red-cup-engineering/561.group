@@ -48,6 +48,7 @@ Use Node 24 or newer and the exact committed lockfile with the original scoped r
 
 ```bash
 npm ci --ignore-scripts --no-audit --no-fund
+npm run install:observation # isolated Node observer supplier lock
 npm run bind        # needs ./content or SITE_CONTENT_ROOT, see above
 npm run check
 npm test
@@ -58,5 +59,27 @@ npm run dev
 The native test suite exercises the original TUFTE/LivingWebServer HTML, JSON and HEAD representations; human pathways, real company and project references; honest service scopes; Worker route and ActivityPub body boundaries; source-generated language, agent and sitemap artifacts. Source CI also performs a genuine Wrangler Worker **dry run**, never a PR-to-production deployment.
 
 The original serialized production workflow accepts a successful exact-main qualification (or an expressly selected main release), rechecks the frozen dependencies and original build, deploys the configured Cloudflare Worker, and separately reads the live source revision, HTML, JSON, generated-asset SHA-256 digests and Cloudflare active Worker version. The Group must not confuse a green PR, an HTTP response, a deploy, and a customer-received useful result.
+
+## Operating search-conformance observation
+
+The existing post-release `scripts/observe-production.mjs` consumes the original
+Website Administration reader `0.2.2-dev.1`. Its bounded HTTP observations feed
+that supplier's `projectSiteConformance` for the homepage, work, projects,
+about, agent and contact entrypoints. Each is explicitly expected to be
+indexable and self-canonical. The same sampled page and robots responses
+provide Googlebot access, noindex and canonical evidence without extra probes.
+Unsupported or incomplete readings remain unknown; a measured fault remains
+actionable even when another check is unknown.
+
+The original report retains the native `searchConformance` product and its
+evidence references. Public HTTP observations establish neither Google's
+indexed state nor resolution of provider notices with unknown affected URLs.
+The public release supplies no private mailbox content; recurring mailbox
+intake remains with the existing private conformance application.
+
+`scripts/site-observation` holds only the observer's private Node dependency
+closure and direct upstream imports. Its frozen lock leaves the deployed
+Worker's original package lock intact. The source, release, public-observation
+and recovery workflows install this same closure before using the observer.
 
 Follow the original receiving [issue #17](https://github.com/561-group/561.group/issues/17) for genuine user, accessibility, commerce and content outcomes. Improve the real pages, not just the CI machinery.

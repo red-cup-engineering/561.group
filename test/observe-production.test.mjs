@@ -10,17 +10,20 @@ const headers = { 'x-content-type-options':'nosniff', 'strict-transport-security
 function provider({ revisionStatus = 200, aliasStatus = 301, aliasLocation = 'https://561.group/contact/?witness=1',
  estateBody = JSON.stringify(estate), abortPath = null, blankPath = null,
  secure = true, claim = revision,
+ htmlDirective = '', extraHeaders = {}, canonical = path => 'https://561.group' + path,
+ robotsBody = 'User-agent: *\nAllow: /',
  researchHref = 'https://science.561.group/', researchAsText = false } = {}) {
   return async url => {
     const path = new URL(url).pathname;
     if (path === abortPath) throw new Error('no route observed');
     if (url.includes('www.561.group')) return new Response('',{status:aliasStatus,headers:{location:aliasLocation}});
     const security = secure ? headers : {};
+    const head = '<head><link rel="canonical" href="' + canonical(path) + '">' + htmlDirective + '</head>';
     if (path === '/') {
       const research = researchAsText ? researchHref
         : '<a href="' + researchHref + '">Read original research</a>';
-      return new Response('<html><main data-tufte>Group ' + research + '</main></html>',
-        {headers:{'content-type':'text/html',...security}});
+      return new Response('<html>' + head + '<main data-tufte>Group ' + research + '</main></html>',
+        {headers:{'content-type':'text/html',...security,...extraHeaders}});
     }
     const journeys = {
       '/work/':'Areas we can scope',
@@ -29,14 +32,14 @@ function provider({ revisionStatus = 200, aliasStatus = 301, aliasLocation = 'ht
       '/for-agents/':'Published machine-readable interfaces'
     };
     if (Object.hasOwn(journeys,path)) return new Response(
-      path===blankPath?'<html><main>Empty alpha placeholder</main></html>':
-        '<html><main data-tufte><h2>'+journeys[path]+'</h2></main></html>',
-      {headers:{'content-type':'text/html',...security}}
+      path===blankPath?'<html>'+head+'<main>Empty alpha placeholder</main></html>':
+        '<html>'+head+'<main data-tufte><h2>'+journeys[path]+'</h2></main></html>',
+      {headers:{'content-type':'text/html',...security,...extraHeaders}}
     );
-    if (path === '/contact/') return new Response('<html>Contact</html>',{headers:{'content-type':'text/html',...security}});
+    if (path === '/contact/') return new Response('<html>'+head+'Contact</html>',{headers:{'content-type':'text/html',...security,...extraHeaders}});
     if (path === '/estate.json') return new Response(estateBody,{headers:{'content-type':'application/json'}});
     if (path === '/llms.txt') return new Response('# 561 Group',{headers:{'content-type':'text/plain'}});
-    if (path === '/robots.txt') return new Response('User-agent: *\nAllow: /',{headers:{'content-type':'text/plain'}});
+    if (path === '/robots.txt') return new Response(robotsBody,{headers:{'content-type':'text/plain'}});
     if (path === '/sitemap.xml') return new Response('<?xml version="1.0"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"></urlset>',{headers:{'content-type':'application/xml'}});
     if (path === '/.well-known/security.txt') return new Response('Contact: mailto:emsenn@561.group',{headers:{'content-type':'text/plain'}});
     if (path === '/source-revision.json') return revisionStatus === 404
@@ -71,6 +74,46 @@ test('a live primary research pathway is checked separately without duplicate ho
   assert.equal(c.contentSha256,r.checks.find(x=>x.name==='homepage').contentSha256);
   assert.equal(requests.filter(url=>url==='https://561.group/').length,1,
     'an additional public journey must reuse the same raw HTTP observation');
+  assert.equal(requests.filter(url=>url==='https://561.group/robots.txt').length,1,
+    'native indexing checks reuse the original robots observation');
+  assert.equal(r.searchConformance.complete,true);
+  assert.equal(r.searchConformance.records.length,6);
+});
+
+test('HTTP200 does not mask noindex, a foreign canonical, or a Googlebot denial',async()=>{
+  for(const [settings,code] of [
+    [{htmlDirective:'<meta name="robots" content="noindex">'},'indexing-directive'],
+    [{extraHeaders:{'x-robots-tag':'googlebot: noindex'}},'indexing-directive'],
+    [{canonical:()=> 'https://example.org/'},'canonical-target'],
+    [{robotsBody:'User-agent: *\nAllow: /\n\nUser-agent: Googlebot\nDisallow: /'},'robots-access'],
+  ]){
+    const r=await observeProduction({fetchImpl:provider(settings)});
+    assert.equal(r.checks.find(c=>c.name==='homepage').outcome,'pass');
+    assert.equal(r.overall,'public-checks-failed');
+    assert.ok(r.searchConformance.records.every(record=>record.checks.some(check=>
+      check.code===code && check.status==='nonconformant')));
+    assert.ok(r.searchConformance.findings.some(finding=>finding.code===code && finding.action==='repair'));
+  }
+});
+
+test('native robots uncertainty stays unknown and cannot mask a separate measured fault',async()=>{
+  const unknown=await observeProduction({fetchImpl:provider({robotsBody:'User-agent: *\nDisallow: /*?secret='})});
+  assert.equal(unknown.overall,'receiving-incomplete');
+  assert.ok(unknown.searchConformance.records.some(record=>record.checks.some(check=>
+    check.code==='robots-access' && check.status==='unknown')));
+  const mixed=await observeProduction({fetchImpl:provider({abortPath:'/robots.txt',htmlDirective:'<meta name="robots" content="noindex">'})});
+  assert.equal(mixed.overall,'public-checks-failed','a measured noindex must remain actionable during incomplete robots coverage');
+});
+
+test('unknown affected URLs in a GSC notice remain investigation work after current HTTP passes',async()=>{
+  const notice={id:'mail-report:synthetic-fixture',property:'sc-domain:561.group',
+    reason:'Server error (5xx)',url:null,observedAt:'2026-10-22T07:35:24Z',source:'test-fixture'};
+  const r=await observeProduction({fetchImpl:provider(),searchConsole:[notice],now:()=> '2026-10-26T18:00:00Z'});
+  assert.equal(r.overall,'public-checks-passed');
+  assert.equal(r.searchConformance.complete,false);
+  assert.equal(r.searchConformance.providerNotices[0].classification,'unbound');
+  assert.ok(r.searchConformance.findings.some(finding=>finding.url===null && finding.action==='investigate'));
+  assert.match(markdownSummary(r),/unresolved provider notices remain separate/u);
 });
 
 test('loss of research destination is a visible failure, not homepage uptime success',async()=>{

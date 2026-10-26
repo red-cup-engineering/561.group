@@ -8,6 +8,7 @@ on:
   pull_request:
     paths:
       - scripts/observe-production.mjs
+      - scripts/site-observation/**
       - test/observe-production.test.mjs
       - scripts/worker-recovery.mjs
       - test/worker-recovery.test.mjs
@@ -17,6 +18,9 @@ on:
       - test/observe-provider-deployment.test.mjs
       - .github/workflows/recover-worker.yml
       - .github/workflows/public-delivery-witness.yml
+      - package.json
+      - package-lock.json
+      - .npmrc
   workflow_dispatch:
     inputs:
       expected_source_sha:
@@ -34,12 +38,16 @@ concurrency:
 jobs:
   observer-fixture-tests:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: '24'
+          cache: npm
+      - name: Install the locked native observation supplier
+        timeout-minutes: 7
+        run: npm run install:observation
       - name: Test public observer decision logic (offline fixtures)
         run: node --test test/observe-production.test.mjs test/worker-recovery.test.mjs test/observe-provider-deployment.test.mjs test/check-delivery-parity.test.mjs
 
@@ -47,12 +55,16 @@ jobs:
     needs: observer-fixture-tests
     if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: '24'
+          cache: npm
+      - name: Install the locked native observation supplier
+        timeout-minutes: 7
+        run: npm run install:observation
       - name: Read provider-native active Worker version using dedicated metadata-read token
         env:
           CLOUDFLARE_READ_API_TOKEN: ${{ secrets.CLOUDFLARE_READ_API_TOKEN }}
