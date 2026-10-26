@@ -1,0 +1,83 @@
+name: Deploy and receive Production Outcome Watch
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/deploy-production-outcome-watch.yml'
+      - 'scripts/receive-production-watch.mjs'
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/deploy-production-outcome-watch.yml'
+      - 'scripts/receive-production-watch.mjs'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-outcome-watch-production
+  cancel-in-progress: false
+
+jobs:
+  source:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '24'
+      - name: Check release receiver
+        run: node --check scripts/receive-production-watch.mjs
+
+  release:
+    needs: source
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      RELEASE_DIRECTORY: .watch-release/.service-releases/production-outcome-watch/20261026
+      RELEASE_MANIFEST: 6051eac022feea2c2b60cbbad52e5d436662d16b95dbc74ac8090619bd7918ef
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Select the current reviewed main revision
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          latest="$(git ls-remote origin refs/heads/main | awk '{print $1}')"
+          test "$latest" = "$GITHUB_SHA" || { echo '::error::Release source superseded'; exit 1; }
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '24'
+      - name: Read the private generated service release
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: 561-group/561-group-frontdoor-services-section
+          ref: 5b0a47ff15b3d584a4d256292821802e5d06ff63
+          path: .watch-release
+          ssh-key: ${{ secrets.SITE_CONTENT_DEPLOY_KEY }}
+          persist-credentials: false
+      - name: Receive exact original output and the existing production target
+        run: node scripts/receive-production-watch.mjs verify "$RELEASE_DIRECTORY" "$RELEASE_MANIFEST"
+      - name: Compile with the original pinned deployment tool before using provider credentials
+        run: npx --yes wrangler@4.149.0 deploy --config "$RELEASE_DIRECTORY/wrangler.json" --dry-run --outdir "$RUNNER_TEMP/production-watch-dry-run"
+      - name: Check that the reviewed release is still current
+        run: |
+          set -euo pipefail
+          latest="$(git ls-remote origin refs/heads/main | awk '{print $1}')"
+          test "$latest" = "$GITHUB_SHA" || { echo '::error::Release source superseded'; exit 1; }
+      - name: Deploy the existing outcome Worker
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: npx --yes wrangler@4.149.0 deploy --config "$RELEASE_DIRECTORY/wrangler.json" --tag "watch-${RELEASE_MANIFEST:0:32}"
+      - name: Receive the active provider version through the public Worker
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: node scripts/receive-production-watch.mjs receive "$RELEASE_DIRECTORY" "$RELEASE_MANIFEST"
