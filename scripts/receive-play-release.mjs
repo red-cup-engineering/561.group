@@ -131,7 +131,7 @@ const feedPaths = ['/feed.rss.xml', '/feed.atom.xml', '/feed.json'];
 const advertisedFeed = /<link\b[^>]*(?:type=["']application\/(?:rss\+xml|atom\+xml|feed\+json)["']|href=["'][^"']*\/feed\.(?:rss\.xml|atom\.xml|json)["'])[^>]*>/i;
 if (feedPaths.some(path => content.has('public' + path)) || names.some(name => name.endsWith('.html') && advertisedFeed.test(content.get(name).toString('utf8'))))
   throw new Error('The catalog still publishes or advertises a document feed');
-for (const name of ['public/index.html', 'public/today.html', 'public/atlas/index.html', 'public/404.html'])
+for (const name of ['public/index.html', 'public/today/index.html', 'public/atlas/index.html', 'public/404.html', 'public/sitemap.xml', 'public/_redirects'])
   if (!content.has(name)) throw new Error('Original public page absent: ' + name);
 if (mode === 'verify') {
   console.log(JSON.stringify({ verified: true, worker: target, manifest: expectedManifest, nativeReleaseDigest: nativeRelease.digest,
@@ -209,10 +209,21 @@ function htmlReceived(actual, expected) {
   return 'original-bytes-with-cloudflare-analytics';
 }
 const publicPages = [
-  ['/', 'public/index.html'], ['/today', 'public/today.html'], ['/atlas/', 'public/atlas/index.html'],
+  ['/', 'public/index.html'], ['/today/', 'public/today/index.html'], ['/atlas/', 'public/atlas/index.html'],
   ['/catalog.json', 'public/catalog.json'], ['/release-manifest.json', 'public/release-manifest.json'],
-  ['/robots.txt', 'public/robots.txt'],
+  ['/robots.txt', 'public/robots.txt'], ['/sitemap.xml', 'public/sitemap.xml'],
 ];
+async function receiveDailyAlias(path) {
+  const response = await fetch(new URL(path, origin), {
+    redirect: 'manual', cache: 'no-store', signal: AbortSignal.timeout(15000),
+    headers: { 'cache-control': 'no-cache', 'user-agent': '561-Group-Play-Release/1.0' },
+  });
+  const location = response.headers.get('location');
+  await response.body?.cancel();
+  if (response.status !== 301 || !location || new URL(location, origin).href !== origin + '/today/')
+    throw new Error('The former daily route did not redirect permanently to its canonical page: ' + path);
+  return { path, status: response.status, location: new URL(location, origin).href };
+}
 if (mode === 'target') {
   const version = await activeVersion(), details = await provider('/versions/' + version);
   if (details?.id?.toLowerCase() !== version) throw new Error('Existing Play version details do not match the active deployment');
@@ -229,16 +240,19 @@ for (let attempt = 0; attempt < 18 && Date.now() < deadline; attempt++) {
     const pages = await Promise.all(publicPages.map(async ([path, name]) => {
       const result = await publicResponse(path), expected = content.get(name);
       if (result.status !== 200) throw new Error('Public page returned HTTP ' + result.status + ': ' + path);
+      if (result.url !== new URL(path, origin).href) throw new Error('The published page is not served at its declared canonical route: ' + path);
       let comparison = 'exact-bytes';
       if (name.endsWith('.html')) {
         if (result.mediaType !== 'text/html' || advertisedFeed.test(result.body.toString('utf8')))
           throw new Error('Public page has the wrong type or advertises a feed: ' + path);
         comparison = htmlReceived(result.body, expected);
       } else if (!result.body.equals(expected) || (name.endsWith('.json') && result.mediaType !== 'application/json') ||
-          (name.endsWith('.txt') && result.mediaType !== 'text/plain')) throw new Error('Public artifact differs: ' + path);
+          (name.endsWith('.txt') && result.mediaType !== 'text/plain') ||
+          (name.endsWith('.xml') && !['application/xml', 'text/xml'].includes(result.mediaType))) throw new Error('Public artifact differs: ' + path);
       return { path, finalUrl: result.url, status: result.status, mediaType: result.mediaType, comparison,
         observedSha256: digest(result.body), expectedSha256: digest(expected) };
     }));
+    const dailyAliases = await Promise.all(['/today', '/today.html'].map(receiveDailyAlias));
     const absentFeeds = await Promise.all(feedPaths.map(async path => {
       const result = await publicResponse(path);
       const nativeEmpty404 = result.body.length === 0 && ['', 'text/plain'].includes(result.mediaType);
@@ -250,10 +264,10 @@ for (let attempt = 0; attempt < 18 && Date.now() < deadline; attempt++) {
     }));
     if (await activeVersion() !== version) throw new Error('Play active version changed during public receiving');
     Object.assign(receipt, { received: true, version, publishedAt: details.metadata?.created_on,
-      receivedAt: new Date().toISOString(), gameCount: catalog.games.length, pages, absentFeeds });
+      receivedAt: new Date().toISOString(), gameCount: catalog.games.length, pages, dailyAliases, absentFeeds });
     await saveReceipt();
     console.log(JSON.stringify({ received: true, worker: target, version, tag, manifest: expectedManifest,
-      nativeReleaseDigest: nativeRelease.digest, gameCount: catalog.games.length, publicPages: pages.length, absentFeeds: absentFeeds.length }));
+      nativeReleaseDigest: nativeRelease.digest, gameCount: catalog.games.length, publicPages: pages.length, dailyAliases: dailyAliases.length, absentFeeds: absentFeeds.length }));
     process.exit(0);
   } catch (error) {
     receipt.observations.push({ at: new Date().toISOString(), attempt: attempt + 1, error: error.message });

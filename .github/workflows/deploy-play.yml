@@ -38,20 +38,21 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
-      RELEASE_DIRECTORY: .play-release/.service-releases/play/20261026
-      RELEASE_MANIFEST: 43303bc5a38d506f25571edcbd82197e344468795db3e55318d05f43c954d6ab
+      RELEASE_DIRECTORY: .play-release/.service-releases/play/20261026-canonical
+      RELEASE_MANIFEST: c177876531d115c618c5b4ce274f325c058e8f82509ac3f067c02fa7b52e7a1f
       WRANGLER_SEND_METRICS: 'false'
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           ref: ${{ github.sha }}
           persist-credentials: false
-      - name: Select the current reviewed main revision
+      - name: Receive the current Play release inputs
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
           latest="$(git ls-remote origin refs/heads/main | awk '{print $1}')"
-          test "$latest" = "$GITHUB_SHA" || { echo '::error::Play release source superseded'; exit 1; }
+          git fetch --no-tags --depth=1 origin "$latest"
+          git diff --quiet "$GITHUB_SHA" "$latest" -- .github/workflows/deploy-play.yml scripts/receive-play-release.mjs || { echo '::error::Play release inputs superseded'; exit 1; }
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: '24'
@@ -59,7 +60,7 @@ jobs:
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           repository: 561-group/561-group-frontdoor-services-section
-          ref: b239c0303b74ec0608738e03f74c9c5f61d786f1
+          ref: a1ea3bd916e795cf698399a5e1646b24c9e7f022
           path: .play-release
           ssh-key: ${{ secrets.SITE_CONTENT_DEPLOY_KEY }}
           persist-credentials: false
@@ -71,7 +72,8 @@ jobs:
         run: |
           set -euo pipefail
           latest="$(git ls-remote origin refs/heads/main | awk '{print $1}')"
-          test "$latest" = "$GITHUB_SHA" || { echo '::error::Play release source superseded'; exit 1; }
+          git fetch --no-tags --depth=1 origin "$latest"
+          git diff --quiet "$GITHUB_SHA" "$latest" -- .github/workflows/deploy-play.yml scripts/receive-play-release.mjs || { echo '::error::Play release inputs superseded'; exit 1; }
       - name: Receive the existing Play target before replacing its version
         id: target
         env:
