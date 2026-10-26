@@ -63,7 +63,7 @@ test("the SAME real source yields useful machine-readable TUFTE JSON",async()=>{
     "machine-readable TUFTE readers must receive the same research path");
 
   assert.deepEqual(model.tiles.map(t=>t.id),
-    ["introduction","frontiers","paths","services","method","physical-world","explore","trade","companies","agents","support"]);
+    ["introduction","self-service","frontiers","paths","services","method","physical-world","explore","trade","companies","agents","support"]);
   assert.equal(model.metadata.structuredData["@graph"][0].subOrganization.length,4);
   assert.ok(model.metadata.structuredData["@graph"][0].knowsAbout.includes("Artificial Abiogenesis and Smartgoo"));
   assert.ok(model.tiles.some(t=>t.id==="frontiers" && t.html.includes("silica")));

@@ -113,6 +113,18 @@ test("llms.txt maps the whole Group and takes the market's offer count from the 
   for (const told of home.told) assert.ok(full.includes(told.label));
 });
 
+test("both agent guides preserve the same unattended purchase examples and source claims as the public journey", () => {
+  const frontdoor=JSON.parse(read("data/frontdoor.json"));
+  for (const guide of [renderLlms(home,estate,{frontdoor}),renderLlmsFull(home,estate,{frontdoor})]) {
+    assert.ok(guide.includes(frontdoor.selfService.summary));
+    for (const example of frontdoor.selfService.examples) {
+      assert.ok(guide.includes(`[${example.title}](${example.href})`));
+      for (const identity of [example.sku,example.cell,example.law]) assert.ok(guide.includes(identity));
+    }
+    assert.ok(guide.includes(frontdoor.selfService.terms));
+  }
+});
+
 test("robots names every AI crawler and keeps the sitemap; the sitemap lists the llms files", () => {
   const robots = renderRobots(home);
   for (const bot of ["GPTBot", "OAI-SearchBot", "ChatGPT-User", "ClaudeBot", "Claude-SearchBot", "PerplexityBot", "Google-Extended", "Applebot-Extended", "CCBot"]) assert.match(robots, new RegExp(`User-agent: ${bot}\\nAllow: /\\n`, "u"));

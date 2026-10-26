@@ -84,6 +84,17 @@ function checkedSources(home, estate, frontdoor) {
   };
   unique(frontdoor.paths, "path");
   unique(frontdoor.offers, "service");
+  const direct = frontdoor.selfService;
+  if (!direct || ![direct.title, direct.summary, direct.terms].every(value => typeof value === "string" && value.trim()) ||
+      !Array.isArray(direct.examples) || !direct.examples.length)
+    throw new TypeError("The public buying journey needs its authored source offers");
+  unique(direct.examples, "self-service example");
+  for (const example of direct.examples) {
+    publicHref(example.href);
+    if (![example.title, example.summary, example.sku, example.cell, example.law]
+      .every(value => typeof value === "string" && value.trim()))
+      throw new TypeError("Self-service examples retain their source SKU, claim cell and operation law");
+  }
   if (nodes.size !== estate.nodes.length ||
       new Set(home.public.featured.map(x => x.host)).size !== home.public.featured.length)
     throw new TypeError("Original public project identities must be unique");
@@ -146,6 +157,14 @@ function structure(home, pathname, frontdoor) {
     url:home.origin + pathname,inLanguage:"en",
     isPartOf:{"@id":home.origin + "/#website"},
     about:{"@id":home.origin + "/#organization"}};
+  if (["/", "/work/", "/for-agents/"].includes(pathname)) {
+    page.relatedLink = frontdoor.selfService.examples.map(example => example.href);
+    page.mentions = frontdoor.selfService.examples.map(example => ({
+      "@type":"Thing", "@id":example.sku, name:example.title, url:example.href,
+      identifier:[{ "@type":"PropertyValue",propertyID:"SignCell",value:example.cell },
+        { "@type":"PropertyValue",propertyID:"Operation law",value:example.law }]
+    }));
+  }
   // Project only real publicly visible inquiry areas; no prices, purchases,
   // merchant promises, review scores or invented customer endorsement.
   if (pathname === "/work/") {
@@ -262,13 +281,28 @@ function endpoints(estate, limit = Infinity) {
     para(point.what) + "</li>").join("") + "</ul>";
 }
 
+function selfService(home, frontdoor) {
+  const source = frontdoor.selfService;
+  return panel("self-service",source.title,
+    para(source.summary,"site-section-lead") +
+    '<ul class="site-service-grid">' + source.examples.map(example =>
+      '<li class="site-service" data-sku="' + esc(example.sku) + '" data-cell="' + esc(example.cell) +
+      '" data-law="' + esc(example.law) + '"><h3>' + anchor(example.href,example.title) +
+      '</h3>' + para(example.summary) + '</li>').join("") + '</ul>' +
+    actions([{href:home.group.marketUrl + "offers/",label:"Browse all pay-per-call APIs"},
+      {href:home.group.marketGuide,label:"Make an x402 purchase"},
+      {href:home.group.marketDiscovery,label:"Read machine discovery"}]) +
+    note(source.terms),12);
+}
 function homepage(home, estate, frontdoor, source) {
   return [
     panel("introduction",home.public.headline,
       lead("561 GROUP / RESEARCH · TECHNOLOGY · PRACTICE",
         frontdoor.proposition,frontdoor.promise,
-        [{href:"/work/",label:"Bring us a problem"},{href:"/projects/",label:"Explore what we build"}]) +
+        [{href:home.group.marketUrl + "offers/",label:"Buy data and computation"},
+          {href:"/work/",label:"Bring us a problem"},{href:"/projects/",label:"Explore what we build"}]) +
       para(home.public.intro,"site-hero-note"),12,"rail"),
+    selfService(home,frontdoor),
     panel("frontiers",frontdoor.vision.headline,frontiers(frontdoor,true),12),
     panel("paths","What brings you here?",pathways(frontdoor),12),
     panel("services","Work you can ask us to do",
@@ -308,6 +342,7 @@ function workPage(home, frontdoor, source) {
       lead("A REAL JOB / A REAL PROVIDER", "Bring us a problem.",
         frontdoor.firstStep,[{href:"/contact/#work",label:"Request a scope and quote"},
           {href:"/projects/",label:"See what we make"}]),12),
+    selfService(home,frontdoor),
     panel("services","Areas we can scope",
       para(frontdoor.vision.throughline,"site-section-lead") +
       para("These are service capabilities for inquiry and qualification, not a catalog of pre-approved fixed-price orders.","site-section-lead") +
@@ -373,6 +408,7 @@ function agentPage(home, estate, frontdoor) {
         "Read the actual interfaces.",
         "Use the source-owned entry points below to inspect publications, estate observations, offered capabilities and current seller terms.",
         [{href:"/llms.txt",label:"Read the machine guide"},{href:"/estate.json",label:"Read the public estate"}]),12),
+    selfService(home,frontdoor),
     panel("endpoints","Published machine-readable interfaces",
       endpoints(estate) +
       note("GET routes can be opened for inspection. POST routes are reference information, not an invitation to invoke them."),12),
