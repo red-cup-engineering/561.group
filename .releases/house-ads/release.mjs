@@ -63,6 +63,26 @@ async function currentDeployment() {
   return {deploymentId:latest.id, versionId:latest.versions[0].version_id, createdOn:latest.created_on};
 }
 
+function receiveBindings(settings, {allowMissingAnalytics = false} = {}) {
+  const bindings = settings.bindings ?? [];
+  const kv = bindings.find(binding => binding.name === release.target.kvBinding);
+  assert.equal(kv?.type, 'kv_namespace', 'Existing paid-receipt KV binding missing');
+  assert.equal(kv.namespace_id, release.target.kvNamespace, 'Existing paid-receipt namespace differs');
+  const analytics = bindings.find(binding => binding.name === release.target.analyticsBinding);
+  if (!release.target.analyticsEnabled) {
+    assert.equal(analytics, undefined, 'Release selects unbound analytics');
+  } else if (analytics) {
+    assert.equal(analytics.type, 'analytics_engine');
+    assert.equal(analytics.dataset, release.target.analyticsDataset);
+  } else {
+    assert.ok(allowMissingAnalytics, 'Selected aggregate analytics binding missing');
+  }
+  assert.ok(bindings.every(binding =>
+    [release.target.kvBinding, release.target.analyticsBinding].includes(binding.name) ||
+    ['secret_text', 'plain_text', 'json'].includes(binding.type)), 'Unrepresented stateful binding');
+  return {kvNamespace:kv.namespace_id, analyticsDataset:analytics?.dataset ?? null};
+}
+
 const mode = process.argv[2];
 if (mode === 'prepare') {
   const archive = verifyArchive();
@@ -76,7 +96,9 @@ if (mode === 'prepare') {
   assert.equal(config.name, release.target.worker);
   assert.deepEqual(config.routes, [{pattern:new URL(release.target.origin).hostname, custom_domain:true}]);
   assert.deepEqual(config.kv_namespaces, [{binding:release.target.kvBinding, id:release.target.kvNamespace}]);
-  assert.deepEqual(config.analytics_engine_datasets, [{binding:release.target.analyticsBinding, dataset:release.target.analyticsDataset}]);
+  assert.equal(typeof release.target.analyticsEnabled, 'boolean');
+  assert.deepEqual(config.analytics_engine_datasets ?? [], release.target.analyticsEnabled
+    ? [{binding:release.target.analyticsBinding, dataset:release.target.analyticsDataset}] : []);
   mkdirSync(resolve(host, 'release-artifacts'), {recursive:true});
   writeFileSync(resolve(host, 'release-artifacts/advertising-0.3.0-dev.2.tgz'), archive);
   copyFileSync(resolve(releaseRoot, 'package-lock.json'), resolve(host, 'package-lock.json'));
@@ -93,18 +115,8 @@ if (mode === 'prepare') {
 } else if (mode === 'before') {
   const deployment = await currentDeployment();
   const settings = await provider('/settings');
-  const kv = settings.bindings?.find(binding => binding.name === release.target.kvBinding);
-  assert.equal(kv?.type, 'kv_namespace', 'Existing paid-receipt KV binding missing');
-  assert.equal(kv.namespace_id, release.target.kvNamespace, 'Existing paid-receipt namespace differs');
-  const analytics = settings.bindings.find(binding => binding.name === release.target.analyticsBinding);
-  if (analytics) {
-    assert.equal(analytics.type, 'analytics_engine');
-    assert.equal(analytics.dataset, release.target.analyticsDataset);
-  }
-  assert.ok(settings.bindings.every(binding =>
-    [release.target.kvBinding, release.target.analyticsBinding].includes(binding.name) ||
-    ['secret_text', 'plain_text', 'json'].includes(binding.type)), 'Unrepresented stateful binding');
-  save('before.json', deployment);
+  const bindings = receiveBindings(settings, {allowMissingAnalytics:true});
+  save('before.json', {...deployment, bindings});
   console.log('Existing ads rollback version: ' + deployment.versionId);
 } else if (mode === 'after') {
   const before = json(resolve(work, 'before.json'));
@@ -114,6 +126,7 @@ if (mode === 'prepare') {
   const deployment = await currentDeployment();
   assert.notEqual(deployment.deploymentId, before.deploymentId);
   assert.equal(deployment.versionId, uploaded, 'Uploaded version is not active at 100% traffic');
+  const bindings = receiveBindings(await provider('/settings'));
   let observed;
   for (let attempt = 0; attempt < 12; attempt++) {
     try {
@@ -135,7 +148,7 @@ if (mode === 'prepare') {
   }
   const receipt = {hostCommit:release.hostCommit, advertisingCommit:release.advertisingCommit,
     advertisingVersion:release.advertisingVersion, advertisingArchiveSha256:release.advertisingArchiveSha256,
-    workerSha256:release.workerSha256, target:release.target, before, deployment, public:observed};
+    workerSha256:release.workerSha256, target:release.target, before, deployment, bindings, public:observed};
   save('receipt.json', receipt);
   console.log(JSON.stringify(receipt, null, 2));
 } else {
