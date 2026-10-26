@@ -214,8 +214,10 @@ const publicPages = [
   ['/robots.txt', 'public/robots.txt'],
 ];
 if (mode === 'target') {
-  const version = await activeVersion();
-  console.log(JSON.stringify({ existingTarget: true, worker: target, activeVersion: version }));
+  const version = await activeVersion(), details = await provider('/versions/' + version);
+  if (details?.id?.toLowerCase() !== version) throw new Error('Existing Play version details do not match the active deployment');
+  console.log(JSON.stringify({ existingTarget: true, worker: target, activeVersion: version,
+    alreadyCurrent: details.annotations?.['workers/tag'] === tag }));
   process.exit(0);
 }
 const deadline = Date.now() + 360000;
@@ -239,10 +241,11 @@ for (let attempt = 0; attempt < 18 && Date.now() < deadline; attempt++) {
     }));
     const absentFeeds = await Promise.all(feedPaths.map(async path => {
       const result = await publicResponse(path);
-      if (result.status !== 404 || result.mediaType !== 'text/html' ||
+      const nativeEmpty404 = result.body.length === 0 && ['', 'text/plain'].includes(result.mediaType);
+      if (result.status !== 404 || (!nativeEmpty404 && result.mediaType !== 'text/html') ||
           /<rss\b|<feed\b|https?:\/\/jsonfeed\.org\/version\//i.test(result.body.toString('utf8')))
         throw new Error('Feed absence not received: HTTP ' + result.status + ' ' + result.mediaType + ' at ' + path);
-      const comparison = htmlReceived(result.body, content.get('public/404.html'));
+      const comparison = nativeEmpty404 ? 'native-empty-404' : htmlReceived(result.body, content.get('public/404.html'));
       return { path, status: result.status, mediaType: result.mediaType, comparison, observedSha256: digest(result.body) };
     }));
     if (await activeVersion() !== version) throw new Error('Play active version changed during public receiving');
