@@ -285,8 +285,8 @@ function selfService(home, frontdoor) {
   const source = frontdoor.selfService;
   return panel("self-service",source.title,
     para(source.summary,"site-section-lead") +
-    '<ul class="site-service-list">' + source.examples.map(example =>
-      '<li data-sku="' + esc(example.sku) + '" data-cell="' + esc(example.cell) +
+    '<ul class="site-service-grid">' + source.examples.map(example =>
+      '<li class="site-service" data-sku="' + esc(example.sku) + '" data-cell="' + esc(example.cell) +
       '" data-law="' + esc(example.law) + '"><h3>' + anchor(example.href,example.title) +
       '</h3>' + para(example.summary) + '</li>').join("") + '</ul>' +
     actions([{href:home.group.marketUrl + "offers/",label:"Browse all pay-per-call APIs"},
