@@ -2,10 +2,11 @@
 // The Group owns only the existing credential/carrier lane. Market owns the
 // release algorithm and Cloudflare owns its effects; both arrive as pinned
 // original source-derived bytes in the already-established private carrier.
-import { readFile, realpath, stat, appendFile } from 'node:fs/promises';
+import { readFile, realpath, stat, lstat, appendFile, writeFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
-import { resolve, relative, isAbsolute } from 'node:path';
+import { resolve, relative, isAbsolute, dirname } from 'node:path';
 import { execFileSync } from 'node:child_process';
+import { gunzipSync } from 'node:zlib';
 
 const SHA = /^[a-f0-9]{64}$/u, COMMIT = /^[a-f0-9]{40}$/u;
 const ROOT = '561-group/561-group-frontdoor-services-section';
@@ -25,7 +26,7 @@ export async function selectMarketCarrier(file = '.releases/market/selection.jso
   return { ready: true, ...selection };
 }
 
-export async function verifyMarketCarrier(directory, expectedManifestSha256) {
+async function selectedMarketManifest(directory, expectedManifestSha256) {
   requireThat(SHA.test(expectedManifestSha256 ?? ''), 'Exact selected carrier manifest digest required');
   const root = await realpath(directory);
   const info = await stat(resolve(root, 'manifest.json'));
@@ -45,13 +46,57 @@ export async function verifyMarketCarrier(directory, expectedManifestSha256) {
       SHA.test(item.sha256 ?? '') && Number.isSafeInteger(item.bytes) && item.bytes > 0 && item.bytes <= (name === 'sourceMap' ? 64 : 32) * 1024 * 1024,
     'Every carrier file must have one exact bounded selection');
     seen.add(item.path);
-    const file = await realpath(resolve(root, item.path)), rel = relative(root, file);
-    requireThat(rel && rel !== '..' && !rel.startsWith('../') && !isAbsolute(rel), 'Carrier path escapes the selected source');
-    const fileInfo = await stat(file);
-    requireThat(fileInfo.isFile() && fileInfo.size === item.bytes, 'Carrier file size differs from selected bytes');
-    requireThat(hash(await readFile(file)) === item.sha256, 'Carrier file digest differs from selected bytes');
   }
+  return { root, manifest };
+}
+
+async function containedCarrierPath(root, selectedPath) {
+  const file = await realpath(resolve(root, selectedPath)), rel = relative(root, file);
+  requireThat(rel && rel !== '..' && !rel.startsWith('../') && !isAbsolute(rel), 'Carrier path escapes the selected source');
+  return file;
+}
+
+async function verifyCarrierFile(root, item) {
+  const file = await containedCarrierPath(root, item.path), info = await stat(file);
+  requireThat(info.isFile() && info.size === item.bytes, 'Carrier file size differs from selected bytes');
+  requireThat(hash(await readFile(file)) === item.sha256, 'Carrier file digest differs from selected bytes');
+}
+
+export async function verifyMarketCarrier(directory, expectedManifestSha256) {
+  const { root, manifest } = await selectedMarketManifest(directory, expectedManifestSha256);
+  for (const item of Object.values(manifest.artifacts)) await verifyCarrierFile(root, item);
   return { manifest, receiver: resolve(root, manifest.artifacts.receiver.path), root };
+}
+
+/** Explicit local transport effect before read-only verification. The original
+ * manifest still selects uncompressed bytes. A missing file can arrive only as
+ * its standard gzip sibling in the same pinned carrier, never as an archive or
+ * a replacement manifest. No existing raw file is overwritten or bypassed. */
+export async function receiveMarketCarrier(directory, expectedManifestSha256) {
+  const { root, manifest } = await selectedMarketManifest(directory, expectedManifestSha256);
+  const restoredArtifacts = [];
+  for (const [name, item] of Object.entries(manifest.artifacts)) {
+    const target = resolve(root, item.path);
+    let existing;
+    try { existing = await lstat(target); }
+    catch (error) { if (error.code !== 'ENOENT') throw error; }
+    if (existing) { await verifyCarrierFile(root, item); continue; }
+    const parent = dirname(target);
+    requireThat(await realpath(parent) === parent, 'Carrier write parent must not be a symlink');
+    const compressedFile = await containedCarrierPath(root, `${item.path}.gz`), info = await stat(compressedFile);
+    requireThat(info.isFile() && info.size > 0 && info.size <= 16 * 1024 * 1024, 'Compressed carrier file exceeds its bound');
+    const compressed = await readFile(compressedFile);
+    requireThat(compressed.length === info.size, 'Compressed carrier file changed while receiving');
+    const bytes = gunzipSync(compressed, { maxOutputLength: item.bytes });
+    requireThat(bytes.length === item.bytes, 'Expanded carrier file size differs from selected bytes');
+    requireThat(hash(bytes) === item.sha256, 'Expanded carrier file digest differs from selected bytes');
+    // Recheck the parent immediately before an exclusive write. A racing raw
+    // file is refused by wx; receiving never replaces pre-existing material.
+    requireThat(await realpath(parent) === parent, 'Carrier write parent must not be a symlink');
+    await writeFile(target, bytes, { flag: 'wx', mode: 0o600 });
+    restoredArtifacts.push(name);
+  }
+  return { ...await verifyMarketCarrier(root, expectedManifestSha256), restoredArtifacts };
 }
 
 if (import.meta.main) {
@@ -65,6 +110,10 @@ if (import.meta.main) {
       await appendFile(process.env.GITHUB_OUTPUT, `${outputs.join('\n')}\n`);
     }
     console.log(JSON.stringify({ ready: selected.ready, reason: selected.ready ? 'Exact original Market carrier selected' : 'No received Market artifact selected; no provider access' }));
+  } else if (command === 'receive') {
+    requireThat(!extra.length, 'Use receive with the selected carrier directory and manifest digest');
+    const received = await receiveMarketCarrier(directory, expectedManifestSha256);
+    console.log(JSON.stringify({ received: true, restoredArtifacts: received.restoredArtifacts, providerAccess: false }));
   } else {
     requireThat(['verify', 'release'].includes(command) && !extra.length, 'Use select, verify, or release');
     const received = await verifyMarketCarrier(directory, expectedManifestSha256);

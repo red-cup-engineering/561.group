@@ -67,6 +67,8 @@ jobs:
           path: .market-release
           ssh-key: ${{ secrets.SITE_CONTENT_DEPLOY_KEY }}
           persist-credentials: false
+      - name: Restore bounded gzip transport to the exact selected original bytes
+        run: node .releases/market/release.mjs receive "$RELEASE_DIRECTORY" "$RELEASE_MANIFEST"
       - name: Receive selected bytes, original source owners and native qualification
         run: node .releases/market/release.mjs verify "$RELEASE_DIRECTORY" "$RELEASE_MANIFEST"
       - name: Stage, independently receive, promote and receive through original owners
