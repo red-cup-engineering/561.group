@@ -1,7 +1,7 @@
 {
   "kind": "561.market-worker-carrier-selection/v1",
   "repository": "561-group/561-group-frontdoor-services-section",
-  "revision": "09af6e16cec15e08c7ed722599c8caad17659c74",
-  "directory": ".service-releases/market/20261026-resume-1b2a9569",
-  "manifestSha256": "e14d4cdb746a11881161b4a8b41cd5db17705af62ce31ecf024c7af57c5f7a0f"
+  "revision": "6164f4aa2b9b354787984aea5268ab03cbb3223f",
+  "directory": ".service-releases/market/20261026-source-cells-a9240a17",
+  "manifestSha256": "134ea8a70058612f03bc6c21308bab7bcc5d44dd6549096fb3a9a0cd3ce44d07"
 }
