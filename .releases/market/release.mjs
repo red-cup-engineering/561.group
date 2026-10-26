@@ -19,11 +19,13 @@ export async function selectMarketCarrier(file = '.releases/market/selection.jso
   catch (error) { if (error.code === 'ENOENT') return { ready: false }; throw error; }
   requireThat(bytes.length <= 16 * 1024, 'Market carrier selection exceeds its bound');
   const selection = JSON.parse(bytes);
+  const operation = selection.operation === undefined ? 'release' : selection.operation;
   requireThat(selection.kind === '561.market-worker-carrier-selection/v1' && selection.repository === ROOT &&
     COMMIT.test(selection.revision ?? '') && SHA.test(selection.manifestSha256 ?? '') &&
+    ['release', 'observe'].includes(operation) &&
     /^\.service-releases\/market\/[a-zA-Z0-9][a-zA-Z0-9_-]{0,100}$/u.test(selection.directory ?? ''),
   'Select one exact original Market carrier in the existing private source');
-  return { ready: true, ...selection };
+  return { ready: true, ...selection, operation };
 }
 
 async function selectedMarketManifest(directory, expectedManifestSha256) {
@@ -108,7 +110,7 @@ if (import.meta.main) {
     const selected = await selectMarketCarrier();
     if (process.env.GITHUB_OUTPUT) {
       const outputs = [`ready=${selected.ready}`];
-      if (selected.ready) outputs.push(`revision=${selected.revision}`, `directory=${selected.directory}`, `manifest=${selected.manifestSha256}`);
+      if (selected.ready) outputs.push(`revision=${selected.revision}`, `directory=${selected.directory}`, `manifest=${selected.manifestSha256}`, `operation=${selected.operation}`);
       await appendFile(process.env.GITHUB_OUTPUT, `${outputs.join('\n')}\n`);
     }
     console.log(JSON.stringify({ ready: selected.ready, reason: selected.ready ? 'Exact original Market carrier selected' : 'No received Market artifact selected; no provider access' }));
@@ -117,18 +119,23 @@ if (import.meta.main) {
     const received = await receiveMarketCarrier(directory, expectedManifestSha256);
     console.log(JSON.stringify({ received: true, restoredArtifacts: received.restoredArtifacts, providerAccess: false }));
   } else {
-    requireThat(['verify', 'release'].includes(command) && !extra.length, 'Use select, verify, or release');
+    requireThat(['verify', 'release', 'observe'].includes(command) &&
+      (command === 'verify' ? extra.length <= 1 && ['release', 'observe'].includes(extra[0] ?? 'release') : !extra.length),
+    'Use select, receive, verify with its operation, or the selected release/observe operation');
     const received = await verifyMarketCarrier(directory, expectedManifestSha256);
     if (command === 'verify') {
       const env = Object.fromEntries(Object.entries(process.env).filter(([key]) => !key.startsWith('CLOUDFLARE_')));
-      execFileSync(process.execPath, [received.receiver, '--verify', received.root, expectedManifestSha256], { env, stdio: 'inherit', timeout: 120_000 });
+      execFileSync(process.execPath, [received.receiver, '--verify', received.root, expectedManifestSha256, extra[0] ?? 'release'], { env, stdio: 'inherit', timeout: 120_000 });
     } else {
       requireThat(process.env.GITHUB_REPOSITORY === 'red-cup-engineering/561.group' && process.env.GITHUB_REF === 'refs/heads/main' &&
         ['push', 'workflow_dispatch'].includes(process.env.GITHUB_EVENT_NAME) && COMMIT.test(process.env.GITHUB_SHA ?? '') &&
         process.env.RUNNER_TEMP, 'Only the original reviewed Group main credential lane may run this effect');
       const revision = execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8', maxBuffer: 4096 }).trim();
       requireThat(revision === process.env.GITHUB_SHA, 'Carrier checkout is not the selected Group edition');
-      execFileSync(process.execPath, [received.receiver, received.root, expectedManifestSha256,
+      const selected = await selectMarketCarrier();
+      requireThat(selected.ready && selected.operation === command && selected.manifestSha256 === expectedManifestSha256,
+        'The original Group selection must name this exact Market operation and manifest');
+      execFileSync(process.execPath, [received.receiver, ...(command === 'observe' ? ['--observe'] : []), received.root, expectedManifestSha256,
         resolve(process.env.RUNNER_TEMP, 'market-release/receipt.json'), revision], { stdio: 'inherit', timeout: 18 * 60_000 });
     }
   }

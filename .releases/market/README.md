@@ -11,10 +11,15 @@ After the original Market artifact and original receiver have been qualified, th
 | `revision` | The actual immutable carrier commit |
 | `directory` | One directory under `.service-releases/market/` |
 | `manifestSha256` | SHA-256 of the exact original Market `manifest.json` |
+| `operation` | Optional `observe` or `release`; omission retains `release` |
 
 There is deliberately no fabricated selection file. Without a real selected artifact, source checks report that no provider access is selected. A dispatch cannot supply an unreviewed alternative repository, path, artifact digest or target.
 
-`deploy-market.yml` uses the established `SITE_CONTENT_DEPLOY_KEY` to read that pinned private carrier and the established `CLOUDFLARE_ACCOUNT_ID`/`CLOUDFLARE_API_TOKEN` only in its release step. The Group transport checks every file before executing the original Market receiver. A preceding uncredentialled step invokes the receiver's actual `--verify` path. Source, version, byte, binding, merchant, promotion and rollback policy remain the original Market and Cloudflare owners.
+`deploy-market.yml` uses the established `SITE_CONTENT_DEPLOY_KEY` to read that pinned private carrier and the established `CLOUDFLARE_ACCOUNT_ID`/`CLOUDFLARE_API_TOKEN` only in its selected-operation step. The Group transport checks every file before executing the original Market receiver. A preceding uncredentialled step invokes the receiver's actual `--verify` path for that same operation. Source, version, byte, binding, merchant, promotion and rollback policy remain the original Market and Cloudflare owners.
+
+An explicit `observe` selection dispatches the original Market receiver's `--observe` mode through this same lane. It only reads current provider deployment/latest/configuration and exact selected version bytes; it does not upload, deploy, change settings or publish a directory listing. The existing receiver separately admits an attempted prior operation as observation evidence while preserving ordinary release's zero-traffic gate. Before either credentialled command, the Group rereads its original selection and requires both the exact manifest and operation to match. An observation selection therefore cannot dispatch release. A later source/selection commit can choose the appropriate next operation after the actual observation has been received, without adding another workflow.
+
+The observation artifact has kind `561.market-worker-provider-observation/v1`. Completion records what the original provider actually returned; its `providerCustodyReceived` comparison may remain false. It does not establish public catalog/payment receiving or authorize release. Current public incarnation, provider custody, deployment execution and economic outcome remain separate observations.
 
 The native producer's carrier contains fifteen exact files: seven common artifacts and eight source-custody artifacts, including its original `parameterSourceManifest`. The original Market receiver checks that manifest's bytes and its declared Public Git binding against the selected Public edition. The older retained-producer carrier remains seven files. An incomplete fourteen-file native carrier is refused instead of dropping the Parameters source custody.
 

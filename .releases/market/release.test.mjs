@@ -5,6 +5,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createHash } from 'node:crypto';
 import { gzipSync } from 'node:zlib';
+import { execFileSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 import { selectMarketCarrier, verifyMarketCarrier, receiveMarketCarrier } from './release.mjs';
 
 const sha = bytes => createHash('sha256').update(bytes).digest('hex');
@@ -16,6 +18,23 @@ test('no selected artifact never becomes implicit release authority', async () =
     const file = join(root, 'selection.json');
     await writeFile(file, JSON.stringify({ kind: '561.market-worker-carrier-selection/v1', repository: 'unselected/other-service', revision: 'a'.repeat(40), manifestSha256: 'b'.repeat(64), directory: '.service-releases/market/fixture' }));
     await assert.rejects(selectMarketCarrier(file), /existing private source/u);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test('the exact selection names observation or release, with legacy selections retaining release semantics', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'market-operation-selection-'));
+  try {
+    const file = join(root, 'selection.json'), selected = { kind: '561.market-worker-carrier-selection/v1',
+      repository: '561-group/561-group-frontdoor-services-section', revision: 'a'.repeat(40), manifestSha256: 'b'.repeat(64),
+      directory: '.service-releases/market/fixture' };
+    await writeFile(file, JSON.stringify(selected)); assert.equal((await selectMarketCarrier(file)).operation, 'release');
+    for (const operation of ['observe', 'release']) {
+      await writeFile(file, JSON.stringify({ ...selected, operation })); assert.equal((await selectMarketCarrier(file)).operation, operation);
+    }
+    for (const operation of ['deploy', 'release; echo fixture', null, false]) {
+      await writeFile(file, JSON.stringify({ ...selected, operation }));
+      await assert.rejects(selectMarketCarrier(file), /existing private source/u);
+    }
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 
@@ -208,5 +227,39 @@ test('existing raw artifacts are verified without fallback, overwrite or replace
     await rm(target); await symlink(join(root, 'missing-raw'), target);
     await assert.rejects(receiveMarketCarrier(root, digest), { code: 'ENOENT' });
     assert.equal((await lstat(target)).isSymbolicLink(), true);
+  });
+});
+
+test('the actual Group CLI verifies observation without credentials and dispatches only the selected read-only operation', async () => {
+  await withGzipCarrier(async ({ parent, root, manifest, select }) => {
+    const argsFile = join(parent, 'received-arguments.json');
+    const receiver = Buffer.from("require('node:fs').writeFileSync(process.env.FIXTURE_ARGUMENTS, JSON.stringify({args:process.argv.slice(2),credentialPresent:Boolean(process.env.CLOUDFLARE_API_TOKEN)}));\n");
+    await writeFile(join(root, manifest.artifacts.receiver.path), receiver);
+    manifest.artifacts.receiver.bytes = receiver.length; manifest.artifacts.receiver.sha256 = sha(receiver);
+    const digest = await select(); await receiveMarketCarrier(root, digest);
+    const selectionRoot = join(parent, '.releases/market'); await mkdir(selectionRoot, { recursive: true });
+    await writeFile(join(selectionRoot, 'selection.json'), JSON.stringify({ kind: '561.market-worker-carrier-selection/v1',
+      repository: '561-group/561-group-frontdoor-services-section', revision: 'a'.repeat(40),
+      directory: '.service-releases/market/fixture', manifestSha256: digest, operation: 'observe' }));
+    execFileSync('git', ['init', '--quiet', parent]);
+    execFileSync('git', ['-C', parent, 'add', '.releases/market/selection.json']);
+    execFileSync('git', ['-C', parent, '-c', 'user.name=Native fixture', '-c', 'user.email=fixture@example.invalid',
+      'commit', '--quiet', '-m', 'Native observation fixture']);
+    const revision = execFileSync('git', ['-C', parent, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
+    const env = { ...process.env, GITHUB_REPOSITORY: 'red-cup-engineering/561.group', GITHUB_REF: 'refs/heads/main',
+      GITHUB_EVENT_NAME: 'push', GITHUB_SHA: revision, RUNNER_TEMP: parent, FIXTURE_ARGUMENTS: argsFile, CLOUDFLARE_API_TOKEN: 'fixture-only-token' };
+    const cli = fileURLToPath(new URL('./release.mjs', import.meta.url));
+    execFileSync(process.execPath, [cli, 'verify', root, digest, 'observe'], { cwd: parent, env });
+    assert.deepEqual(JSON.parse(await readFile(argsFile, 'utf8')), { args: ['--verify', root, digest, 'observe'], credentialPresent: false });
+    execFileSync(process.execPath, [cli, 'observe', root, digest], { cwd: parent, env });
+    assert.deepEqual(JSON.parse(await readFile(argsFile, 'utf8')), { args: ['--observe', root, digest, join(parent, 'market-release/receipt.json'), revision], credentialPresent: true });
+    await rm(argsFile);
+    assert.throws(() => execFileSync(process.execPath, [cli, 'release', root, digest], { cwd: parent, env, stdio: 'pipe' }),
+      error => error.status === 1 && error.stderr.toString().includes('exact Market operation'));
+    await assert.rejects(lstat(argsFile), { code: 'ENOENT' });
+    assert.throws(() => execFileSync(process.execPath, [cli, 'observe', root, digest], {
+      cwd: parent, env: { ...env, GITHUB_REPOSITORY: 'another/repository' }, stdio: 'pipe',
+    }), error => error.status === 1 && error.stderr.toString().includes('original reviewed Group main'));
+    await assert.rejects(lstat(argsFile), { code: 'ENOENT' });
   });
 });
