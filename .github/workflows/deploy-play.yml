@@ -73,11 +73,17 @@ jobs:
           latest="$(git ls-remote origin refs/heads/main | awk '{print $1}')"
           test "$latest" = "$GITHUB_SHA" || { echo '::error::Play release source superseded'; exit 1; }
       - name: Receive the existing Play target before replacing its version
+        id: target
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: node scripts/receive-play-release.mjs target "$RELEASE_DIRECTORY" "$RELEASE_MANIFEST"
+        run: |
+          set -euo pipefail
+          node scripts/receive-play-release.mjs target "$RELEASE_DIRECTORY" "$RELEASE_MANIFEST" > "$RUNNER_TEMP/play-target.json"
+          cat "$RUNNER_TEMP/play-target.json"
+          node --input-type=module -e 'import { readFileSync, appendFileSync } from "node:fs"; const target = JSON.parse(readFileSync(process.env.RUNNER_TEMP + "/play-target.json")); if (typeof target.alreadyCurrent !== "boolean") throw new Error("Missing exact release decision"); appendFileSync(process.env.GITHUB_OUTPUT, "already-current=" + target.alreadyCurrent + "\n");'
       - name: Deploy the existing Play Worker once
+        if: steps.target.outputs.already-current != 'true'
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
