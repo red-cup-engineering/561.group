@@ -1,0 +1,25 @@
+{
+  "hostRepository": "red-cup-engineering/house-ads-server-site",
+  "hostCommit": "ec49ae088d0f12c5fe9ec647cb81ec0f58e86e55",
+  "advertisingRepository": "red-cup-engineering/web-advertising-system-engineering-services-section",
+  "advertisingCommit": "2fa6576097ac2f1590248fd54d2e76c3aedd9531",
+  "advertisingVersion": "0.3.0-dev.2",
+  "advertisingArchiveSha256": "b77d8038d6ab5d77ea37eccb5c62ea9a38d4cd98865faee27f4811217c8cb850",
+  "advertisingArchiveIntegrity": "sha512-Z71XYHico5qQuROerTEFBnl5FF27dLXjpWr15asab49qNq1lE5h7IyVFlFbCe03wdqgtDZurOLF72QZ8d3ejOg==",
+  "lockSha256": "49237539b5812cf19b7951f0801f452e5083ce400f61a1c7eda7284340b795a7",
+  "workerSha256": "49adf0e44bf33c205528707318598acc2ccc67fb6760f3a2e2d3497f3f99be14",
+  "workerBytes": 53826,
+  "catalogSha256": "dd110004f4da3c550f8dd2e7717db3da852957eda20f670dc341a7025950eb41",
+  "catalogSize": 24,
+  "nodeVersion": "24.22.1",
+  "wranglerVersion": "4.127.1",
+  "target": {
+    "accountId": "337e54ee6dc7d488933f473204a6d89e",
+    "origin": "https://ads.561.group",
+    "worker": "house-ads-server",
+    "kvBinding": "AD_RECEIPTS",
+    "kvNamespace": "56b1e309a1f24442a61d82b8b7eff38e",
+    "analyticsBinding": "AD_ACTIVITY",
+    "analyticsDataset": "house_ads_activity"
+  }
+}
