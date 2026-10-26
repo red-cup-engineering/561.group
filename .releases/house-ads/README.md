@@ -4,8 +4,11 @@ This carrier runs the original `house-ads-server-site` publisher against
 `ads.561.group`. Production was still serving the former 12-entry catalog after
 the host and advertising quota repair merged. This release installs the exact
 selected `0.3.0-dev.2` package and publishes its already-qualified 24-entry
-catalog. Ordinary house traffic writes aggregate `AD_ACTIVITY` observations
-and consumes no `AD_RECEIPTS` KV PUTs. The existing paid receipt requirements,
+catalog. Ordinary house traffic consumes no `AD_RECEIPTS` KV PUTs. Aggregate
+`AD_ACTIVITY` observations are optional; this account has Analytics Engine
+disabled, so the release explicitly selects the supplier's `unbound` activity
+behavior. The active provider bindings are received before and after deployment.
+The existing paid receipt requirements,
 quota hold/reset, publisher restrictions and inactive game records remain in
 the original supplier.
 
