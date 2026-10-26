@@ -34,7 +34,7 @@ test("real installed TUFTE/LWS gives a useful homepage in HTML, not a pipeline r
   for(const term of ["Work with us","Bring us a problem","Persistent AI systems",
     "Indigenous data governance","Shop","Bazaar","Market","Support the Group",
     "Design for a world that does not hold still","Indigenous and treaty rights",
-    "Another civilization is possible","Union of Harmonious Colonies",
+    home.public.headline,"Union of Harmonious Colonies",
     "Beyond settler-colonial governance","Toward a second lineage of living matter"]) {
     assert.ok(html.includes(term),"a visitor needs to see "+term);
   }
