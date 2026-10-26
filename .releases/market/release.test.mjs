@@ -108,6 +108,28 @@ test('explicit gzip receiving restores the exact native fifteen-file closure and
   }, { native: true });
 });
 
+test('an optional original held receipt is received as another exact byte-bound artifact', async () => {
+  for (const native of [false, true]) await withGzipCarrier(async ({ root, manifest, select }) => {
+    const bytes = Buffer.from('original held fixture receipt');
+    manifest.artifacts.priorReleaseReceipt = { path: 'prior-release-receipt.json', bytes: bytes.length, sha256: sha(bytes) };
+    await writeFile(join(root, 'prior-release-receipt.json'), bytes);
+    const digest = await select();
+    const received = await receiveMarketCarrier(root, digest);
+    assert.equal(Object.keys(received.manifest.artifacts).length, native ? 16 : 8);
+    await writeFile(join(root, 'prior-release-receipt.json'), 'altered held receipt');
+    await assert.rejects(verifyMarketCarrier(root, digest), /file (?:size|digest)/u);
+  }, { native });
+});
+
+test('an unrelated eighth artifact cannot stand in for the original held receipt', async () => {
+  await withGzipCarrier(async ({ root, manifest, select }) => {
+    const bytes = Buffer.from('unrelated fixture');
+    manifest.artifacts.arbitrary = { path: 'arbitrary.txt', bytes: bytes.length, sha256: sha(bytes) };
+    await writeFile(join(root, 'arbitrary.txt'), bytes);
+    await assert.rejects(receiveMarketCarrier(root, await select()), /carrier closure missing/u);
+  });
+});
+
 test('malformed and truncated gzip cannot create a selected raw artifact', async () => {
   for (const compressed of [Buffer.from('not a gzip stream'), gzipSync(Buffer.from('original fixture worker')).subarray(0, -4)]) {
     await withGzipCarrier(async ({ root, manifest, digest }) => {

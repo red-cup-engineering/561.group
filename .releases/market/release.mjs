@@ -38,12 +38,14 @@ async function selectedMarketManifest(directory, expectedManifestSha256) {
     manifest.target?.scriptName === 'market-561-group' && manifest.target?.origin === 'https://market.561.group' &&
     manifest.source?.market?.repository === 'red-cup-engineering/market.561.group' && COMMIT.test(manifest.source.market.revision),
   'This credential lane is restricted to the existing original Market target');
-  requireThat(manifest.artifacts?.receiver && [7, 15].includes(Object.keys(manifest.artifacts).length), 'Original Market carrier closure missing');
+  const originalFileCount = Object.keys(manifest.artifacts ?? {}).length - (Object.hasOwn(manifest.artifacts ?? {}, 'priorReleaseReceipt') ? 1 : 0);
+  requireThat(manifest.artifacts?.receiver && [7, 15].includes(originalFileCount), 'Original Market carrier closure missing');
   const seen = new Set();
   for (const [name, item] of Object.entries(manifest.artifacts)) {
     requireThat(typeof item.path === 'string' && /^[a-zA-Z0-9][a-zA-Z0-9_./-]{0,220}$/u.test(item.path) &&
       !item.path.split('/').some(part => !part || part === '.' || part === '..') && !seen.has(item.path) &&
-      SHA.test(item.sha256 ?? '') && Number.isSafeInteger(item.bytes) && item.bytes > 0 && item.bytes <= (name === 'sourceMap' ? 64 : 32) * 1024 * 1024,
+      SHA.test(item.sha256 ?? '') && Number.isSafeInteger(item.bytes) && item.bytes > 0 &&
+      item.bytes <= (name === 'priorReleaseReceipt' ? 128 * 1024 : (name === 'sourceMap' ? 64 : 32) * 1024 * 1024),
     'Every carrier file must have one exact bounded selection');
     seen.add(item.path);
   }
