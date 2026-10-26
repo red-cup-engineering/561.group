@@ -583,6 +583,12 @@ function publicGuide(home, editorial) {
     "- [About](" + home.origin + "/about/): four companies and work method.",
     "- [For agents](" + home.origin + "/for-agents/): public machine interfaces and permissions.",
     "- [Contact](" + home.origin + "/contact/): human inquiries and public reports.", "",
+    "## " + editorial.selfService.title, "",
+    editorial.selfService.summary, "",
+    ...editorial.selfService.examples.map(example =>
+      "- [" + example.title + "](" + example.href + "): " + example.summary +
+      " Source offer " + example.sku + "; claim cell " + example.cell + "; operation law " + example.law + "."),
+    "", editorial.selfService.terms, "",
     "## Areas the companies can scope", "",
     ...editorial.offers.map(x =>
       "- " + x.title + " (" + providers[x.provider].name + "): " + x.scope),

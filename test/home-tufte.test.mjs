@@ -20,7 +20,7 @@ test("a visitor can tell what the Group is, what they can hire, and where to go 
   assert.deepEqual(root.navigation.map(x=>x.href),
     ["/","/work/","/projects/","/about/","/for-agents/","/contact/"]);
   assert.deepEqual(root.tiles.map(x=>x.id),
-    ["introduction","frontiers","paths","services","method","physical-world","explore","trade","companies","agents","support"]);
+    ["introduction","self-service","frontiers","paths","services","method","physical-world","explore","trade","companies","agents","support"]);
   const hero=tile(root,"introduction").html;
   assert.ok(hero.includes(frontdoor.proposition));
   assert.ok(hero.includes(frontdoor.promise.replace(/&/gu,"&amp;").replace(/'/gu,"&#39;")));
@@ -124,6 +124,24 @@ test("services are tied to an existing accountable company, and only inquiry is 
   for(const step of frontdoor.steps)
     assert.ok(tile(work,"process").html.includes(step.detail));
   assert.doesNotMatch(list,/Buy now|guaranteed revenue|instant acceptance/u);
+});
+
+test("self-service buyer journeys preserve original offer identities in human and machine projections",()=>{
+  for (const path of ["/","/work/","/for-agents/"]) {
+    const page=model(path), direct=tile(page,"self-service");
+    assert.equal(direct.title,frontdoor.selfService.title);
+    assert.ok(page.tiles.indexOf(direct)<page.tiles.findIndex(x=>x.id==="services") || path==="/for-agents/");
+    const mentions=page.metadata.structuredData["@graph"][2].mentions;
+    for (const example of frontdoor.selfService.examples) {
+      assert.ok(direct.html.includes('href="'+example.href+'"'));
+      for(const identity of [example.sku,example.cell,example.law]) assert.ok(direct.html.includes(identity));
+      const claim=mentions.find(x=>x["@id"]===example.sku);
+      assert.equal(claim.url,example.href);
+      assert.deepEqual(claim.identifier.map(x=>x.value),[example.cell,example.law]);
+    }
+    assert.ok(direct.html.includes(home.group.marketDiscovery));
+    assert.doesNotMatch(direct.html,/contact\/|Request a scope|\$\d/u,"self-service leads directly to the original merchant without a second price or quote");
+  }
 });
 
 test("real named projects and distinct buying venues are prominent, not inferred offers",()=>{
