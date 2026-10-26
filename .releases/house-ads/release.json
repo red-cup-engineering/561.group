@@ -1,6 +1,6 @@
 {
   "hostRepository": "red-cup-engineering/house-ads-server-site",
-  "hostCommit": "ec49ae088d0f12c5fe9ec647cb81ec0f58e86e55",
+  "hostCommit": "1a58fb576420a0cafc9525b0a1934750b798090e",
   "advertisingRepository": "red-cup-engineering/web-advertising-system-engineering-services-section",
   "advertisingCommit": "2fa6576097ac2f1590248fd54d2e76c3aedd9531",
   "advertisingVersion": "0.3.0-dev.2",
@@ -19,6 +19,7 @@
     "worker": "house-ads-server",
     "kvBinding": "AD_RECEIPTS",
     "kvNamespace": "56b1e309a1f24442a61d82b8b7eff38e",
+    "analyticsEnabled": false,
     "analyticsBinding": "AD_ACTIVITY",
     "analyticsDataset": "house_ads_activity"
   }
