@@ -34,11 +34,23 @@ const obsolete=await readFile(path.join(app,"public/index.html"),"utf8").then(()
 check("root has one TUFTE authority and stale static index is removed",()=>assert.equal(obsolete,false));
 const names=["source-revision.json","estate-records.json","zh-hans/index.html",
   "lkt/index.html","llms.txt","llms-full.txt","feed.json","feed.atom.xml",
-  "feed.rss.xml",".well-known/security.txt","8d232583e7cba18a83bf5c0325fcc7c9.txt",
+  "feed.rss.xml","feed-input-receipt.json",".well-known/security.txt","8d232583e7cba18a83bf5c0325fcc7c9.txt",
   "humans.txt","robots.txt","sitemap.xml"];
 const readOutputs=async()=>Object.fromEntries(await Promise.all(names.map(async name=>[
   name,await readFile(path.join(app,"public",name),"utf8")])));
 const before=await readOutputs();
+check("offline source-input receipt distinguishes missing inputs from absent original publications",()=>{
+  const receipt=JSON.parse(before["feed-input-receipt.json"]);
+  assert.equal(receipt.schema,"561.group/feed-input-receipt/v1");
+  assert.equal(receipt.origin,"https://561.group");
+  assert.equal(receipt.sources.length,4);
+  assert.deepEqual(receipt.sources.map(s=>s.state),
+    ["unavailable","unavailable","unavailable","unavailable"]);
+  assert.equal(receipt.completeness,"partial-source-coverage");
+  assert.equal(receipt.emittedItems,0);
+  assert.equal(receipt.sources.some(s=>s.inputItems!==undefined),false);
+});
+
 check("the published site guides humans and agents to every real public page",()=>{
   for(const route of ["/work/","/projects/","/about/","/for-agents/"]){
     assert.ok(before["sitemap.xml"].includes("<loc>https://561.group"+route+"</loc>"),
