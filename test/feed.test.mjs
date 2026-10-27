@@ -190,7 +190,7 @@ test("bounded feed intake refuses oversized bodies and non-UTF-8 JSON, never pro
   ]),/unobserved source provenance/);
 });
 
-import { assayPublicFeedProjection } from "../scripts/assay-public-feed.mjs";
+import { assayPublicFeedProjection, qualifyPublicAssetReadPath } from "../scripts/assay-public-feed.mjs";
 
 function aCompletePublication() {
   const submitted=home.group.companies.map((company,i)=>{
@@ -275,4 +275,41 @@ test("original main release witnesses exact public provenance bytes, MIME and se
   assert.match(workflow,/publicationBodies\.get\('feed\.json'\)/u);
   assert.match(workflow,/new TextDecoder\('utf-8',\{fatal:true\}\)/u);
   assert.match(workflow,/Public syndication evidence lacks bounded JSON media type/u);
+});
+
+test("original release accepts only same-language canonical HTML redirects, never evidence redirects",()=>{
+  const origin="https://561.group";
+  assert.deepEqual(qualifyPublicAssetReadPath({
+    origin,path:"feed-provenance.jsonld",redirected:false,
+    responseUrl:origin+"/feed-provenance.jsonld",contentType:"application/ld+json"
+  }),{mode:"direct"});
+  for(const [path,language] of [
+    ["zh-hans/index.html","zh-hans"],["lkt/index.html","lkt"]
+  ]){
+    assert.deepEqual(qualifyPublicAssetReadPath({
+      origin,path,redirected:true,responseUrl:origin+"/"+language+"/",
+      contentType:"text/html; charset=utf-8"
+    }),{mode:"localized-html-redirect",canonical:origin+"/"+language+"/"});
+  }
+  for(const [path,redirectedTo,type] of [
+    ["feed.json","/feed.json?rewrite=1","application/feed+json"],
+    ["feed-input-receipt.json","/feed-input-receipt.json","application/json"],
+    ["feed-provenance.jsonld","/feed-provenance.jsonld","application/ld+json"],
+    ["llms.txt","/llms.txt","text/plain"],
+    ["zh-hans/index.html","/lkt/","text/html"],
+    ["lkt/index.html","/zh-hans/","text/html"],
+    ["lkt/index.html","https://foreign.invalid/lkt/","text/html"],
+    ["lkt/index.html","/lkt/?token=1","text/html"],
+    ["zh-hans/index.html","/zh-hans/","application/json"],
+  ]){
+    const responseUrl=redirectedTo.startsWith("https://")?
+      redirectedTo:origin+redirectedTo;
+    assert.throws(()=>qualifyPublicAssetReadPath({
+      origin,path,redirected:true,responseUrl,contentType:type
+    }),/redirect|canonical/i,"must refuse unqualified redirect "+path);
+  }
+  const workflow=readFileSync(new URL("../.github/workflows/deploy.yml",import.meta.url),"utf8");
+  assert.match(workflow,/qualifyPublicAssetReadPath\(\{/u);
+  assert.match(workflow,/asset\.url,contentType:asset\.headers\.get\('content-type'\)/u);
+  assert.match(workflow,/Deployed public bytes differ from original release receipt/u);
 });

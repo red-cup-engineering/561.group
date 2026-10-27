@@ -209,6 +209,8 @@ jobs:
           // A source commit alone does not attest generated external-feed
           // snapshots. Independently compare original published bytes with
           // their release-time artifact digests at the public origin.
+          const {assayPublicFeedProjection,qualifyPublicAssetReadPath}=
+            await import('./scripts/assay-public-feed.mjs');
           const publicationBodies=new Map();
           const semanticPublicationPaths=new Set([
             'feed.json','feed-input-receipt.json','feed-provenance.jsonld'
@@ -218,8 +220,13 @@ jobs:
             'estate-records.json','zh-hans/index.html','lkt/index.html']) {
             const target='/'+path;
             const asset=await read(target);
-            if(!asset.ok || asset.redirected)
-              throw Error('Original generated public artifact unavailable or redirected: '+target+' '+asset.status);
+            if(!asset.ok)throw Error('Original generated public artifact unavailable: '+target+' '+asset.status);
+            const route=qualifyPublicAssetReadPath({
+              origin:host,path,redirected:asset.redirected,
+              responseUrl:asset.url,contentType:asset.headers.get('content-type')
+            });
+            if(route.mode==='localized-html-redirect')
+              console.log('Canonical localized public asset read: '+target+' -> '+route.canonical);
             const raw=await asset.arrayBuffer();
             if(semanticPublicationPaths.has(path)) {
               if(raw.byteLength>2*1024*1024 ||
@@ -236,7 +243,7 @@ jobs:
           // These are the exact already-fetched public bytes, not a second
           // crawler or a check of unpublished checkout-only representations.
           const {readFile}=await import('node:fs/promises');
-          const {assayPublicFeedProjection}=await import('./scripts/assay-public-feed.mjs');
+
           const sourceHome=JSON.parse(await readFile('data/home.json','utf8'));
           const feedReceipt=assayPublicFeedProjection({
             home:sourceHome,
