@@ -528,3 +528,29 @@ test("Original Group ecological source questions are independently read after pu
     release.indexOf("for(const path of ['/','/work/','/projects/','/about/','/for-agents/'])"),
     "Public machine and HTML attestations precede Markdown conformance");
 });
+
+
+test("original production independently receives all six source-owned question citations from actual public JSON-LD",()=>{
+  const workflow=readFileSync(new URL("../.github/workflows/deploy.yml",import.meta.url),"utf8");
+  const start=workflow.indexOf("      - name: Receive independent public revision, human/agent and retained site routes");
+  const end=workflow.indexOf("      - name: Record original public delivery observation after release",start);
+  assert.ok(start>0 && end>start);
+  const release=workflow.slice(start,end);
+  const script=release.match(/          node --input-type=module <<'NODE'\n([\s\S]*?)\n          NODE\n/u);
+  assert.ok(script,"original release has one bounded independent Node receiver");
+  const unindented=script[1].split("\n").map(line=>
+    line.startsWith("          ")?line.slice(10):line).join("\n");
+  const check=spawnSync(process.execPath,["--check","--input-type=module"],{
+    input:unindented,encoding:"utf8",timeout:10000
+  });
+  assert.equal(check.status,0,check.stderr);
+  for(const evidence of [
+    "'editorial-question-provenance.jsonld'",
+    "semanticPublicationPaths.has(path)",
+    "receipt.artifactDigests?.[path]!==digest",
+    "const editorialSourceBytes=await readFile('data/frontdoor.json')",
+    "const {assayEditorialQuestionProvenance}=",
+    "graph:JSON.parse(publicationBodies.get('editorial-question-provenance.jsonld'))",
+    "Independent public editorial provenance receiving",
+  ])assert.ok(release.includes(evidence),"received public source assertion missing: "+evidence);
+});

@@ -566,3 +566,17 @@ test("the same blog source receipt refuses false author, count and cap claims",(
   assert.throws(()=>project561GroupPage({home,estate,frontdoor,path:"/blog/",
     feed:originalFeed}),/four-company build receipt/u);
 });
+
+test("source-owned six questions have one explicitly qualified machine-readable source graph",()=>{
+  const about=model("/about/");
+  const cited=tile(about,"source").html;
+  assert.ok(cited.includes('href="/editorial-question-provenance.jsonld"'));
+  assert.ok(cited.includes("Source-bound public questions and citations (JSON-LD)"));
+  assert.ok(cited.includes("does not independently verify their scientific claims"));
+  const head=project561GroupHead(home);
+  assert.ok(head.includes('type="application/ld+json"'));
+  assert.ok(head.includes('href="/editorial-question-provenance.jsonld"'));
+  assert.equal(about.metadata.structuredData["@graph"][2]["@id"],
+    "https://561.group/about/#webpage",
+    "existing About schema remains one source, not a substitute CMS");
+});

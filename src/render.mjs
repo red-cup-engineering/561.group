@@ -626,7 +626,7 @@ ${designTerms(home).map(({ text, gloss }) => `- ${text}: ${gloss}`).join("\n")}
 
 ${companyLines(g)}
 
-What the Group is publishing, merged from the four companies: [Read the blog](${home.origin}/blog/), [JSON Feed](${home.origin}/feed.json), [Atom](${home.origin}/feed.atom.xml), [RSS](${home.origin}/feed.rss.xml). [Build source-admission receipt](${home.origin}/feed-input-receipt.json) reports the four original company feed reads, SHA-256 of received source response bytes, and withheld-record counts. [PROV-O item provenance](${home.origin}/feed-provenance.jsonld) links each aggregated item to its observed source feed snapshot and asserted company author. These artifacts do not attest article fact-checking, indexing, federation delivery, correction histories or full archive coverage.
+What the Group is publishing, merged from the four companies: [Read the blog](${home.origin}/blog/), [JSON Feed](${home.origin}/feed.json), [Atom](${home.origin}/feed.atom.xml), [RSS](${home.origin}/feed.rss.xml). [Build source-admission receipt](${home.origin}/feed-input-receipt.json) reports the four original company feed reads, SHA-256 of received source response bytes, and withheld-record counts. [PROV-O item provenance](${home.origin}/feed-provenance.jsonld) links each aggregated item to its observed source feed snapshot and asserted company author. These artifacts do not attest article fact-checking, indexing, federation delivery, correction histories or full archive coverage. [Editorial question and citation provenance](${home.origin}/editorial-question-provenance.jsonld) derives the six public About-page questions and suggested answers from the exact source-authored front-door JSON byte digest; its research links are not independent scientific attestations.
 
 GitHub organization of the parent: ${g.githubOrg}. Full prose, doctrine and told values: [llms-full.txt](${home.origin}/llms-full.txt).
 
@@ -666,7 +666,7 @@ export function renderLlmsFull(home, estate, facts = {}) {
 
 > ${home.description}
 
-This is the long form of [llms.txt](${home.origin}/llms.txt). Everything here is public.
+This is the long form of [llms.txt](${home.origin}/llms.txt). Everything here is public. Original [editorial question and citation provenance](${home.origin}/editorial-question-provenance.jsonld) binds each About-page question to its source bytes and related company reading, not an independently verified scientific result.
 
 ${publicGuide(home, facts.frontdoor)}
 
