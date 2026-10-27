@@ -1,3 +1,27 @@
+/** A localized authored HTML file may have a same-origin canonical slash
+ * redirect at the Cloudflare assets layer. That is not permission to redirect
+ * JSON evidence, feeds, or arbitrary generated assets. Content authenticity
+ * is checked separately against exact public SHA-256 bytes after this check.
+ */
+export function qualifyPublicAssetReadPath({origin,path,redirected,responseUrl,contentType}) {
+  if(origin!=="https://561.group" || typeof path!=="string" || !path ||
+     typeof redirected!=="boolean")
+    throw new TypeError("Public artifact route requires exact origin, path and redirect reading");
+  if(!redirected) return Object.freeze({mode:"direct"});
+  const locale=({"zh-hans/index.html":"zh-hans","lkt/index.html":"lkt"})[path];
+  if(!locale || typeof responseUrl!=="string" ||
+     !(contentType??"").toLowerCase().startsWith("text/html"))
+    throw new TypeError("Only authored localized HTML may follow a canonical public redirect");
+  let final;
+  try { final=new URL(responseUrl); } catch {
+    throw new TypeError("Localized canonical redirect requires an observed public URL");
+  }
+  if(final.origin!==origin || final.username || final.password ||
+     final.search || final.hash || !final.pathname.startsWith("/"+locale+"/"))
+    throw new TypeError("Localized public redirect left its canonical language scope");
+  return Object.freeze({mode:"localized-html-redirect",canonical:final.href});
+}
+
 // Read-only release assay for the ONE Group publisher: verifies the same
 // source-qualified feed, input receipt and PROV-O graph after public HTTP
 // readback. No new publisher, crawler, author or federation identity.
