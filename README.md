@@ -24,6 +24,17 @@ JSON Feed into human HTML, machine JSON and negotiated Markdown.
   dates and bounded fields **before** generating any RSS/Atom/JSON feeds. A
   refused feed or item is withheld, not given another company's authorship.
   A single invalid upstream item no longer brings down the entire blog.
+- The same original `/blog/` TUFTE/LivingWebServer page **shows the
+  source receipt to a human**: four named companies and each one's
+  received/unavailable/refused status, the count of admitted and rejected
+  source items, the number actually syndicated and the number outside the
+  60-item cap. The application imports the same generated JSON Feed and
+  input receipt that the existing publisher already produces; only authorized
+  Blog GET/HEAD reads access them. HTML, Markdown and machine JSON project
+  the same admitted state. A partly available feed is explicitly shown as
+  partial, not converted into a claim that an unreachable publisher has no
+  work. Source input is **one release-time snapshot**, not a current live
+  inventory, independent article fact check or correction/withdrawal event.
 - `/feed-input-receipt.json` is a public build artifact with one source
   observation per original company (received, unavailable or refused), source
   item counts where known, SHA-256 of the **decoded original HTTP response
