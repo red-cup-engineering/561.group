@@ -27,7 +27,10 @@ JSON Feed into human HTML, machine JSON and negotiated Markdown.
 - `/feed-input-receipt.json` is a public build artifact with one source
   observation per original company (received, unavailable or refused), source
   item counts where known, SHA-256 of the **decoded original HTTP response
-  bytes** for received feeds, and aggregated item-exclusion reasons. Streaming
+  bytes** for received feeds, aggregated item-exclusion reasons, and separately
+  the number of valid articles omitted only by the 60-item aggregate limit.
+  A source reception count, accepted item count and published aggregate count
+  are different observations. Streaming
   intake is capped at 2 MiB per original source. The build rejects source
   items whose declared byline differs from the declared corporate author,
   rather than quietly replacing one author's identity with another's.
