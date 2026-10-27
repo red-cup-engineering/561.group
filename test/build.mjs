@@ -50,6 +50,9 @@ check("offline source-input receipt distinguishes missing inputs from absent ori
     ["unavailable","unavailable","unavailable","unavailable"]);
   assert.equal(receipt.completeness,"partial-source-coverage");
   assert.equal(receipt.emittedItems,0);
+  assert.equal(receipt.sourceItemCount,0);
+  assert.equal(receipt.admittedItems,0);
+  assert.equal(receipt.omittedByAggregateLimit,0);
   assert.equal(receipt.expectedSourceCount,4);
   const graph=JSON.parse(before["feed-provenance.jsonld"]);
   assert.equal(graph["@context"].prov,"http://www.w3.org/ns/prov#");
