@@ -359,6 +359,62 @@ jobs:
             graph:JSON.parse(publicationBodies.get('feed-provenance.jsonld'))
           });
           console.log('Independent public source/metadata receiving: '+JSON.stringify(feedReceipt));
+          // Independently read the actual reader-facing blog, not only its
+          // source feed: TUFTE HTML, machine JSON and negotiated Markdown must
+          // tell the same truth as the exact public input receipt just fetched.
+          const inputReceipt=JSON.parse(publicationBodies.get('feed-input-receipt.json'));
+          const expectedCoverage=feedReceipt.observedSourceFeeds+' of '+
+            sourceHome.group.companies.length+' original company feeds received';
+          const expectedSelection=feedReceipt.admittedItems+' source '+
+            (feedReceipt.admittedItems===1?'item':'items')+' admitted, '+
+            feedReceipt.emittedItems+' selected';
+          const expectedRejected=feedReceipt.excludedItems+' source '+
+            (feedReceipt.excludedItems===1?'entry':'entries')+' rejected';
+          const expectedOverflow=feedReceipt.omittedByAggregateLimit+
+            ' left outside its 60-item selection';
+          const expected=[expectedCoverage,expectedSelection,expectedRejected,expectedOverflow];
+          const blogHtmlResponse=await read('/blog/','text/html');
+          const blogHtml=await blogHtmlResponse.text();
+          if(!blogHtmlResponse.ok||blogHtmlResponse.redirected||
+             !(blogHtmlResponse.headers.get('content-type')??'').includes('text/html')||
+             !blogHtml.includes('href="https://561.group/blog/"')||
+             !blogHtml.includes('What this build actually received')||
+             !expected.every(term=>blogHtml.includes(term)))
+            throw Error('Independent published blog HTML disagrees with qualified source coverage');
+          const blogJsonResponse=await read('/blog/','application/json');
+          if(!blogJsonResponse.ok||blogJsonResponse.redirected||
+             !(blogJsonResponse.headers.get('content-type')??'').includes('application/json'))
+            throw Error('Published blog has no original machine-readable source model');
+          const blogModel=await blogJsonResponse.json();
+          const originalCoverageTile=blogModel?.tiles?.find(tile=>tile.id==='coverage');
+          if(blogModel.kind!=='tufte.projection'||
+             blogModel.metadata?.canonical!==host+'/blog/'||
+             !originalCoverageTile||
+             !expected.every(term=>originalCoverageTile.html?.includes(term))||
+             !sourceHome.group.companies.every(company=>
+               originalCoverageTile.html.includes(company.name) &&
+               originalCoverageTile.html.includes(company.feeds.json)))
+            throw Error('Published TUFTE blog JSON loses original company and source-receipt evidence');
+          const blogMarkdownResponse=await read('/blog/','text/markdown');
+          const blogMarkdown=await blogMarkdownResponse.text();
+          if(!blogMarkdownResponse.ok||blogMarkdownResponse.redirected||
+             !(blogMarkdownResponse.headers.get('content-type')??'').startsWith('text/markdown')||
+             !/^(?:#|##) .+/mu.test(blogMarkdown)||
+             !expected.every(term=>blogMarkdown.includes(term))||
+             !blogMarkdown.includes('build-time feed input and selection counts'))
+            throw Error('Published accessible blog Markdown disagrees with original feed receipt');
+          if(inputReceipt.emittedItems!==feedReceipt.emittedItems)
+            throw Error('Reader-facing blog is using another source snapshot');
+          console.log('Independent published blog reader coverage: '+JSON.stringify({
+            sourceCommit:receipt.sourceCommit,
+            sources:feedReceipt.observedSourceFeeds,
+            sourceItems:feedReceipt.sourceItems,
+            selected:feedReceipt.emittedItems,
+            rejected:feedReceipt.excludedItems,
+            omittedByCap:feedReceipt.omittedByAggregateLimit,
+            html:true,json:true,markdown:true
+          }));
+
 
           // Marketing copy is owned by the public editorial source, not by
           // frozen release-workflow prose. Verify current purpose, not a
