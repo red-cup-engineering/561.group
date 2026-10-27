@@ -200,11 +200,17 @@ test("native blog negotiates identical TUFTE original feed as HTML, JSON and Mar
   const json=await (await f.request("/blog/",{headers:{accept:"application/json"}})).json();
   assert.equal(json.kind,"tufte.projection");
   assert.equal(json.metadata.canonical,"https://561.group/blog/");
+  assert.ok(json.tiles.find(x=>x.id==="coverage")?.html.includes(
+    "4 of 4 original company feeds received"),"machine view matches human source coverage");
+  assert.ok(json.tiles.find(x=>x.id==="coverage")?.html.includes(
+    "not current live publication totals"),"machine view preserves temporal scope");
   assert.deepEqual(json.metadata.structuredData["@graph"][2].mainEntity.itemListElement
     .map(x=>x.item.author.name),[home.group.companies[0].name]);
   const markdown=await (await f.request("/blog/",{headers:{accept:"text/markdown"}})).text();
   assert.match(markdown,/Source\\-bound research/u);
   assert.match(markdown,/science\.561\.group\/source-bound-research/u);
+  assert.match(markdown,/original company feeds received/u,
+    "Markdown reader also sees the source coverage of this release");
   assert.equal(f.reads.filter(x=>x[0]==="feed").length,3);
   assert.equal(f.reads.filter(x=>x[0]==="receipt").length,3);
   assert.equal(f.reads.filter(x=>x[0]==="home").length,3);
