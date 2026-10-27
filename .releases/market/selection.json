@@ -3,5 +3,8 @@
   "repository": "561-group/561-group-frontdoor-services-section",
   "revision": "4d9c747aa6d5f039417671d1b26e2d44ef1ea23c",
   "directory": ".service-releases/market/20261027-lakota-memory-a1ddfe2",
-  "manifestSha256": "681af6e8c67065e51d4bb47e9fb9e6727c546fa539872f5ca533bcddcdd23a5e"
+  "manifestSha256": "681af6e8c67065e51d4bb47e9fb9e6727c546fa539872f5ca533bcddcdd23a5e",
+  "operation": "observe",
+  "workOrder": ".releases/market/work-order.json",
+  "workOrderSha256": "f0dc660870b660789cf4d8266d3ad850bbb18dbff7335df94f51dc858a39bbf1"
 }

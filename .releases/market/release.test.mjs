@@ -7,7 +7,18 @@ import { createHash } from 'node:crypto';
 import { gzipSync } from 'node:zlib';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { selectMarketCarrier, verifyMarketCarrier, receiveMarketCarrier } from './release.mjs';
+import {
+  admitMarketFabricationWorkOrder,
+  checkoutMarketFabricationSources,
+  fabricateMarketCarrier,
+  installFrozenMarketSuppliers,
+  readMarketFabricationWorkOrder,
+  receiveMarketCarrier,
+  selectMarketCarrier,
+  verifyInstalledMarketSuppliers,
+  verifyMarketCarrier,
+  verifyMarketFabricationInputs,
+} from './release.mjs';
 
 const sha = bytes => createHash('sha256').update(bytes).digest('hex');
 
@@ -255,11 +266,888 @@ test('the actual Group CLI verifies observation without credentials and dispatch
     assert.deepEqual(JSON.parse(await readFile(argsFile, 'utf8')), { args: ['--observe', root, digest, join(parent, 'market-release/receipt.json'), revision], credentialPresent: true });
     await rm(argsFile);
     assert.throws(() => execFileSync(process.execPath, [cli, 'release', root, digest], { cwd: parent, env, stdio: 'pipe' }),
-      error => error.status === 1 && error.stderr.toString().includes('exact Market operation'));
+      error => error.status === 1 && error.stderr.toString().trim() === 'MARKET_OPERATION_FAILED');
     await assert.rejects(lstat(argsFile), { code: 'ENOENT' });
     assert.throws(() => execFileSync(process.execPath, [cli, 'observe', root, digest], {
       cwd: parent, env: { ...env, GITHUB_REPOSITORY: 'another/repository' }, stdio: 'pipe',
-    }), error => error.status === 1 && error.stderr.toString().includes('original reviewed Group main'));
+    }), error => error.status === 1 && error.stderr.toString().trim() === 'MARKET_OPERATION_FAILED');
     await assert.rejects(lstat(argsFile), { code: 'ENOENT' });
+  });
+});
+
+test('the reviewed selection binds the exact merged e835 native fabrication work order and incumbent carrier', async () => {
+  const selectionPath = fileURLToPath(new URL('./selection.json', import.meta.url));
+  const workOrderPath = fileURLToPath(new URL('./work-order.json', import.meta.url));
+  const selected = await selectMarketCarrier(selectionPath);
+  assert.equal(selected.ready, true);
+  assert.equal(selected.operation, 'observe');
+  assert.equal(selected.repository, '561-group/561-group-frontdoor-services-section');
+  assert.equal(selected.revision, '4d9c747aa6d5f039417671d1b26e2d44ef1ea23c');
+  assert.equal(selected.directory, '.service-releases/market/20261027-lakota-memory-a1ddfe2');
+  assert.equal(selected.manifestSha256, '681af6e8c67065e51d4bb47e9fb9e6727c546fa539872f5ca533bcddcdd23a5e');
+  assert.equal(selected.workOrder, '.releases/market/work-order.json');
+  assert.equal(selected.workOrderSha256, 'f0dc660870b660789cf4d8266d3ad850bbb18dbff7335df94f51dc858a39bbf1');
+
+  const { workOrder, workOrderSha256 } = await readMarketFabricationWorkOrder(workOrderPath, selected.workOrderSha256);
+  assert.equal(workOrderSha256, selected.workOrderSha256);
+  assert.equal(workOrder.source.market.revision, 'e8350176f604f4592918d870718747a12a878379');
+  assert.equal(workOrder.source.market.tree, 'eaeee8b43297f3fd56748d0f256cb2eb3b8d779c');
+  assert.equal(workOrder.source.public.revision, 'dd763c1356e9aea3a5688090efebeef8ecaf7eed');
+  assert.equal(workOrder.source.public.gitlink, 'dd763c1356e9aea3a5688090efebeef8ecaf7eed');
+  assert.equal(workOrder.source.public.tree, 'debc7dd359bafc77825a47065065c77a9d9befd2');
+  assert.equal(workOrder.baseline.versionId, '21c53a1e-8001-49c4-a186-fa1b0ea0ae5c');
+  assert.equal(workOrder.baseline.sourceRevision, 'a1ddfe2151b40292deb756f3c465f9d39ddab007');
+  assert.equal(workOrder.suppliers.length, 1);
+  assert.equal(workOrder.suppliers[0].name, '@red-cup-engineering/mcp-engineering-services-section');
+  assert.equal(workOrder.suppliers[0].version, '0.1.9');
+
+  const root = await mkdtemp(join(tmpdir(), 'market-work-order-selection-'));
+  try {
+    const tempSelection = join(root, 'selection.json');
+    const rawSelection = JSON.parse(await readFile(selectionPath, 'utf8'));
+    await writeFile(join(root, 'work-order.json'), await readFile(workOrderPath));
+    await writeFile(tempSelection, JSON.stringify({ ...rawSelection, workOrderSha256: '0'.repeat(64) }));
+    await assert.rejects(selectMarketCarrier(tempSelection), { code: 'FABRICATION_WORK_ORDER_BYTES_CHANGED' });
+
+    const mismatchedWorkOrder = structuredClone(workOrder);
+    mismatchedWorkOrder.incumbentCarrier.revision = 'c'.repeat(40);
+    const mismatchedBytes = Buffer.from(JSON.stringify(mismatchedWorkOrder));
+    await writeFile(join(root, 'work-order.json'), mismatchedBytes);
+    await writeFile(tempSelection, JSON.stringify({ ...rawSelection, workOrderSha256: sha(mismatchedBytes) }));
+    await assert.rejects(selectMarketCarrier(tempSelection), { code: 'INCUMBENT_CARRIER_SELECTION_MISMATCH' });
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+async function createCanonicalMarketFabricationFixture() {
+  const root = await mkdtemp(join(tmpdir(), 'market-native-fabrication-fixture-'));
+  const sourceRoot = join(root, 'source');
+  const parametersRoot = join(sourceRoot, 'parameters');
+  await mkdir(sourceRoot, { recursive: true });
+  await mkdir(parametersRoot, { recursive: true });
+
+  const git = (cwd, ...args) => execFileSync(
+    'git',
+    ['-c', 'gc.auto=0', '-c', 'maintenance.auto=false', '--no-optional-locks', '-C', cwd, ...args],
+    { encoding: 'utf8' },
+  ).trim();
+
+  git(parametersRoot, 'init', '--quiet');
+  git(parametersRoot, 'remote', 'add', 'origin', 'https://github.com/causeway-services/public-market-services-section.git');
+  await mkdir(join(parametersRoot, 'data/catalog'), { recursive: true });
+  const parametersPkgBytes = Buffer.from(`${JSON.stringify({
+    name: '@561-group/public-market-services-section',
+    version: '0.1.0',
+    private: true,
+    type: 'module',
+    repository: {
+      type: 'git',
+      url: 'https://github.com/causeway-services/public-market-services-section.git',
+    },
+  }, null, 2)}\n`);
+  const catalogBytes = Buffer.from(`${JSON.stringify({ offers: [{ id: 'fixture-offer' }] }, null, 2)}\n`);
+  await writeFile(join(parametersRoot, 'package.json'), parametersPkgBytes);
+  await writeFile(join(parametersRoot, 'data/catalog/offers.json'), catalogBytes);
+  git(parametersRoot, 'add', 'package.json', 'data/catalog/offers.json');
+  git(parametersRoot, '-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.invalid', 'commit', '--quiet', '-m', 'Parameters fixture');
+  const parametersRevision = git(parametersRoot, 'rev-parse', 'HEAD');
+  const parametersTree = git(parametersRoot, 'rev-parse', 'HEAD^{tree}');
+
+  git(sourceRoot, 'init', '--quiet');
+  git(sourceRoot, 'remote', 'add', 'origin', 'https://github.com/red-cup-engineering/market.561.group.git');
+  for (const dir of ['src', 'scripts', 'ops', 'test']) {
+    await mkdir(join(sourceRoot, dir), { recursive: true });
+  }
+
+  const supplierIntegrity = 'sha512-jbeC9siAiTmnXzs8zw8ZqUk9ZnkNrq0+AOmILhDQrjiDWk/D/lXQCncMZEQxxUMKUCKZKRMhZKOPJW7uYaq6bw==';
+  const files = {
+    'package.json': Buffer.from(`${JSON.stringify({
+      name: '@causeway-services/market.561.group',
+      version: '0.1.0',
+      private: true,
+      type: 'module',
+      packageManager: 'pnpm@10.0.0',
+      imports: { '#parameters/*': './parameters/*' },
+      dependencies: {
+        '@red-cup-engineering/mcp-engineering-services-section': '0.1.9',
+      },
+      devDependencies: {
+        wrangler: '4.152.0',
+      },
+    }, null, 2)}\n`),
+    'pnpm-lock.yaml': Buffer.from(
+      `lockfileVersion: '9.0'\npackages:\n  '@red-cup-engineering/mcp-engineering-services-section@0.1.9':\n    resolution: {integrity: ${supplierIntegrity}}\n`,
+    ),
+    'pnpm-workspace.yaml': Buffer.from('onlyBuiltDependencies:\n  - esbuild\n  - workerd\n'),
+    '.npmrc': Buffer.from('registry=https://registry.npmjs.org/\n@red-cup-engineering:registry=https://registry.561.group/\n'),
+    'wrangler.jsonc': Buffer.from(`${JSON.stringify({
+      name: 'market-561-group',
+      main: 'src/worker.mjs',
+      compatibility_date: '2026-08-31',
+      compatibility_flags: ['nodejs_compat'],
+    }, null, 2)}\n`),
+    'src/worker.mjs': Buffer.from('export default { async fetch() { return new Response("ok"); } };\n'),
+    'src/compiled-offers.mjs': Buffer.from('export const COMPILED_DECLARATIONS = [{ id: "offer-1", runtime: "worker" }, { id: "node-only", runtime: "node" }];\n'),
+    'src/catalog.mjs': Buffer.from('export const catalog = true;\n'),
+    'scripts/build-native-worker.mjs': Buffer.from('export async function selectNativeMarketBuildRequest() {}\nexport async function buildNativeMarketWorker() {}\n'),
+    'scripts/replay-retained-worker.mjs': Buffer.from('export async function replayRetainedWorker() {}\n'),
+    'scripts/build-worker-release-receiver.mjs': Buffer.from('export async function buildMarketWorkerReleaseReceiver() {}\n'),
+    'ops/receive-native-worker.mjs': Buffer.from('export async function receiveNativeMarketWorker() {}\n'),
+    'ops/receive-deployment.mjs': Buffer.from('export function admitMarketSourceBindings(v) { return v; }\n'),
+    'ops/release-worker.mjs': Buffer.from('export async function releaseWorker() {}\n'),
+    'test/worker.test.mjs': Buffer.from('export const workerSuite = true;\n'),
+    'test/source-cell-Realization.test.mjs': Buffer.from('export const cellSuite = true;\n'),
+    'test/workspace-package-graph.test.mjs': Buffer.from('export const graphSuite = true;\n'),
+  };
+
+  for (const [relPath, content] of Object.entries(files)) {
+    await writeFile(join(sourceRoot, relPath), content);
+  }
+  await writeFile(join(sourceRoot, '.gitignore'), 'node_modules/\n.wrangler/\n');
+  git(sourceRoot, 'add', '.gitignore', ...Object.keys(files));
+  git(sourceRoot, 'update-index', '--add', '--cacheinfo', `160000,${parametersRevision},parameters`);
+  git(sourceRoot, '-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.invalid', 'commit', '--quiet', '-m', 'Market fixture');
+  const marketRevision = git(sourceRoot, 'rev-parse', 'HEAD');
+  const marketTree = git(sourceRoot, 'rev-parse', 'HEAD^{tree}');
+
+  const supplierRoot = join(sourceRoot, 'node_modules/@red-cup-engineering/mcp-engineering-services-section');
+  await mkdir(join(supplierRoot, 'src'), { recursive: true });
+  const supplierManifestBytes = Buffer.from(`${JSON.stringify({
+    name: '@red-cup-engineering/mcp-engineering-services-section',
+    version: '0.1.9',
+    type: 'module',
+    exports: { '.': './src/index.mjs' },
+  }, null, 2)}\n`);
+  const supplierIndexBytes = Buffer.from('export const mcpVersion = "0.1.9";\n');
+  await writeFile(join(supplierRoot, 'package.json'), supplierManifestBytes);
+  await writeFile(join(supplierRoot, 'src/index.mjs'), supplierIndexBytes);
+
+  const wranglerRoot = join(sourceRoot, 'node_modules/wrangler');
+  const esbuildRoot = join(sourceRoot, 'node_modules/esbuild');
+  const workerdRoot = join(sourceRoot, 'node_modules/workerd');
+  await mkdir(wranglerRoot, { recursive: true });
+  await mkdir(esbuildRoot, { recursive: true });
+  await mkdir(workerdRoot, { recursive: true });
+  await writeFile(join(wranglerRoot, 'package.json'), `${JSON.stringify({
+    name: 'wrangler',
+    version: '4.152.0',
+    dependencies: {
+      esbuild: '0.25.2',
+      workerd: '1.20260405.1',
+    },
+  }, null, 2)}\n`);
+  await writeFile(join(esbuildRoot, 'package.json'), `${JSON.stringify({ name: 'esbuild', version: '0.25.2' }, null, 2)}\n`);
+  await writeFile(join(workerdRoot, 'package.json'), `${JSON.stringify({ name: 'workerd', version: '1.20260405.1' }, null, 2)}\n`);
+
+  const descriptor = (relPath, bytes) => ({ path: relPath, bytes: bytes.length, sha256: sha(bytes) });
+  const edgeDeclarationsBytes = Buffer.from(`${JSON.stringify([{ id: 'offer-1', runtime: 'worker' }], null, 2)}\n`);
+  const incumbentCarrierRoot = join(root, 'incumbent-carrier');
+  await mkdir(incumbentCarrierRoot, { recursive: true });
+  const incumbentManifest = {
+    kind: '561.market-worker-release/v1',
+    target: { scriptName: 'market-561-group', origin: 'https://market.561.group' },
+    source: { market: { repository: 'red-cup-engineering/market.561.group', revision: 'a1ddfe2151b40292deb756f3c465f9d39ddab007' } },
+    artifacts: {
+      candidateDeclarations: descriptor('candidate-declarations.json', edgeDeclarationsBytes),
+    },
+  };
+  const incumbentManifestBytes = Buffer.from(`${JSON.stringify(incumbentManifest, null, 2)}\n`);
+  await writeFile(join(incumbentCarrierRoot, 'manifest.json'), incumbentManifestBytes);
+  await writeFile(join(incumbentCarrierRoot, 'candidate-declarations.json.gz'), gzipSync(edgeDeclarationsBytes));
+
+  const workOrder = admitMarketFabricationWorkOrder({
+    kind: '561.market-worker-fabrication-work-order/v1',
+    target: {
+      accountId: '337e54ee6dc7d488933f473204a6d89e',
+      scriptName: 'market-561-group',
+      origin: 'https://market.561.group',
+      aliases: ['https://shop.561.group', 'https://bazaar.561.group'],
+    },
+    source: {
+      market: {
+        repository: 'red-cup-engineering/market.561.group',
+        revision: marketRevision,
+        tree: marketTree,
+      },
+      public: {
+        repository: 'causeway-services/public-market-services-section',
+        path: 'parameters',
+        mode: '160000',
+        revision: parametersRevision,
+        gitlink: parametersRevision,
+        tree: parametersTree,
+      },
+      cloudflare: {
+        repository: 'red-cup-engineering/cloudflare-engineering-services-section',
+        revision: 'fb54f04252796fdd29d965a714d7af6de1e86fa3',
+      },
+      receiver: {
+        repository: 'red-cup-engineering/market.561.group',
+        revision: marketRevision,
+      },
+    },
+    candidateCatalogPresentation: 'native',
+    baseline: {
+      versionId: '21c53a1e-8001-49c4-a186-fa1b0ea0ae5c',
+      deploymentId: 'f3841d23-aece-4997-88fa-2eb4a152d56c',
+      latestVersionId: '21c53a1e-8001-49c4-a186-fa1b0ea0ae5c',
+      sourceRevision: 'a1ddfe2151b40292deb756f3c465f9d39ddab007',
+      catalogPresentation: 'native',
+    },
+    payment: {
+      payTo: '0x6c42421f9f9c3f3f48f5c72c56e9895ca1262271',
+      network: 'eip155:8453',
+      asset: '0x833589fcd6edb6e08f4c7c32d4f71b54bda02913',
+      facilitator: 'https://facilitator.xpay.sh',
+    },
+    incumbentCarrier: {
+      repository: '561-group/561-group-frontdoor-services-section',
+      revision: '4d9c747aa6d5f039417671d1b26e2d44ef1ea23c',
+      directory: '.service-releases/market/20261027-lakota-memory-a1ddfe2',
+      manifestSha256: sha(incumbentManifestBytes),
+      incumbentDeclarationsArtifact: 'candidateDeclarations',
+    },
+    compiler: {
+      wrangler: { name: 'wrangler', version: '4.152.0' },
+      esbuild: { name: 'esbuild', version: '0.25.2' },
+      workerd: { name: 'workerd', version: '1.20260405.1' },
+      pnpm: { name: 'pnpm', version: '10.0.0' },
+    },
+    sourceInputs: {
+      sourceManifest: descriptor('package.json', files['package.json']),
+      lockfile: descriptor('pnpm-lock.yaml', files['pnpm-lock.yaml']),
+      workspaceManifest: descriptor('pnpm-workspace.yaml', files['pnpm-workspace.yaml']),
+      npmrc: descriptor('.npmrc', files['.npmrc']),
+      configuration: descriptor('wrangler.jsonc', files['wrangler.jsonc']),
+      parameterSourceManifest: descriptor('parameters/package.json', parametersPkgBytes),
+      parameterCatalog: descriptor('parameters/data/catalog/offers.json', catalogBytes),
+      workerEntry: descriptor('src/worker.mjs', files['src/worker.mjs']),
+      compiledOffers: descriptor('src/compiled-offers.mjs', files['src/compiled-offers.mjs']),
+      nativeProducer: descriptor('scripts/build-native-worker.mjs', files['scripts/build-native-worker.mjs']),
+      retainedProducer: descriptor('scripts/replay-retained-worker.mjs', files['scripts/replay-retained-worker.mjs']),
+      receiverBuilder: descriptor('scripts/build-worker-release-receiver.mjs', files['scripts/build-worker-release-receiver.mjs']),
+      nativeReceiver: descriptor('ops/receive-native-worker.mjs', files['ops/receive-native-worker.mjs']),
+      deploymentReceiver: descriptor('ops/receive-deployment.mjs', files['ops/receive-deployment.mjs']),
+      releaseOperator: descriptor('ops/release-worker.mjs', files['ops/release-worker.mjs']),
+      applicationInputs: [
+        descriptor('src/catalog.mjs', files['src/catalog.mjs']),
+      ],
+    },
+    suppliers: [
+      {
+        name: '@red-cup-engineering/mcp-engineering-services-section',
+        version: '0.1.9',
+        integrity: supplierIntegrity,
+        manifest: descriptor('package.json', supplierManifestBytes),
+        files: [
+          descriptor('src/index.mjs', supplierIndexBytes),
+        ],
+      },
+    ],
+    qualificationSuites: {
+      sourceSuite: descriptor('test/worker.test.mjs', files['test/worker.test.mjs']),
+      sourceCellSuite: descriptor('test/source-cell-Realization.test.mjs', files['test/source-cell-Realization.test.mjs']),
+      workspaceGraphSuite: descriptor('test/workspace-package-graph.test.mjs', files['test/workspace-package-graph.test.mjs']),
+    },
+    declarations: {
+      candidate: descriptor('candidate-declarations.json', edgeDeclarationsBytes),
+      incumbent: descriptor('incumbent-declarations.json', edgeDeclarationsBytes),
+    },
+  });
+
+  return {
+    root,
+    sourceRoot,
+    parametersRoot,
+    supplierRoot,
+    wranglerRoot,
+    esbuildRoot,
+    incumbentCarrierRoot,
+    files,
+    parametersPkgBytes,
+    supplierManifestBytes,
+    supplierIndexBytes,
+    edgeDeclarationsBytes,
+    workOrder,
+    git,
+  };
+}
+
+test('native fabrication input and supplier verification refuses unreceived revisions, dirty checkouts, altered bytes, credential leaks and external symlinks', async () => {
+  const fixture = await createCanonicalMarketFabricationFixture();
+  try {
+    const {
+      root,
+      sourceRoot,
+      parametersRoot,
+      supplierRoot,
+      wranglerRoot,
+      files,
+      supplierManifestBytes,
+      supplierIndexBytes,
+      workOrder,
+      git,
+    } = fixture;
+
+    const verifiedInputs = await verifyMarketFabricationInputs(sourceRoot, workOrder);
+    assert.equal(verifiedInputs.marketCheckout.revision, workOrder.source.market.revision);
+    assert.equal(verifiedInputs.parametersCheckout.revision, workOrder.source.public.revision);
+
+    const verifiedSuppliers = await verifyInstalledMarketSuppliers(sourceRoot, workOrder);
+    assert.equal(verifiedSuppliers.compiler.wrangler.version, '4.152.0');
+    assert.equal(verifiedSuppliers.compiler.esbuild.version, '0.25.2');
+    assert.equal(verifiedSuppliers.compiler.workerd.version, '1.20260405.1');
+    assert.equal(verifiedSuppliers.suppliers[0].version, '0.1.9');
+
+    // Non-canonical Git directory is refused
+    await assert.rejects(verifyMarketFabricationInputs(join(sourceRoot, 'src'), workOrder), {
+      code: 'CANONICAL_GIT_CHECKOUT_REQUIRED',
+    });
+
+    // Fake remote origin is refused
+    git(sourceRoot, 'remote', 'set-url', 'origin', 'https://github.com/another/merchant.git');
+    await assert.rejects(verifyMarketFabricationInputs(sourceRoot, workOrder), {
+      code: 'CANONICAL_GIT_ORIGIN_REQUIRED',
+    });
+    git(sourceRoot, 'remote', 'set-url', 'origin', 'https://github.com/red-cup-engineering/market.561.group.git');
+
+    // Wrong Market revision or tree is refused
+    await assert.rejects(
+      verifyMarketFabricationInputs(sourceRoot, {
+        ...workOrder,
+        source: { ...workOrder.source, market: { ...workOrder.source.market, revision: 'a'.repeat(40) } },
+      }),
+      { code: 'MARKET_SOURCE_REVISION_MISMATCH' },
+    );
+    await assert.rejects(
+      verifyMarketFabricationInputs(sourceRoot, {
+        ...workOrder,
+        source: { ...workOrder.source, market: { ...workOrder.source.market, tree: 'b'.repeat(40) } },
+      }),
+      { code: 'MARKET_SOURCE_TREE_MISMATCH' },
+    );
+
+    // Wrong Parameters gitlink or Parameters revision is refused
+    await assert.rejects(
+      verifyMarketFabricationInputs(sourceRoot, {
+        ...workOrder,
+        source: {
+          ...workOrder.source,
+          public: { ...workOrder.source.public, revision: 'c'.repeat(40), gitlink: 'c'.repeat(40) },
+        },
+      }),
+      { code: 'PARAMETERS_GITLINK_MISMATCH' },
+    );
+
+    // Dirty or untracked files in Market or Parameters checkout are refused
+    await writeFile(join(sourceRoot, 'untracked.mjs'), 'export const dirty = true;\n');
+    await assert.rejects(verifyMarketFabricationInputs(sourceRoot, workOrder), {
+      code: 'SOURCE_CHECKOUT_DIRTY',
+    });
+    await rm(join(sourceRoot, 'untracked.mjs'));
+
+    await writeFile(join(parametersRoot, 'untracked.json'), '{}\n');
+    await assert.rejects(verifyMarketFabricationInputs(sourceRoot, workOrder), {
+      code: 'SOURCE_CHECKOUT_DIRTY',
+    });
+    await rm(join(parametersRoot, 'untracked.json'));
+
+    // Altered source input or qualification suite digest is refused
+    await assert.rejects(
+      verifyMarketFabricationInputs(sourceRoot, {
+        ...workOrder,
+        sourceInputs: {
+          ...workOrder.sourceInputs,
+          workerEntry: { ...workOrder.sourceInputs.workerEntry, sha256: '0'.repeat(64) },
+        },
+      }),
+      { code: 'SOURCE_INPUT_BYTES_CHANGED' },
+    );
+    await assert.rejects(
+      verifyMarketFabricationInputs(sourceRoot, {
+        ...workOrder,
+        qualificationSuites: {
+          ...workOrder.qualificationSuites,
+          sourceSuite: { ...workOrder.qualificationSuites.sourceSuite, sha256: '0'.repeat(64) },
+        },
+      }),
+      { code: 'QUALIFICATION_SUITE_BYTES_CHANGED' },
+    );
+
+    // Altered supplier SRI in lockfile is refused
+    await assert.rejects(
+      verifyMarketFabricationInputs(sourceRoot, {
+        ...workOrder,
+        suppliers: [
+          {
+            ...workOrder.suppliers[0],
+            integrity: `sha512-${'A'.repeat(86)}==`,
+          },
+        ],
+      }),
+      { code: 'SUPPLIER_SRI_UNRECEIVED' },
+    );
+
+    // Credential leak in .npmrc is refused even if its hash matches the descriptor
+    const leakedNpmrc = Buffer.from(
+      'registry=https://registry.npmjs.org/\n//registry.561.group/:_authToken=leaked-token\n',
+    );
+    await writeFile(join(sourceRoot, '.npmrc'), leakedNpmrc);
+    git(sourceRoot, 'add', '.npmrc');
+    git(sourceRoot, '-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.invalid', 'commit', '--quiet', '-m', 'Leaked npmrc');
+    const leakedCommit = git(sourceRoot, 'rev-parse', 'HEAD');
+    const leakedTree = git(sourceRoot, 'rev-parse', 'HEAD^{tree}');
+    await assert.rejects(
+      verifyMarketFabricationInputs(sourceRoot, {
+        ...workOrder,
+        source: {
+          ...workOrder.source,
+          market: { ...workOrder.source.market, revision: leakedCommit, tree: leakedTree },
+        },
+        sourceInputs: {
+          ...workOrder.sourceInputs,
+          npmrc: { path: '.npmrc', bytes: leakedNpmrc.length, sha256: sha(leakedNpmrc) },
+        },
+      }),
+      { code: 'NPMRC_CREDENTIAL_LEAK_REFUSED' },
+    );
+    git(sourceRoot, 'reset', '--hard', '--quiet', workOrder.source.market.revision);
+
+    // Same-byte external symlink substitution for a source input is refused even if committed
+    const outsideSourceFile = join(root, 'outside-catalog.mjs');
+    await writeFile(outsideSourceFile, files['src/catalog.mjs']);
+    await rm(join(sourceRoot, 'src/catalog.mjs'));
+    await symlink(outsideSourceFile, join(sourceRoot, 'src/catalog.mjs'));
+    git(sourceRoot, 'add', 'src/catalog.mjs');
+    git(sourceRoot, '-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.invalid', 'commit', '--quiet', '-m', 'Symlinked catalog');
+    const symlinkCommit = git(sourceRoot, 'rev-parse', 'HEAD');
+    const symlinkTree = git(sourceRoot, 'rev-parse', 'HEAD^{tree}');
+    await assert.rejects(
+      verifyMarketFabricationInputs(sourceRoot, {
+        ...workOrder,
+        source: {
+          ...workOrder.source,
+          market: { ...workOrder.source.market, revision: symlinkCommit, tree: symlinkTree },
+        },
+      }),
+      { code: 'EXTERNAL_SOURCE_PATH_REFUSED' },
+    );
+    git(sourceRoot, 'reset', '--hard', '--quiet', workOrder.source.market.revision);
+
+    // Wrong compiler version or altered supplier manifest/file bytes are refused
+    await assert.rejects(
+      verifyInstalledMarketSuppliers(sourceRoot, {
+        ...workOrder,
+        compiler: { ...workOrder.compiler, wrangler: { name: 'wrangler', version: '4.151.0' } },
+      }),
+      { code: 'COMPILER_SELECTION_UNRECEIVED' },
+    );
+    await writeFile(join(supplierRoot, 'src/index.mjs'), 'export const mcpVersion = "tampered";\n');
+    await assert.rejects(verifyInstalledMarketSuppliers(sourceRoot, workOrder), {
+      code: 'SUPPLIER_BYTES_UNRECEIVED',
+    });
+    await writeFile(join(supplierRoot, 'src/index.mjs'), supplierIndexBytes);
+
+    await writeFile(join(supplierRoot, 'package.json'), `${JSON.stringify({
+      name: '@red-cup-engineering/mcp-engineering-services-section',
+      version: '0.1.8',
+    }, null, 2)}\n`);
+    await assert.rejects(verifyInstalledMarketSuppliers(sourceRoot, workOrder), {
+      code: 'SUPPLIER_MANIFEST_UNRECEIVED',
+    });
+    await writeFile(join(supplierRoot, 'package.json'), supplierManifestBytes);
+
+    // Same-byte external symlink inside node_modules is refused
+    const outsideSupplierFile = join(root, 'outside-supplier-index.mjs');
+    await writeFile(outsideSupplierFile, supplierIndexBytes);
+    await rm(join(supplierRoot, 'src/index.mjs'));
+    await symlink(outsideSupplierFile, join(supplierRoot, 'src/index.mjs'));
+    await assert.rejects(verifyInstalledMarketSuppliers(sourceRoot, workOrder), {
+      code: 'EXTERNAL_SUPPLIER_PATH_REFUSED',
+    });
+    await rm(join(supplierRoot, 'src/index.mjs'));
+    await writeFile(join(supplierRoot, 'src/index.mjs'), supplierIndexBytes);
+
+    const outsideWrangler = join(root, 'outside-wrangler');
+    await mkdir(outsideWrangler, { recursive: true });
+    await writeFile(join(outsideWrangler, 'package.json'), await readFile(join(wranglerRoot, 'package.json')));
+    await rm(wranglerRoot, { recursive: true, force: true });
+    await symlink(outsideWrangler, wranglerRoot, 'dir');
+    await assert.rejects(verifyInstalledMarketSuppliers(sourceRoot, workOrder), {
+      code: 'EXTERNAL_SUPPLIER_PATH_REFUSED',
+    });
+  } finally {
+    await rm(fixture.root, { recursive: true, force: true });
+  }
+});
+
+test('checkoutMarketFabricationSources and fabricateMarketCarrier assemble the fifteen-file carrier, refuse undeclared outputs or missing keys, and dispose the private workspace', async () => {
+  const fixture = await createCanonicalMarketFabricationFixture();
+  try {
+    const {
+      root,
+      sourceRoot,
+      parametersRoot,
+      incumbentCarrierRoot,
+      files,
+      parametersPkgBytes,
+      supplierManifestBytes,
+      workOrder,
+    } = fixture;
+
+    // Missing private SSH deploy keys are refused before any Git checkout
+    await assert.rejects(
+      checkoutMarketFabricationSources(join(root, 'missing-key'), workOrder, {
+        marketDeployKey: '',
+        parametersDeployKey: 'dummy-key',
+      }),
+      { code: 'PRIVATE_MARKET_SOURCE_KEY_REQUIRED' },
+    );
+    await assert.rejects(
+      checkoutMarketFabricationSources(join(root, 'missing-param-key'), workOrder, {
+        marketDeployKey: 'dummy-key',
+        parametersDeployKey: '',
+      }),
+      { code: 'PRIVATE_PARAMETERS_SOURCE_KEY_REQUIRED' },
+    );
+
+    // Checkout from pinned local Git remotes verifies commits, trees, gitlink, and canonical origins
+    const checkedOut = await checkoutMarketFabricationSources(join(root, 'checked-out-workspace'), workOrder, {
+      marketDeployKey: 'fixture-ssh-key',
+      parametersDeployKey: 'fixture-ssh-key',
+      marketRemoteUrl: sourceRoot,
+      parametersRemoteUrl: parametersRoot,
+    });
+    assert.equal(checkedOut.marketCheckout.revision, workOrder.source.market.revision);
+    assert.equal(checkedOut.parametersCheckout.revision, workOrder.source.public.revision);
+
+    async function writeMockBuildOutputs(outputRoot, currentSourceRoot, { extraFile = false, externalSourcePath = false } = {}) {
+      await mkdir(outputRoot, { recursive: true });
+      const workerBytes = Buffer.from('export default { async fetch() { return new Response("built-worker"); } };\n');
+      const mapBytes = Buffer.from(JSON.stringify({ version: 3, sources: ['src/worker.mjs'], sourcesContent: [files['src/worker.mjs'].toString('utf8')] }));
+      const metafileBytes = Buffer.from(JSON.stringify({ inputs: {}, outputs: { 'worker.js': { entryPoint: 'src/worker.mjs' } } }));
+      const sourceInputsData = [
+        {
+          path: 'src/worker.mjs',
+          kind: 'physical',
+          source: externalSourcePath ? join(root, 'outside.mjs') : join(currentSourceRoot, 'src/worker.mjs'),
+          bytes: files['src/worker.mjs'].length,
+          sha256: sha(files['src/worker.mjs']),
+          packageManifestSha256: sha(files['package.json']),
+        },
+      ];
+      const sourceInputsBytes = Buffer.from(`${JSON.stringify(sourceInputsData, null, 2)}\n`);
+      const packageManifestsData = [
+        {
+          path: join(currentSourceRoot, 'package.json'),
+          name: '@causeway-services/market.561.group',
+          version: '0.1.0',
+          bytes: files['package.json'].length,
+          sha256: sha(files['package.json']),
+          sideEffects: null,
+          manifestBase64: files['package.json'].toString('base64'),
+        },
+        {
+          path: join(currentSourceRoot, 'node_modules/@red-cup-engineering/mcp-engineering-services-section/package.json'),
+          name: '@red-cup-engineering/mcp-engineering-services-section',
+          version: '0.1.9',
+          bytes: supplierManifestBytes.length,
+          sha256: sha(supplierManifestBytes),
+          sideEffects: null,
+          manifestBase64: supplierManifestBytes.toString('base64'),
+        },
+      ];
+      const packageManifestsBytes = Buffer.from(`${JSON.stringify(packageManifestsData, null, 2)}\n`);
+
+      await writeFile(join(outputRoot, 'worker.js'), workerBytes);
+      await writeFile(join(outputRoot, 'worker.js.map'), mapBytes);
+      await writeFile(join(outputRoot, 'esbuild.metafile.json'), metafileBytes);
+      await writeFile(join(outputRoot, 'source-inputs.json'), sourceInputsBytes);
+      await writeFile(join(outputRoot, 'package-manifests.json'), packageManifestsBytes);
+      await writeFile(join(outputRoot, 'source-package.json'), files['package.json']);
+      await writeFile(join(outputRoot, 'parameters-package.json'), parametersPkgBytes);
+      await writeFile(join(outputRoot, 'pnpm-lock.yaml'), files['pnpm-lock.yaml']);
+      await writeFile(join(outputRoot, 'wrangler.jsonc'), files['wrangler.jsonc']);
+      if (extraFile) {
+        await writeFile(join(outputRoot, 'undeclared-extra.js'), 'export const undeclared = true;\n');
+      }
+
+      const descriptor = (name, bytes) => ({ path: name, bytes: bytes.length, sha256: sha(bytes) });
+      const receipt = {
+        kind: 'native-market-worker-build',
+        source: { repository: 'red-cup-engineering/market.561.group', revision: workOrder.source.market.revision },
+        sourceBindings: {
+          parameters: {
+            repository: 'causeway-services/public-market-services-section',
+            path: 'parameters',
+            mode: '160000',
+            revision: workOrder.source.public.revision,
+            gitlink: workOrder.source.public.gitlink,
+          },
+        },
+        deploymentBindings: { MARKET_BUILD_SHA: workOrder.source.market.revision },
+        predecessorClosureReplayed: false,
+        nativeMetadataComplete: true,
+        output: join(outputRoot, 'worker.js'),
+        bytes: workerBytes.length,
+        sha256: sha(workerBytes),
+        inputs: 1,
+        physicalInputs: 1,
+        generatedInputs: 0,
+        sourceInputs: descriptor('source-inputs.json', sourceInputsBytes),
+        packageManifests: descriptor('package-manifests.json', packageManifestsBytes),
+        sourceManifest: descriptor('source-package.json', files['package.json']),
+        parameterSourceManifest: descriptor('parameters-package.json', parametersPkgBytes),
+        lockfile: descriptor('pnpm-lock.yaml', files['pnpm-lock.yaml']),
+        configuration: descriptor('wrangler.jsonc', files['wrangler.jsonc']),
+        metafile: descriptor('esbuild.metafile.json', metafileBytes),
+        sourceMap: descriptor('worker.js.map', mapBytes),
+      };
+      await writeFile(join(outputRoot, 'build-receipt.json'), `${JSON.stringify(receipt, null, 2)}\n`);
+      return receipt;
+    }
+
+    const receiveWorker = async request => {
+      await mkdir(request.outputRoot, { recursive: true });
+      const qualification = {
+        kind: '561.market-worker-native-qualification/v1',
+        sourceRevision: request.source.revision,
+        workerSha256: request.artifact.sha256,
+        outsidePaymentReceived: false,
+        artifactInternalComputationInstrumented: false,
+        checks: {
+          startup: { passed: true },
+          sourceSuite: { passed: true },
+        },
+      };
+      await writeFile(join(request.outputRoot, 'native-qualification.json'), `${JSON.stringify(qualification, null, 2)}\n`);
+    };
+
+    const buildReceiver = async request => {
+      await mkdir(request.outputRoot, { recursive: true });
+      const receiverBytes = Buffer.from(
+        "require('node:fs').writeFileSync(process.env.FIXTURE_ARGUMENTS, JSON.stringify({args:process.argv.slice(2),credentialPresent:Boolean(process.env.CLOUDFLARE_API_TOKEN)}));\n",
+      );
+      await writeFile(join(request.outputRoot, 'receiver.cjs'), receiverBytes);
+      const receiverInputs = {
+        kind: '561.market-worker-receiver-build/v1',
+        source: { repository: 'red-cup-engineering/market.561.group', revision: request.sourceRevision },
+        cloudflare: { repository: 'red-cup-engineering/cloudflare-engineering-services-section', revision: request.cloudflareRevision },
+        output: { path: 'receiver.cjs', bytes: receiverBytes.length, sha256: sha(receiverBytes) },
+      };
+      await writeFile(join(request.outputRoot, 'receiver-inputs.json'), `${JSON.stringify(receiverInputs, null, 2)}\n`);
+    };
+
+    // Undeclared build output file is refused before carrier assembly
+    await assert.rejects(
+      fabricateMarketCarrier(workOrder, {
+        destination: join(root, 'refused-extra-output'),
+        sourceRoot,
+        incumbentCarrierDirectory: incumbentCarrierRoot,
+        installSuppliers: false,
+        buildWorker: ({ outputRoot, sourceRoot: sr }) => writeMockBuildOutputs(outputRoot, sr, { extraFile: true }),
+        receiveWorker,
+        buildReceiver,
+      }),
+      { code: 'UNDECLARED_BUILD_OUTPUT_REFUSED' },
+    );
+
+    // External physical path in build provenance is refused
+    await writeFile(join(root, 'outside.mjs'), files['src/worker.mjs']);
+    await assert.rejects(
+      fabricateMarketCarrier(workOrder, {
+        destination: join(root, 'refused-external-provenance'),
+        sourceRoot,
+        incumbentCarrierDirectory: incumbentCarrierRoot,
+        installSuppliers: false,
+        buildWorker: ({ outputRoot, sourceRoot: sr }) => writeMockBuildOutputs(outputRoot, sr, { externalSourcePath: true }),
+        receiveWorker,
+        buildReceiver,
+      }),
+      { code: 'EXTERNAL_SUPPLIER_PATH_REFUSED' },
+    );
+
+    // Valid fabrication assembles all 15 files, verifies the carrier, writes fabrication-receipt.json, and disposes workspace/
+    const workOrderBytes = Buffer.from(`${JSON.stringify(workOrder, null, 2)}\n`);
+    const workOrderSha256 = sha(workOrderBytes);
+    const fabricatedRoot = join(root, 'fabricated');
+    const fabricated = await fabricateMarketCarrier(workOrder, {
+      destination: fabricatedRoot,
+      workOrderSha256,
+      operation: 'release',
+      sourceRoot,
+      incumbentCarrierDirectory: incumbentCarrierRoot,
+      installSuppliers: false,
+      buildWorker: ({ outputRoot, sourceRoot: sr }) => writeMockBuildOutputs(outputRoot, sr),
+      receiveWorker,
+      buildReceiver,
+    });
+
+    assert.equal(Object.keys(fabricated.manifest.artifacts).length, 15);
+    assert.equal(fabricated.fabricationReceipt.kind, '561.market-worker-native-fabrication/v1');
+    assert.equal(fabricated.fabricationReceipt.workOrderSha256, workOrderSha256);
+    assert.equal(fabricated.fabricationReceipt.incumbentManifestSha256, workOrder.incumbentCarrier.manifestSha256);
+    assert.equal(fabricated.fabricationReceipt.manifestSha256, fabricated.manifestSha256);
+    assert.equal(fabricated.fabricationReceipt.workspaceDisposed, true);
+    assert.equal(fabricated.fabricationReceipt.providerAccess, false);
+    assert.equal(fabricated.fabricationReceipt.outsidePaymentReceived, false);
+    await assert.rejects(lstat(join(fabricatedRoot, 'workspace')), { code: 'ENOENT' });
+
+    const verifiedCarrier = await verifyMarketCarrier(fabricated.carrierDirectory, fabricated.manifestSha256);
+    assert.equal(verifiedCarrier.manifest.source.market.revision, workOrder.source.market.revision);
+    assert.equal(verifiedCarrier.manifest.source.public.revision, workOrder.source.public.revision);
+
+    // Extra unreviewed file in the carrier directory is refused by verifyMarketCarrier
+    const unreviewedCarrierFile = join(fabricated.carrierDirectory, 'unreviewed-extra.txt');
+    await writeFile(unreviewedCarrierFile, 'unreviewed');
+    await assert.rejects(
+      verifyMarketCarrier(fabricated.carrierDirectory, fabricated.manifestSha256),
+      { code: 'EXTRA_CARRIER_INPUT_REFUSED' },
+    );
+    await rm(unreviewedCarrierFile);
+
+    // CLI verify and release accept the fabricated carrier when bound by selection.json + fabrication-receipt.json
+    const groupRepo = join(root, 'group-repo');
+    await mkdir(join(groupRepo, '.releases/market'), { recursive: true });
+    await writeFile(join(groupRepo, '.releases/market/work-order.json'), workOrderBytes);
+    await writeFile(join(groupRepo, '.releases/market/selection.json'), `${JSON.stringify({
+      kind: '561.market-worker-carrier-selection/v1',
+      repository: '561-group/561-group-frontdoor-services-section',
+      revision: workOrder.incumbentCarrier.revision,
+      directory: workOrder.incumbentCarrier.directory,
+      manifestSha256: workOrder.incumbentCarrier.manifestSha256,
+      workOrder: '.releases/market/work-order.json',
+      workOrderSha256,
+      operation: 'release',
+    }, null, 2)}\n`);
+    execFileSync('git', ['init', '--quiet', groupRepo]);
+    execFileSync('git', ['-C', groupRepo, 'add', '.releases/market/selection.json', '.releases/market/work-order.json']);
+    execFileSync('git', ['-C', groupRepo, '-c', 'user.name=Native fixture', '-c', 'user.email=fixture@example.invalid', 'commit', '--quiet', '-m', 'Select fabricated release']);
+    const groupRevision = execFileSync('git', ['-C', groupRepo, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
+
+    const argsFile = join(root, 'cli-arguments.json');
+    const cli = fileURLToPath(new URL('./release.mjs', import.meta.url));
+    const env = {
+      ...process.env,
+      GITHUB_REPOSITORY: 'red-cup-engineering/561.group',
+      GITHUB_REF: 'refs/heads/main',
+      GITHUB_EVENT_NAME: 'push',
+      GITHUB_SHA: groupRevision,
+      RUNNER_TEMP: root,
+      FIXTURE_ARGUMENTS: argsFile,
+      CLOUDFLARE_API_TOKEN: 'fixture-only-token',
+      MARKET_SOURCE_DEPLOY_KEY: 'fixture-source-key',
+    };
+
+    execFileSync(process.execPath, [cli, 'verify', fabricated.carrierDirectory, fabricated.manifestSha256, 'release'], { cwd: groupRepo, env });
+    assert.deepEqual(JSON.parse(await readFile(argsFile, 'utf8')), {
+      args: ['--verify', fabricated.carrierDirectory, fabricated.manifestSha256, 'release'],
+      credentialPresent: false,
+    });
+
+    execFileSync(process.execPath, [cli, 'release', fabricated.carrierDirectory, fabricated.manifestSha256], { cwd: groupRepo, env });
+    assert.deepEqual(JSON.parse(await readFile(argsFile, 'utf8')), {
+      args: [fabricated.carrierDirectory, fabricated.manifestSha256, join(root, 'market-release/receipt.json'), groupRevision],
+      credentialPresent: true,
+    });
+
+    // Tampered fabrication-receipt.json is refused before executing release
+    await rm(argsFile);
+    await writeFile(
+      fabricated.receiptFile,
+      JSON.stringify({ ...fabricated.fabricationReceipt, workOrderSha256: '0'.repeat(64) }),
+    );
+    assert.throws(
+      () => execFileSync(process.execPath, [cli, 'release', fabricated.carrierDirectory, fabricated.manifestSha256], {
+        cwd: groupRepo,
+        env,
+        stdio: 'pipe',
+      }),
+      error => error.status === 1 && error.stderr.toString().trim() === 'MARKET_OPERATION_FAILED',
+    );
+    await assert.rejects(lstat(argsFile), { code: 'ENOENT' });
+  } finally {
+    await rm(fixture.root, { recursive: true, force: true });
+  }
+});
+
+test('deploy-market.yml confines private source keys to receive, Cloudflare credentials to the final operation, and artifact upload to receipt.json', async () => {
+  const workflowPath = fileURLToPath(new URL('../../.github/workflows/deploy-market.yml', import.meta.url));
+  const workflow = await readFile(workflowPath, 'utf8');
+  assert.match(workflow, /work_order_sha256: \$\{\{ steps\.selection\.outputs\.work_order_sha256 \}\}/u);
+  assert.match(workflow, /corepack enable pnpm/u);
+  assert.doesNotMatch(workflow, /corepack prepare pnpm@10\.0\.0/u);
+  assert.match(workflow, /node \.releases\/market\/release\.mjs receive "\$RELEASE_DIRECTORY" "\$RELEASE_MANIFEST" "\$RELEASE_WORK_ORDER"/u);
+  assert.match(workflow, /node \.releases\/market\/release\.mjs verify "\$ACTIVE_RELEASE_DIRECTORY" "\$ACTIVE_RELEASE_MANIFEST" "\$MARKET_OPERATION"/u);
+  assert.match(workflow, /node \.releases\/market\/release\.mjs "\$MARKET_OPERATION" "\$ACTIVE_RELEASE_DIRECTORY" "\$ACTIVE_RELEASE_MANIFEST"/u);
+  assert.match(workflow, /rm -rf \.market-release "\$\{\{ runner\.temp \}\}\/market-fabricated-carrier"/u);
+
+  const receiveIndex = workflow.indexOf('id: receive');
+  const verifyIndex = workflow.indexOf('Receive selected bytes, original source owners and native qualification');
+  const executeIndex = workflow.indexOf('Execute the selected original Market observation or release');
+  const disposeIndex = workflow.indexOf('Dispose ephemeral private carrier and fabrication workspace');
+  const retainIndex = workflow.indexOf('Retain provider and public receiving, including any guarded rollback');
+  assert.ok(receiveIndex > 0 && verifyIndex > receiveIndex && executeIndex > verifyIndex && disposeIndex > executeIndex && retainIndex > disposeIndex);
+
+  const receiveBlock = workflow.slice(receiveIndex, verifyIndex);
+  const verifyBlock = workflow.slice(verifyIndex, executeIndex);
+  const executeBlock = workflow.slice(executeIndex, disposeIndex);
+  const retainBlock = workflow.slice(retainIndex);
+  assert.match(retainBlock, /path: \$\{\{ runner\.temp \}\}\/market-release\/receipt\.json/u);
+  assert.doesNotMatch(retainBlock, /market-fabricated-carrier/u);
+  assert.doesNotMatch(retainBlock, /\.market-release/u);
+  assert.match(receiveBlock, /MARKET_SOURCE_DEPLOY_KEY/u);
+  assert.match(receiveBlock, /MARKET_PARAMETERS_DEPLOY_KEY/u);
+  assert.doesNotMatch(receiveBlock, /CLOUDFLARE_API_TOKEN/u);
+  assert.doesNotMatch(verifyBlock, /DEPLOY_KEY/u);
+  assert.doesNotMatch(verifyBlock, /CLOUDFLARE_/u);
+  assert.match(executeBlock, /CLOUDFLARE_API_TOKEN/u);
+  assert.match(executeBlock, /CLOUDFLARE_ACCOUNT_ID/u);
+  assert.doesNotMatch(executeBlock, /DEPLOY_KEY/u);
+});
+
+
+
+
+test('frozen install receives the selected effective PNPM version before install and records its custody', async () => {
+  const fixture = await createCanonicalMarketFabricationFixture();
+  try {
+    const calls = [];
+    const received = await installFrozenMarketSuppliers(fixture.sourceRoot, fixture.workOrder, {
+      exec: async (command, args, options) => {
+        calls.push({ command, args, cwd: options.cwd });
+        return { stdout: args.includes('--version') ? '10.0.0\n' : '' };
+      },
+    });
+    assert.equal(calls.length, 2);
+    assert.deepEqual(calls[0], { command: 'corepack', args: ['pnpm@10.0.0', '--version'], cwd: fixture.sourceRoot });
+    assert.deepEqual(calls[1].args.slice(0, 4), ['pnpm@10.0.0', 'install', '--frozen-lockfile', '--ignore-scripts']);
+    assert.deepEqual(received.compiler.pnpm, { name: 'pnpm', version: '10.0.0', command: 'corepack', arguments: ['pnpm@10.0.0'] });
+    let attempts = 0;
+    await assert.rejects(installFrozenMarketSuppliers(fixture.sourceRoot, fixture.workOrder, {
+      exec: async () => { attempts++; return { stdout: '11.28.5\n' }; },
+    }), /PACKAGE_MANAGER_VERSION_MISMATCH/u);
+    assert.equal(attempts, 1);
+  } finally { await rm(fixture.root, { recursive: true, force: true }); }
+});
+
+test('actual CLI contains receiver failure diagnostics in private custody and emits only a static public failure', async () => {
+  await withGzipCarrier(async ({ parent, root, manifest, select }) => {
+    const marker = 'SYNTHETIC_PRIVATE_RECEIVER_DIAGNOSTIC_83e645';
+    const receiver = Buffer.from(`console.log('${marker}');console.error('${marker}');throw Error('${marker}');\n`);
+    await writeFile(join(root, manifest.artifacts.receiver.path), receiver);
+    manifest.artifacts.receiver.bytes = receiver.length; manifest.artifacts.receiver.sha256 = sha(receiver);
+    const digest = await select(); await receiveMarketCarrier(root, digest);
+    const cli = fileURLToPath(new URL('./release.mjs', import.meta.url));
+    assert.throws(() => execFileSync(process.execPath, [cli, 'verify', root, digest, 'observe'], {
+      env: { ...process.env, RUNNER_TEMP: parent }, stdio: 'pipe',
+    }), error => error.status === 1 && error.stdout.length === 0 && error.stderr.toString().trim() === 'MARKET_OPERATION_FAILED');
+    const directory = join(parent, 'market-private-diagnostics');
+    const diagnostic = await readFile(join(directory, 'failure.log'));
+    assert.ok(diagnostic.includes(Buffer.from(marker)));
+    assert.ok(diagnostic.length <= 65536);
+    assert.equal((await lstat(directory)).mode & 0o777, 0o700);
+    assert.equal((await lstat(join(directory, 'failure.log'))).mode & 0o777, 0o600);
   });
 });

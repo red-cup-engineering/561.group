@@ -29,6 +29,9 @@ jobs:
       directory: ${{ steps.selection.outputs.directory }}
       manifest: ${{ steps.selection.outputs.manifest }}
       operation: ${{ steps.selection.outputs.operation }}
+      mode: ${{ steps.selection.outputs.mode }}
+      work_order: ${{ steps.selection.outputs.work_order }}
+      work_order_sha256: ${{ steps.selection.outputs.work_order_sha256 }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
@@ -52,6 +55,7 @@ jobs:
     env:
       RELEASE_DIRECTORY: .market-release/${{ needs.source.outputs.directory }}
       RELEASE_MANIFEST: ${{ needs.source.outputs.manifest }}
+      RELEASE_WORK_ORDER: ${{ needs.source.outputs.work_order_sha256 }}
       MARKET_OPERATION: ${{ needs.source.outputs.operation }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -69,15 +73,31 @@ jobs:
           path: .market-release
           ssh-key: ${{ secrets.SITE_CONTENT_DEPLOY_KEY }}
           persist-credentials: false
-      - name: Restore bounded gzip transport to the exact selected original bytes
-        run: node .releases/market/release.mjs receive "$RELEASE_DIRECTORY" "$RELEASE_MANIFEST"
+      - name: Activate pinned pnpm package manager for native fabrication
+        if: needs.source.outputs.work_order_sha256 != ''
+        run: |
+          corepack enable pnpm
+      - name: Restore bounded gzip transport or fabricate the selected original bytes
+        id: receive
+        env:
+          MARKET_SOURCE_DEPLOY_KEY: ${{ secrets.MARKET_SOURCE_DEPLOY_KEY }}
+          MARKET_PARAMETERS_DEPLOY_KEY: ${{ secrets.MARKET_PARAMETERS_DEPLOY_KEY }}
+        run: node .releases/market/release.mjs receive "$RELEASE_DIRECTORY" "$RELEASE_MANIFEST" "$RELEASE_WORK_ORDER"
       - name: Receive selected bytes, original source owners and native qualification
-        run: node .releases/market/release.mjs verify "$RELEASE_DIRECTORY" "$RELEASE_MANIFEST" "$MARKET_OPERATION"
+        env:
+          ACTIVE_RELEASE_DIRECTORY: ${{ steps.receive.outputs.directory || env.RELEASE_DIRECTORY }}
+          ACTIVE_RELEASE_MANIFEST: ${{ steps.receive.outputs.manifest || env.RELEASE_MANIFEST }}
+        run: node .releases/market/release.mjs verify "$ACTIVE_RELEASE_DIRECTORY" "$ACTIVE_RELEASE_MANIFEST" "$MARKET_OPERATION"
       - name: Execute the selected original Market observation or release
         env:
+          ACTIVE_RELEASE_DIRECTORY: ${{ steps.receive.outputs.directory || env.RELEASE_DIRECTORY }}
+          ACTIVE_RELEASE_MANIFEST: ${{ steps.receive.outputs.manifest || env.RELEASE_MANIFEST }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: node .releases/market/release.mjs "$MARKET_OPERATION" "$RELEASE_DIRECTORY" "$RELEASE_MANIFEST"
+        run: node .releases/market/release.mjs "$MARKET_OPERATION" "$ACTIVE_RELEASE_DIRECTORY" "$ACTIVE_RELEASE_MANIFEST"
+      - name: Dispose ephemeral private carrier and fabrication workspace
+        if: always()
+        run: rm -rf .market-release "${{ runner.temp }}/market-fabricated-carrier" "${{ runner.temp }}/market-private-diagnostics"
       - name: Retain provider and public receiving, including any guarded rollback
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
