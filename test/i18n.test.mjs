@@ -65,7 +65,9 @@ test("the Lakota page serves its Lakota and marks every English fallback", () =>
   const html = page("lkt");
   assert.match(html, /<html lang="lkt" dir="ltr">/u);
   assert.match(html, /<nav class="langs" aria-label="Iyápi">/u);
-  assert.ok(html.includes('<p class="lede"><span lang="en">'+home.description+'</span>'), "the English fallback retains the current source-owned corporate description");
+  assert.notEqual(speaker(space, "lkt", { origin: home.origin }).text("home.description"), home.description);
+  assert.ok(speaker(space, "lkt", { origin: home.origin }).text("home.description").length > 0);
+  assert.doesNotMatch(html, /<span lang="en">/u);
   assert.match(html, /:lang\(lkt\)\{--serif:"Charis SIL"/u);
 });
 
