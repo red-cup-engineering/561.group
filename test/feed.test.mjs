@@ -108,7 +108,7 @@ test("source-receiving refuses a foreign feed identity and retains original orde
     fetchImpl: async url => {
       const company = source.find(c => c.feeds.json === url);
       if (company === operations) return new Response("down", { status: 502 });
-      const f = feed(company, [item(company, "real", "2026-10-20T00:00:00Z")]);
+      const f = feed(company, [item(company, company.id + "-real", "2026-10-20T00:00:00Z")]);
       if (company === engineering) f.home_page_url = "https://wrong.example/";
       return new Response(JSON.stringify(f));
     },
