@@ -1,9 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { createHash } from "node:crypto";
 import {
   readFeeds, readFeedsWithCoverage, mergeItems, renderFeedInputReceipt,
-  renderJsonFeed, renderAtom, renderRss
+  renderFeedItemProvenance, renderJsonFeed, renderAtom, renderRss
 } from "../src/feed.mjs";
 
 const home = JSON.parse(readFileSync(new URL("../data/home.json", import.meta.url), "utf8"));
@@ -11,11 +12,13 @@ const [science, engineering, operations, services] = home.group.companies;
 const item = (company, id, date, extra = {}) => ({
   id, url: company.url + encodeURIComponent(id) + "/",
   title: "T " + id, summary: "S " + id, date_published: date, tags: ["a"],
+  authors: [{ name: company.name, url: company.url }],
   content_html: "<p>never copied into the merged feed</p>", ...extra,
 });
 const feed = (company, items) => ({
   version: "https://jsonfeed.org/version/1.1",
-  home_page_url: company.url, feed_url: company.feeds.json, items,
+  home_page_url: company.url, feed_url: company.feeds.json,
+  authors: [{ name: company.name, url: company.url }], items,
 });
 
 test("feeds merge newest first with the company as author, drop bodies, dedupe and cap", () => {
@@ -52,6 +55,10 @@ test("an unreachable or malformed feed is logged and skipped, never fatal", asyn
   assert.deepEqual(observed.sources.map(source => source.state),
     ["unavailable", "unavailable", "refused", "received"]);
   assert.deepEqual(observed.sources.at(-1).inputItems, 1);
+  const bytes = JSON.stringify(feed(services, [item(services, "ok", "2026-10-10T00:00:00Z")]));
+  assert.equal(observed.sources.at(-1).sha256,
+    "sha256:" + createHash("sha256").update(bytes).digest("hex"));
+  assert.equal(observed.sources.at(-1).bytes, Buffer.byteLength(bytes));
   assert.equal(logs.length, 3);
   assert.deepEqual((await readFeeds([science, engineering, operations, services],
     { fetchImpl, log: () => {} })).map(read => read.company.id), [services.id]);
@@ -123,4 +130,49 @@ test("source-receiving refuses a foreign feed identity and retains original orde
   assert.equal(receipt.sources[1].feedUrl, engineering.feeds.json);
   assert.equal(receipt.sources[1].inputItems, undefined);
   assert.equal(receipt.emittedItems, 2);
+  assert.ok(results.sources[0].sha256?.startsWith("sha256:"));
+  assert.ok(results.sources[0].bytes > 0);
+  const graph = JSON.parse(renderFeedItemProvenance(home, results.sources, published));
+  assert.equal(graph["@id"], "https://561.group/feed-provenance.jsonld");
+  assert.equal(graph["@context"].prov, "http://www.w3.org/ns/prov#");
+  const entries = graph["@graph"].filter(node => node["@type"]?.includes("schema:DataFeedItem"));
+  assert.equal(entries.length, 2);
+  for (const item of published) {
+    const entry = entries.find(x => x["schema:item"]["@id"] === item.url);
+    const company = source.find(c => c.url === item.authors[0].url);
+    const digest = results.sources.find(x => x.companyId === company.id).sha256.slice(7);
+    assert.equal(entry["prov:wasDerivedFrom"]["@id"], "urn:sha256:" + digest);
+    assert.equal(entry["prov:wasAttributedTo"]["@id"], company.url);
+    assert.equal(entry["schema:identifier"], item.id);
+  }
+  const snapshots = graph["@graph"].filter(node => node["@type"] === "prov:Entity");
+  assert.equal(snapshots.length, 2);
+  assert.ok(snapshots.every(x => x["@id"].startsWith("urn:sha256:")));
+});
+
+test("declared bylines cannot be overwritten with another company's publisher identity", () => {
+  const date="2026-10-20T00:00:00Z";
+  const withheld=[];
+  const items=mergeItems([{company:services,feed:feed(services,[
+    item(services,"foreign-byline",date,{
+      authors:[{name:"Other author",url:"https://another.example/"}]}),
+    item(services,"missing-byline",date,{authors:null}),
+    item(services,"proper-byline",date),
+  ])}],undefined,{onReject:r=>withheld.push(r)});
+  assert.deepEqual(items.map(x=>x.id),["proper-byline"]);
+  assert.deepEqual(withheld.map(x=>x.reason),["attribution-mismatch","attribution-mismatch"]);
+});
+
+test("bounded feed intake refuses oversized bodies and non-UTF-8 JSON, never promoting unknown evidence",async()=>{
+  const fetchImpl=async url=>new Response(url.includes("science") ? "x".repeat(2*1024*1024+1) :
+    new Uint8Array([0xff,0xfe]),{headers:{"content-type":"application/json"}});
+  const observed=await readFeedsWithCoverage([science,services],{fetchImpl,log:()=>{}});
+  assert.deepEqual(observed.sources.map(x=>x.state),["refused","refused"]);
+  assert.deepEqual(observed.feeds,[]);
+  assert.equal(observed.sources.some(x=>x.sha256),false);
+  const graph=JSON.parse(renderFeedItemProvenance(home,observed.sources,[]));
+  assert.equal(graph["@graph"].filter(x=>x["@type"]?.includes("schema:DataFeedItem")).length,0);
+  assert.throws(()=>renderFeedItemProvenance(home,observed.sources,[
+    {id:"unwitnessed",url:services.url+"ghost/",authors:[{name:services.name,url:services.url}]}
+  ]),/unobserved source provenance/);
 });
