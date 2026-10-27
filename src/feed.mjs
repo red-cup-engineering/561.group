@@ -1,6 +1,8 @@
 // What the Group is publishing: the four companies' JSON Feeds merged, newest first, and written out as
 // JSON Feed 1.1, Atom and RSS. Pure except readFeeds, which tolerates any feed being unreachable.
 
+import { createHash } from "node:crypto";
+
 export const FEED_LIMIT = 60;
 
 const xml = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&apos;" })[c]);
@@ -10,6 +12,7 @@ const time = (item) => (Number.isFinite(Date.parse(item.date_published)) ? Date.
 // blog renderer has its own last-line check, but a bad upstream record must
 // neither poison its whole reading nor acquire a company's forged authorship.
 const MAX_SOURCE_ITEMS = 500;
+const MAX_SOURCE_BYTES = 2 * 1024 * 1024;
 const MAX_TITLE = 512;
 const MAX_SUMMARY = 4096;
 
@@ -33,11 +36,17 @@ function admittedDate(value) {
   return new Date(day + "T00:00:00Z").toISOString().slice(0, 10) === day;
 }
 
-function sourceItem(company, item) {
+function sourceItem(company, item, declaredAuthors) {
   if (!item || typeof item !== "object" || Array.isArray(item))
     return { reason: "not-an-object" };
   const url = articleUrl(company, item.url);
   if (!url) return { reason: "noncanonical-or-foreign-article" };
+  // A source's corporate origin is evidence of publication custody, not
+  // permission to replace an independently named author's byline.
+  if (!Array.isArray(declaredAuthors) || declaredAuthors.length !== 1 ||
+      declaredAuthors[0]?.url !== company.url ||
+      declaredAuthors[0]?.name !== company.name)
+    return { reason: "attribution-mismatch" };
   if (item.id !== undefined &&
       (typeof item.id !== "string" || !item.id.trim() || item.id.length > 1024))
     return { reason: "invalid-article-id" };
@@ -63,6 +72,49 @@ function sourceItem(company, item) {
   }};
 }
 
+// Hash the actual decoded HTTP response body bytes, not reserialized JSON.
+// Bound streaming intake so an upstream feed cannot exhaust the site builder.
+async function readBoundedFeed(response) {
+  const indicated = response.headers.get("content-length");
+  if (indicated !== null && /^\d+$/u.test(indicated) &&
+      Number(indicated) > MAX_SOURCE_BYTES)
+    throw new RangeError("oversized source feed");
+  if (!response.body?.getReader)
+    throw new TypeError("Source feed needs a readable response body");
+  const reader = response.body.getReader();
+  const chunks = [];
+  const digest = createHash("sha256");
+  let bytes = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (!(value instanceof Uint8Array)) throw new TypeError("invalid source response chunk");
+      bytes += value.byteLength;
+      if (bytes > MAX_SOURCE_BYTES) {
+        await reader.cancel("oversized source feed");
+        throw new RangeError("oversized source feed");
+      }
+      digest.update(value);
+      chunks.push(value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+  const merged = new Uint8Array(bytes);
+  let offset = 0;
+  for (const chunk of chunks) {
+    merged.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  const content = new TextDecoder("utf-8", { fatal: true }).decode(merged);
+  return {
+    feed: JSON.parse(content),
+    sha256: "sha256:" + digest.digest("hex"),
+    bytes,
+  };
+}
+
 /** One actual read per source. Missing/rejected sources have an explicit status,
  * rather than silently turning a partial build into a purported complete archive. */
 export async function readFeedsWithCoverage(companies, { fetchImpl = fetch, log = console.warn } = {}) {
@@ -80,7 +132,7 @@ export async function readFeedsWithCoverage(companies, { fetchImpl = fetch, log 
       return { status: { ...source, state: "unavailable" } };
     }
     try {
-      const feed = await response.json();
+      const { feed, sha256, bytes } = await readBoundedFeed(response);
       if (!feed || feed.version !== "https://jsonfeed.org/version/1.1" ||
           feed.home_page_url !== company.url ||
           feed.feed_url !== company.feeds.json ||
@@ -88,7 +140,7 @@ export async function readFeedsWithCoverage(companies, { fetchImpl = fetch, log 
         throw new TypeError("invalid or foreign JSON Feed 1.1 identity/size");
       }
       return {
-        status: { ...source, state: "received", inputItems: feed.items.length },
+        status: { ...source, state: "received", inputItems: feed.items.length, bytes, sha256 },
         received: { company, feed },
       };
     } catch (error) {
@@ -118,7 +170,8 @@ export function mergeItems(feeds, limit = FEED_LIMIT, { onReject = () => {} } = 
   const items = [];
   for (const { company, feed } of feeds) {
     for (const candidate of feed.items) {
-      const { item, reason } = sourceItem(company, candidate);
+      const { item, reason } = sourceItem(company, candidate,
+        candidate?.authors === undefined ? feed.authors : candidate.authors);
       if (!item) {
         onReject({ companyId: company.id, reason });
         continue;
@@ -149,6 +202,68 @@ export function renderFeedInputReceipt(home, sources, items, excluded = []) {
     emittedItems: items.length,
     completeness: sources.every(source => source.state === "received") ?
       "all-sources-received" : "partial-source-coverage",
+  }, null, 2) + "\n";
+}
+
+/** Linked-data projection of the original *feed metadata* transmission.
+ * This does not independently verify the articles or their individual claims,
+ * assert ownership of source writing, or serve as a correction ledger.
+ */
+export function renderFeedItemProvenance(home, sources, items) {
+  if (!Array.isArray(home?.group?.companies) || !Array.isArray(sources) ||
+      !Array.isArray(items))
+    throw new TypeError("Provenance requires actual source and publication inventories");
+  const owners = new Map(home.group.companies.map(company => [company.url, company]));
+  const received = new Map(sources.filter(s => s.state === "received").map(s => [s.companyId, s]));
+  const snapshot = source => "urn:sha256:" + source.sha256.slice(7);
+  const snapshots = [];
+  for (const source of received.values()) {
+    if (!/^sha256:[a-f0-9]{64}$/u.test(source.sha256) ||
+        !Number.isSafeInteger(source.bytes) || source.bytes < 0 ||
+        source.bytes > MAX_SOURCE_BYTES)
+      throw new TypeError("Original received source requires bounded byte evidence");
+    snapshots.push({
+      "@id": snapshot(source), "@type": "prov:Entity",
+      "prov:wasDerivedFrom": { "@id": source.feedUrl },
+      "schema:encodingFormat": "application/feed+json",
+      "schema:contentSize": String(source.bytes) + " B",
+    });
+  }
+  const entries = items.map(item => {
+    const company = owners.get(item.authors?.[0]?.url);
+    const source = company && received.get(company.id);
+    if (!source || !company || item.authors.length !== 1 ||
+        item.authors[0].name !== company.name)
+      throw new TypeError("An aggregated item cannot acquire unobserved source provenance");
+    const id = home.origin + "/feed.json#item-" +
+      createHash("sha256").update(item.url).digest("hex");
+    return {
+      "@id": id, "@type": ["schema:DataFeedItem", "prov:Entity"],
+      "schema:item": { "@id": item.url },
+      "schema:identifier": item.id,
+      "prov:wasDerivedFrom": { "@id": snapshot(source) },
+      "prov:wasAttributedTo": { "@id": company.url },
+      ...(item.date_published === undefined ? {} : { "schema:datePublished": item.date_published }),
+      ...(item.date_modified === undefined ? {} : { "schema:dateModified": item.date_modified }),
+    };
+  });
+  return JSON.stringify({
+    "@context": {
+      "prov": "http://www.w3.org/ns/prov#",
+      "schema": "https://schema.org/",
+    },
+    "@id": home.origin + "/feed-provenance.jsonld",
+    "@type": "prov:Entity",
+    "prov:wasDerivedFrom": { "@id": home.origin + "/feed.json" },
+    "@graph": [
+      {
+        "@id": home.origin + "/feed.json",
+        "@type": ["schema:DataFeed", "prov:Entity"],
+        "prov:wasDerivedFrom": snapshots.map(x => ({ "@id": x["@id"] })),
+        "schema:dataFeedElement": entries.map(x => ({ "@id": x["@id"] })),
+      },
+      ...snapshots, ...entries,
+    ],
   }, null, 2) + "\n";
 }
 
