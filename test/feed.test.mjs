@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { createHash } from "node:crypto";
+import { spawnSync } from "node:child_process";
 import {
   readFeeds, readFeedsWithCoverage, mergeItems, renderFeedInputReceipt,
   renderFeedItemProvenance, renderJsonFeed, renderAtom, renderRss
@@ -428,4 +429,20 @@ test("previous live publication is observed before Wrangler, saved in original a
   assert.match(workflow,/observations\/561\.group-publication-transition-review\.json/u);
   assert.match(workflow,/observations\/561\.group-public-delivery\.json/u);
   assert.match(workflow,/originalCorrectionPublished:false/u);
+});
+
+
+test("inline original predeploy observation is a parseable Node module, not dead workflow prose",()=>{
+  const workflow=readFileSync(new URL("../.github/workflows/deploy.yml",import.meta.url),"utf8");
+  const start=workflow.indexOf("      - name: Observe previous public feed before replacing it;");
+  const end=workflow.indexOf("      - uses: cloudflare/wrangler-action@v3",start);
+  assert.ok(start>0 && end>start);
+  const section=workflow.slice(start,end);
+  const found=section.match(/          node --input-type=module <<'NODE'\n([\s\S]*?)\n          NODE\n/u);
+  assert.ok(found,"original release includes a bounded inline Node script");
+  const source=found[1].split("\n").map(line=>
+    line.startsWith("          ")?line.slice(10):line).join("\n");
+  const result=spawnSync(process.execPath,["--check","--input-type=module"],
+    {input:source,encoding:"utf8",timeout:10000});
+  assert.equal(result.status,0,result.stderr);
 });
