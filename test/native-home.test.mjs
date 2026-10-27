@@ -44,6 +44,8 @@ test("real installed TUFTE/LWS gives a useful homepage in HTML, not a pipeline r
   assert.match(html,/rel="canonical" href="https:\/\/561\.group\/"/u);
   assert.match(html,/name="fediverse:creator"/u);
   assert.match(html,/type="application\/ld\+json"/u);
+  assert.ok(html.includes(frontdoor.discovery.questions[0].question),
+    "the original accessible TUFTE HTML contains the actual alignment question");
   assert.ok(html.includes(":focus-visible"));
   assert.ok(html.includes("max-width:430px"));
   assert.doesNotMatch(html,/conurbanized ecosystem|default Theme/i);
@@ -63,10 +65,12 @@ test("the SAME real source yields useful machine-readable TUFTE JSON",async()=>{
     "machine-readable TUFTE readers must receive the same research path");
 
   assert.deepEqual(model.tiles.map(t=>t.id),
-    ["introduction","self-service","frontiers","paths","services","method","physical-world","explore","trade","companies","agents","support"]);
+    ["introduction","self-service","frontiers","technology-and-power","paths","services","method","physical-world","explore","trade","companies","agents","support"]);
   assert.equal(model.metadata.structuredData["@graph"][0].subOrganization.length,4);
   assert.ok(model.metadata.structuredData["@graph"][0].knowsAbout.includes("Artificial Abiogenesis and Smartgoo"));
   assert.ok(model.tiles.some(t=>t.id==="frontiers" && t.html.includes("silica")));
+  assert.ok(model.tiles.some(t=>t.id==="technology-and-power" && t.html.includes(frontdoor.discovery.questions[0].question)),
+    "machine-readable readers receive the source-authored alignment inquiry");
   assert.deepEqual(f.reads.map(x=>x[0]),["home","estate","frontdoor"]);
 });
 test("the original five public pages serve the same source and actionable links as Markdown",async()=>{
