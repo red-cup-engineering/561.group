@@ -8,7 +8,21 @@ import {
 const read=path=>JSON.parse(readFileSync(new URL("../"+path,import.meta.url),"utf8"));
 const home=read("data/home.json"),estate=read("data/estate.json"),
   frontdoor=read("data/frontdoor.json");
-const model=path=>project561GroupPage({home,estate,frontdoor,path});
+const originalFeed=Object.freeze({
+  version:"https://jsonfeed.org/version/1.1",
+  home_page_url:home.origin+"/",feed_url:home.origin+"/feed.json",
+  items:[
+    {id:"science-article",url:"https://science.561.group/ai-alignment-and-institutions/",
+      title:"AI alignment and institutions <draft?>",
+      summary:"Questions about ownership & autonomy <script>untrusted</script>",
+      date_published:"2026-10-26T12:00:00Z",
+      authors:[{name:home.group.companies[0].name,url:home.group.companies[0].url}]},
+    {id:"engineering-article",url:"https://engineering.561.group/content-addressed-evidence/",
+      title:"Content-addressed evidence",date_published:"2026-10-25T12:00:00Z",
+      authors:[{name:home.group.companies[1].name,url:home.group.companies[1].url}]},
+  ],
+});
+const model=path=>project561GroupPage({home,estate,frontdoor,feed:originalFeed,path});
 const tile=(page,id)=>page.tiles.find(t=>t.id===id);
 
 test("a visitor can tell what the Group is, what they can hire, and where to go immediately",()=>{
@@ -18,7 +32,7 @@ test("a visitor can tell what the Group is, what they can hire, and where to go 
   assert.equal(root.metadata.canonical,"https://561.group/");
   assert.equal(root.metadata.structuredData["@graph"][0].subOrganization.length,4);
   assert.deepEqual(root.navigation.map(x=>x.href),
-    ["/","/work/","/projects/","/about/","/for-agents/","/contact/"]);
+    ["/","/work/","/projects/","/blog/","/about/","/for-agents/","/contact/"]);
   assert.deepEqual(root.tiles.map(x=>x.id),
     ["introduction","self-service","frontiers","paths","services","method","physical-world","explore","trade","companies","agents","support"]);
   const hero=tile(root,"introduction").html;
@@ -194,8 +208,51 @@ test("about and agent pages give real source identities and safe action boundari
   assert.ok(tile(agent,"boundaries").html.includes("authorization"));
 });
 
+
+test("Group blog receives only exact company-authored feed articles and preserves identities",()=>{
+  const blog=model("/blog/");
+  assert.equal(blog.metadata.canonical,"https://561.group/blog/");
+  assert.equal(blog.metadata.structuredData["@graph"][2]["@type"],"CollectionPage");
+  const entries=blog.metadata.structuredData["@graph"][2].mainEntity.itemListElement;
+  assert.equal(entries.length,2);
+  assert.equal(entries[0].item.url,originalFeed.items[0].url);
+  assert.equal(entries[0].item.author.name,home.group.companies[0].name);
+  const html=tile(blog,"posts").html;
+  assert.ok(html.includes("AI alignment and institutions &lt;draft?&gt;"));
+  assert.ok(html.includes("Questions about ownership &amp; autonomy &lt;script&gt;"));
+  assert.ok(!html.includes("<script>"));
+  assert.ok(html.includes('href="https://science.561.group/ai-alignment-and-institutions/"'));
+  assert.ok(!html.includes('href="https://561.group/ai-alignment-and-institutions/"'));
+  assert.ok(html.includes("bounded, build-time"));
+  const follow=tile(blog,"follow").html;
+  for(const company of home.group.companies){
+    assert.ok(follow.includes(company.actor));
+    assert.ok(follow.includes(company.feeds.rss));
+    assert.ok(follow.includes(company.feeds.json));
+  }
+  assert.ok(tile(blog,"lead").html.includes("/feed.rss.xml"));
+  const empty=project561GroupPage({home,estate,frontdoor,path:"/blog/",
+    feed:{...originalFeed,items:[]}});
+  assert.match(tile(empty,"posts").html,/not evidence that their archives are empty/u);
+});
+
+test("Group blog rejects unauthorized, forged, oversized and broken feed records",()=>{
+  const wrong={...originalFeed,items:[{...originalFeed.items[0],
+    authors:[{name:"Another publisher",url:"https://another.example/"}]}]};
+  assert.throws(()=>project561GroupPage({home,estate,frontdoor,path:"/blog/",feed:wrong}),/one original source owner/u);
+  const external={...originalFeed,items:[{...originalFeed.items[0],
+    url:"https://not-in-the-group.example/other/"}]};
+  assert.throws(()=>project561GroupPage({home,estate,frontdoor,path:"/blog/",feed:external}),/one original source owner/u);
+  const badUrl={...originalFeed,items:[{...originalFeed.items[0],
+    url:"javascript:alert(1)"}]};
+  assert.throws(()=>project561GroupPage({home,estate,frontdoor,path:"/blog/",feed:badUrl}),/canonical public HTTPS/u);
+  assert.throws(()=>project561GroupPage({home,estate,frontdoor,path:"/blog/"}),/original bounded generated JSON Feed/u);
+  assert.throws(()=>project561GroupPage({home,estate,frontdoor,path:"/blog/",
+    feed:{...originalFeed,items:Array(61).fill(originalFeed.items[0])}}),/original bounded generated JSON Feed/u);
+});
+
 test("a single original TUFTE application has only exact known public routes",()=>{
-  assert.deepEqual(PUBLIC_ROUTES,["/","/work/","/projects/","/about/","/for-agents/"]);
+  assert.deepEqual(PUBLIC_ROUTES,["/","/work/","/projects/","/blog/","/about/","/for-agents/"]);
   for(const route of PUBLIC_ROUTES) {
     const page=model(route);
     assert.equal(page.metadata.canonical,"https://561.group"+route);
