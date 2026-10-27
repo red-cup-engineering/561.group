@@ -269,7 +269,7 @@ test("original ecological reader routes match independent article visibility acr
   assert.ok(html.includes('href="'+expected+'"'));
   assert.ok(html.includes('href="'+institution+'"'));
   assert.ok(html.includes("As observed on October 27, 2026"));
-  assert.ok(html.includes("Engineering and Engineering and Operations climate article URLs returned HTTP 404"));
+  assert.ok(html.includes("Engineering and Operations climate article URLs returned HTTP 404"));
   assert.ok(html.includes("current source-to-provider revision is not explained by its older release record"));
   const machine=await (await request("/about/",{headers:{accept:"application/json"}})).json();
   assert.equal(machine.metadata.canonical,"https://561.group/about/");
