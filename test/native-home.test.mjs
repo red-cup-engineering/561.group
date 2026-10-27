@@ -257,3 +257,30 @@ test("public about page makes the two long-horizon programs inspectable",async()
       "the source-owned account of each program reaches the native page: "+program.id);
   assert.ok(frontier.html.includes("https://science.561.group/"));
 });
+
+
+test("original ecological reader routes match independent article visibility across three carriers",async()=>{
+  const {request}=fixture();
+  const expected="https://science.561.group/climate-breakdown-ergodicity-and-water-governance/";
+  const institution="https://science.561.group/rendanheyi-living-union-organizational-science/";
+  const page=await request("/about/",{headers:{accept:"text/html"}});
+  assert.equal(page.status,200);
+  const html=await page.text();
+  assert.ok(html.includes('href="'+expected+'"'));
+  assert.ok(html.includes('href="'+institution+'"'));
+  assert.ok(html.includes("As observed on October 27, 2026"));
+  assert.ok(html.includes("Engineering and Coesite climate article routes returned HTTP 404"));
+  assert.ok(html.includes("current source-to-provider revision is not explained by its older release record"));
+  const machine=await (await request("/about/",{headers:{accept:"application/json"}})).json();
+  assert.equal(machine.metadata.canonical,"https://561.group/about/");
+  const ecology=machine.tiles.find(x=>x.id==="ecology-and-adaptation");
+  assert.ok(ecology);
+  assert.ok(ecology.html.includes('href="'+expected+'"'));
+  assert.ok(ecology.html.includes('href="'+institution+'"'));
+  assert.ok(ecology.html.includes("As observed on October 27, 2026"));
+  const markdown=await (await request("/about/",{headers:{accept:"text/markdown"}})).text();
+  assert.ok(markdown.includes(expected));
+  assert.ok(markdown.includes(institution));
+  assert.ok(markdown.includes("As observed on October 27, 2026"));
+  assert.ok(markdown.includes("HTTP 404"));
+});
