@@ -87,6 +87,20 @@ JSON Feed into human HTML, machine JSON and negotiated Markdown.
   A disagreement refuses the ordinary release's public receiving step.
   A locally passing renderer or a deployed source SHA alone does not satisfy
   this reader-facing observation.
+- The original **post-release public-delivery observer** also samples the
+  four explicitly accepted climate–water–energy article URLs and their
+  source-company homepages: Science, Engineering, Operations and Causeway
+  Services. It makes exactly one bounded public GET per page/home URL, checks
+  the HTML media type, page canonical, visible source-title phrase and
+  homepage article link, and preserves response status, observed decoded-byte
+  digest, and distinct **404 / transport unknown / unqualified / visible**
+  classifications in the existing `561.group-public-delivery.json`
+  observation. A source owner/route label is not an authenticated immutable
+  source revision: this read-only sampling **does not** replace the Causeway
+  article release ledger, original Worker provider version, full artifact
+  digest comparison, Google/Bing inclusion or a human reader outcome.
+  Observations about the other company sites remain distinct from the
+  Group's own qualified deployment and do not falsely fail its release.
 - **Before replacing a live release**, the same source-qualified pipeline
   reads its previous public `source-revision.json`, `feed.json`,
   `feed-input-receipt.json`, and `feed-provenance.jsonld`. It checks the
