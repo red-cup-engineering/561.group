@@ -152,7 +152,7 @@ test("different ecological readers find original evidence and explicit limits",(
     "a real publicly observed research article should not be hidden behind the generic Science entrance");
   assert.ok(html.includes('href="https://science.561.group/rendanheyi-living-union-organizational-science/"'),
     "the original institutional research should have a direct qualified reading path");
-  assert.ok(html.includes("Engineering and Coesite climate article routes returned HTTP 404"),
+  assert.ok(html.includes("Engineering and Engineering and Operations climate article URLs returned HTTP 404"),
     "source must distinguish actually observed missing articles from unavailable house sites");
   assert.ok(!html.includes("Our published climate analysis"),
     "publicly observed Science must still not claim an audited provider/source release");
