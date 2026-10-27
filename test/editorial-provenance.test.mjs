@@ -65,7 +65,7 @@ test("the original public receiver refuses forged answers, authors, citations an
    g=>{g["@context"].prov="https://invalid.example/";},
    g=>{g["@graph"][0]["schema:identifier"]="sha256:"+"f".repeat(64);},
    g=>{g["@graph"][1]["schema:suggestedAnswer"]["@type"]="schema:ClaimReview";},
- ]){const g=project();mutate(g);assert.throws(()=>assay(g),/unqualified original editorial provenance/u);}
+ ]){const g=project();mutate(g);assert.throws(()=>assay(g),/Unqualified original editorial provenance/u);}
  assert.throws(()=>assayEditorialQuestionProvenance({
    home,frontdoor,frontdoorSha256:"f".repeat(64),graph:project()
  }),/public source-backed graph differs/u);
