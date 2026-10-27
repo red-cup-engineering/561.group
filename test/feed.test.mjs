@@ -536,10 +536,10 @@ test("original production independently receives all six source-owned question c
   const end=workflow.indexOf("      - name: Record original public delivery observation after release",start);
   assert.ok(start>0 && end>start);
   const release=workflow.slice(start,end);
-  const script=release.match(/          node --input-type=module <<'NODE'\\n([\\s\\S]*?)\\n          NODE\\n/u);
+  const script=release.match(/          node --input-type=module <<'NODE'\n([\s\S]*?)\n          NODE\n/u);
   assert.ok(script,"original release has one bounded independent Node receiver");
-  const unindented=script[1].split("\\n").map(line=>
-    line.startsWith("          ")?line.slice(10):line).join("\\n");
+  const unindented=script[1].split("\n").map(line=>
+    line.startsWith("          ")?line.slice(10):line).join("\n");
   const check=spawnSync(process.execPath,["--check","--input-type=module"],{
     input:unindented,encoding:"utf8",timeout:10000
   });
