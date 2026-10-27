@@ -180,7 +180,7 @@ test("native blog negotiates identical TUFTE original feed as HTML, JSON and Mar
   assert.ok(html.includes('href="https://science.561.group/source-bound-research/"'));
   assert.ok(html.includes("https://science.561.group/actors/science"));
   assert.ok(html.includes('href="https://561.group/blog/"'));
-  assert.ok(html.includes('href="https://561.group/feed-input-receipt.json"'));
+  assert.ok(html.includes('href="/feed-input-receipt.json"'));
   const json=await (await f.request("/blog/",{headers:{accept:"application/json"}})).json();
   assert.equal(json.kind,"tufte.projection");
   assert.equal(json.metadata.canonical,"https://561.group/blog/");
