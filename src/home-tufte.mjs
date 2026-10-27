@@ -4,7 +4,7 @@
 // selected links and page-specific models, never another renderer or router.
 import { HOUSE_STYLES } from "./apex-house-style.mjs";
 import { SITE_STYLES } from "./public-home-style.mjs";
-import { admitGroupBlogFeed } from "./group-blog.mjs";
+import { admitGroupBlogFeed, admitGroupBlogCoverage } from "./group-blog.mjs";
 
 const ORIGIN = "https://561.group";
 export const PUBLIC_ROUTES = Object.freeze(["/", "/work/", "/projects/", "/blog/", "/about/", "/for-agents/"]);
@@ -394,6 +394,14 @@ function projectsPage(home, estate, frontdoor, source) {
   ];
 }
 function blogPage(home, blog) {
+  const coverage=blog.coverage;
+  const originalSources=coverage.sources.map(({company,state,inputItems})=>
+    '<li><strong>'+esc(company.name)+'</strong> · '+
+    (state==='received' ? esc(String(inputItems))+' source entries received' :
+     state==='refused' ? 'Feed refused by input admission' :
+     'Feed unavailable to this build')+
+    ' · '+anchor(company.feeds.json,'Original company feed')+'</li>'
+  ).join('');
   const posts = blog.items.map(item =>
     '<li class="site-card h-entry"><span class="site-category">' + esc(item.company.name) +
     '</span><h3>' + anchor(item.url,item.title,"p-name u-url") + '</h3>' +
@@ -425,6 +433,16 @@ function blogPage(home, blog) {
       anchor("/feed-input-receipt.json","Inspect this build\u2019s source admission receipt") +
       " · " + anchor("/feed-provenance.jsonld","Trace syndicated items to original feed snapshots") +
       " · " + anchor("/projects/","Explore projects and publications"),12),
+    panel("coverage","What this build actually received",
+      para(coverage.received+" of "+coverage.expected+" original company feeds received; "+
+        coverage.admitted+" source "+(coverage.admitted===1?"item":"items")+" admitted, "+coverage.selected+
+        " selected for the capped Group feed, and "+coverage.omittedByLimit+
+        " left outside its 60-item selection.") +
+      para(coverage.rejected+" source "+(coverage.rejected===1?"entry":"entries")+" rejected during this build. "+
+        (coverage.complete ? "All four company feed endpoints were received." :
+         "This was a partial input snapshot: missing company feeds are not empty archives.")) +
+      '<ul class="site-service-grid">'+originalSources+'</ul>'+
+      note("These are build-time feed input and selection counts, not current live publication totals, reader statistics, independently verified article claims or proof of any correction or withdrawal."),12),
     panel("follow","Follow each original publisher",
       para("Subscribe to the company feeds, or follow its genuine ActivityPub identity. A Group-wide feed does not replace individual author identities.") +
       '<ul class="site-service-grid">' + follow + '</ul>',12),
@@ -473,10 +491,13 @@ function agentPage(home, estate, frontdoor) {
       actions([{href:home.group.marketGuide,label:"Current merchant guide"},{href:"/work/",label:"Human scoping and contact"}]),12)
   ];
 }
-export function project561GroupPage({home,estate,frontdoor,feed,path = "/"}) {
+export function project561GroupPage({home,estate,frontdoor,feed,feedReceipt,path = "/"}) {
   if (!PUBLIC_ROUTES.includes(path)) throw new RangeError("Unadmitted Group public route");
   const source = checkedSources(home,estate,frontdoor);
-  const blog = path === "/blog/" ? admitGroupBlogFeed(home,feed) : null;
+  const blog = path === "/blog/" ? Object.freeze({
+    ...admitGroupBlogFeed(home,feed),
+    coverage:admitGroupBlogCoverage(home,feed,feedReceipt)
+  }) : null;
   const page = {
     "/": {title:home.name,subtitle:"Indigenous-grounded governance · Artificial abiogenesis · Practical services"},
     "/work/": {title:"Work with the 561 Group",subtitle:"Capabilities, scoping, providers and actual terms"},

@@ -25,7 +25,19 @@ const originalFeed=Object.freeze({
       authors:[{name:home.group.companies[0].name,url:home.group.companies[0].url}]},
   ],
 });
-const model=path=>project561GroupPage({home,estate,frontdoor,feed:originalFeed,path});
+const originalReceipt=Object.freeze({
+  schema:"561.group/feed-input-receipt/v1",origin:home.origin,
+  expectedSourceCount:4,completeness:"all-sources-received",
+  sources:home.group.companies.map((company,i)=>({
+    companyId:company.id,feedUrl:company.feeds.json,state:"received",
+    inputItems:[2,1,0,0][i],bytes:180,
+    sha256:"sha256:"+String(i+1).repeat(64)
+  })),
+  excludedItemCounts:{},sourceItemCount:3,admittedItems:3,
+  omittedByAggregateLimit:0,emittedItems:3,
+});
+const model=path=>project561GroupPage({home,estate,frontdoor,
+  feed:originalFeed,feedReceipt:originalReceipt,path});
 const tile=(page,id)=>page.tiles.find(t=>t.id===id);
 
 test("a visitor can tell what the Group is, what they can hire, and where to go immediately",()=>{
@@ -236,8 +248,20 @@ test("Group blog receives only exact company-authored feed articles and preserve
     assert.ok(follow.includes(company.feeds.json));
   }
   assert.ok(tile(blog,"lead").html.includes("/feed.rss.xml"));
+  const coverage=tile(blog,"coverage").html;
+  assert.ok(coverage.includes("4 of 4 original company feeds received"));
+  assert.ok(coverage.includes("3 source items admitted, 3 selected"));
+  assert.ok(coverage.includes("0 source entries rejected"));
+  assert.ok(coverage.includes("not current live publication totals"));
+  for(const company of home.group.companies){
+    assert.ok(coverage.includes(company.name),"source identity: "+company.id);
+    assert.ok(coverage.includes(company.feeds.json),"original source feed: "+company.id);
+  }
   const empty=project561GroupPage({home,estate,frontdoor,path:"/blog/",
-    feed:{...originalFeed,items:[]}});
+    feed:{...originalFeed,items:[]},
+    feedReceipt:{...originalReceipt,
+      sources:originalReceipt.sources.map(source=>({...source,inputItems:0})),
+      sourceItemCount:0,admittedItems:0,emittedItems:0}});
   assert.match(tile(empty,"posts").html,/not evidence that their archives are empty/u);
 });
 
@@ -413,4 +437,45 @@ test("the original GitHub Work study gives a prospect a concrete example and sou
  noEvidence.offers.find(s=>s.id==="agent-operations").evidence.href="javascript:alert(1)";
  assert.throws(()=>project561GroupPage({home,estate,frontdoor:noEvidence,path:"/work/"}),
    /Only public HTTPS resources/u);
+});
+
+
+test("source-bound blog exposes partial company coverage and refuses fabricated completeness",()=>{
+  const receipt=structuredClone(originalReceipt);
+  const last=receipt.sources[3];
+  receipt.sources[3]={companyId:last.companyId,feedUrl:last.feedUrl,state:"unavailable"};
+  receipt.completeness="partial-source-coverage";
+  const page=project561GroupPage({home,estate,frontdoor,path:"/blog/",
+    feed:originalFeed,feedReceipt:receipt});
+  const coverage=tile(page,"coverage").html;
+  assert.ok(coverage.includes("3 of 4 original company feeds received"));
+  assert.ok(coverage.includes("Feed unavailable to this build"));
+  assert.ok(coverage.includes("not empty archives"));
+  assert.ok(coverage.includes("Causeway Services"));
+  assert.throws(()=>project561GroupPage({home,estate,frontdoor,path:"/blog/",
+    feed:originalFeed,feedReceipt:{...receipt,completeness:"all-sources-received"}}),
+    /unwitnessed completeness/u);
+  const spoofed=structuredClone(receipt);
+  spoofed.sources[3].inputItems=500;
+  assert.throws(()=>project561GroupPage({home,estate,frontdoor,path:"/blog/",
+    feed:originalFeed,feedReceipt:spoofed}),/Unread company feeds/u);
+});
+test("the same blog source receipt refuses false author, count and cap claims",()=>{
+  const broken=[
+    {...originalReceipt,expectedSourceCount:3},
+    {...originalReceipt,sourceItemCount:6},
+    {...originalReceipt,omittedByAggregateLimit:1},
+    {...originalReceipt,emittedItems:2},
+    {...originalReceipt,sources:originalReceipt.sources.map((s,i)=>
+      i===1?{...s,feedUrl:"https://another.example/feed.json"}:s)},
+    {...originalReceipt,sources:originalReceipt.sources.map((s,i)=>
+      i===2?{...s,sha256:"not-a-hash"}:s)},
+    {...originalReceipt,excludedItemCounts:{"invalid-article":4}},
+  ];
+  for(const receipt of broken)
+    assert.throws(()=>project561GroupPage({home,estate,frontdoor,path:"/blog/",
+      feed:originalFeed,feedReceipt:receipt}),
+      /source|coverage|counts|receipt|incomplete|disagree|original/u);
+  assert.throws(()=>project561GroupPage({home,estate,frontdoor,path:"/blog/",
+    feed:originalFeed}),/four-company build receipt/u);
 });
