@@ -446,3 +446,32 @@ test("inline original predeploy observation is a parseable Node module, not dead
     {input:source,encoding:"utf8",timeout:10000});
   assert.equal(result.status,0,result.stderr);
 });
+
+
+test("original deployed blog receiving checks all three public media views against the same response bytes",()=>{
+  const workflow=readFileSync(new URL("../.github/workflows/deploy.yml",import.meta.url),"utf8");
+  const start=workflow.indexOf("      - name: Receive independent public revision, human/agent and retained site routes");
+  const end=workflow.indexOf("      - name: Record original public delivery observation after release",start);
+  assert.ok(start>0&&end>start,"public inspection must follow original Wrangler deploy");
+  const current=workflow.slice(start,end);
+  const script=current.match(/          node --input-type=module <<'NODE'\n([\s\S]*?)\n          NODE\n/u);
+  assert.ok(script,"the original deployment uses a bounded native Node source verifier");
+  const unindented=script[1].split("\n").map(s=>
+    s.startsWith("          ")?s.slice(10):s).join("\n");
+  const outcome=spawnSync(process.execPath,["--check","--input-type=module"],{
+    input:unindented,encoding:"utf8",timeout:10000
+  });
+  assert.equal(outcome.status,0,outcome.stderr);
+  for(const required of [
+    "Independent published blog reader coverage",
+    "blogHtmlResponse=await read('/blog/','text/html')",
+    "blogJsonResponse=await read('/blog/','application/json')",
+    "blogMarkdownResponse=await read('/blog/','text/markdown')",
+    "blogModel.metadata?.canonical!==host+'/blog/'",
+    "originalCoverageTile.html.includes(company.feeds.json)",
+    "inputReceipt.emittedItems!==feedReceipt.emittedItems",
+    "expected.every(term=>blogHtml.includes(term))",
+    "expected.every(term=>originalCoverageTile.html?.includes(term))",
+    "expected.every(term=>blogMarkdown.includes(term))",
+  ])assert.ok(current.includes(required),"original public receiving must verify "+required);
+});
