@@ -60,7 +60,7 @@ test("a visitor can tell what the Group is, what they can hire, and where to go 
 test("political-economy readers can find evidence rather than technology hype",()=>{
   const homePage=model("/"), about=model("/about/");
   const invitation=tile(homePage,"technology-and-power").html;
-  assert.equal(about.metadata.description,frontdoor.discovery.summary);
+  assert.equal(about.metadata.description,frontdoor.discovery.summary + " " + frontdoor.ecologicalDiscovery.summary);
   assert.ok(invitation.includes(frontdoor.discovery.intro.replace(/&/gu,"&amp;").replace(/'/gu,"&#39;")));
   assert.ok(invitation.includes("Can AI alignment be anti-capitalist?"));
   assert.ok(invitation.includes('href="/about/#technology-and-power"'));
@@ -78,6 +78,40 @@ test("political-economy readers can find evidence rather than technology hype",(
   assert.ok(known.includes("AI alignment and political economy"));
   assert.ok(known.includes("post-capitalist institutional alternatives"));
 });
+
+
+test("different ecological readers find original evidence and explicit limits",()=>{
+  const homePage=model("/"), about=model("/about/");
+  const homepageMaterial=tile(homePage,"physical-world").html;
+  assert.ok(homepageMaterial.includes('href="/about/#ecology-and-adaptation"'),
+    "one existing material-world entrance leads to three distinct questions without a new homepage billboard");
+  const eco=tile(about,"ecology-and-adaptation");
+  assert.equal(eco.title,frontdoor.ecologicalDiscovery.headline);
+  const html=eco.html;
+  const research=frontdoor.ecologicalDiscovery;
+  assert.ok(about.metadata.description.includes(research.summary),
+    "About's public metadata should expose the ecological topics to readers and crawlers");
+  assert.ok(html.includes(research.intro.replace(/&/gu,"&amp;").replace(/'/gu,"&#39;")));
+  assert.equal((html.match(/class="site-card" id="/gu)||[]).length,3);
+  assert.equal(new Set(research.questions.map(q=>q.audience)).size,3);
+  for (const q of research.questions) {
+    assert.ok(html.includes('id="'+q.id+'"'),"each reader problem has its own accessible anchor");
+    assert.ok(html.includes(q.question),"each entry answers a real public question");
+    assert.ok(html.includes('href="'+q.href+'"'),"each answer links an original primary source");
+    assert.ok(html.includes(q.label),"each public source has a human-readable label");
+  }
+  assert.ok(html.includes("the partition test has not yet succeeded"),
+    "a research design must not be misrepresented as a verified disconnected operation");
+  assert.ok(html.includes("not a validated adaptation plan"),
+    "a scientific article must not be misrepresented as operational adaptation effectiveness");
+  assert.ok(html.includes("does not establish a community"),
+    "ecological work cannot silently assert someone else's consent");
+  for (const next of research.nextSteps)
+    assert.ok(html.includes('href="'+next.href+'"'),"voluntary original reader path");
+  assert.ok(!homePage.tiles.some(t=>t.id==="ecology-and-adaptation"),
+    "keep the public homepage focused on institution and jobs, not thematic campaigns");
+});
+
 
 test("services are tied to an existing accountable company, and only inquiry is offered",()=>{
   const root=model("/");
