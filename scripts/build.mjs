@@ -5,7 +5,7 @@ import { mkdir, readFile, writeFile, rename, rm } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { createHash } from "node:crypto";
 import { renderHumans, renderSecurity, renderIndex, renderLlms, renderLlmsFull, renderRobots, renderSitemap } from "../src/render.mjs";
-import { readFeeds, mergeItems, renderJsonFeed, renderAtom, renderRss } from "../src/feed.mjs";
+import { readFeedsWithCoverage, mergeItems, renderFeedInputReceipt, renderFeedItemProvenance, renderJsonFeed, renderAtom, renderRss } from "../src/feed.mjs";
 import { LOCALES, localePath, siteSpace, speaker } from "../src/locales.mjs";
 
 const root = new URL("../", import.meta.url);
@@ -40,7 +40,18 @@ const marketOffers = await (async () => {
 })();
 const facts = { marketOffers, frontdoor };
 // What the Group is publishing: the companies' feeds, merged; any that cannot be read are skipped.
-const items = mergeItems(await readFeeds(home.group.companies));
+const { feeds: companyFeeds, sources: feedSources } = await readFeedsWithCoverage(home.group.companies);
+const withheldFeedItems = [];
+const items = mergeItems(companyFeeds, undefined, { onReject: reading => withheldFeedItems.push(reading) });
+// Independent release logs can report actual feed source reception without
+// mistaking a skipped source for an empty original archive.
+console.log("feed input observation", JSON.stringify({
+  sources: feedSources.map(({companyId,state,inputItems})=>({
+    companyId,state,...(inputItems===undefined?{}:{inputItems})
+  })),
+  excludedItems:withheldFeedItems.length, emittedItems:items.length
+}));
+
 const estate = { ...authored, nodes: [...authored.nodes] };
 estate.revision = createHash("sha256").update(JSON.stringify(estate)).digest("hex");
 
@@ -64,6 +75,8 @@ const files = {
   "public/estate-records.json": JSON.stringify(estate, null, 2) + "\n",
   // English / is served by TUFTE + LivingWebServer, never by a competing static index.
   ...Object.fromEntries(LOCALES.filter(tag => tag !== "en").map((tag) => [`public${localePath(tag)}index.html`, renderIndex(home, estate, speakers[tag], items)])),
+  "public/feed-input-receipt.json": renderFeedInputReceipt(home, feedSources, items, withheldFeedItems),
+  "public/feed-provenance.jsonld": renderFeedItemProvenance(home, feedSources, items),
   "public/feed.json": renderJsonFeed(home, items),
   "public/feed.atom.xml": renderAtom(home, items),
   "public/feed.rss.xml": renderRss(home, items),

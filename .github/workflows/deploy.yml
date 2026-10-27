@@ -209,18 +209,42 @@ jobs:
           // A source commit alone does not attest generated external-feed
           // snapshots. Independently compare original published bytes with
           // their release-time artifact digests at the public origin.
+          const publicationBodies=new Map();
+          const semanticPublicationPaths=new Set([
+            'feed.json','feed-input-receipt.json','feed-provenance.jsonld'
+          ]);
           for(const path of ['llms.txt','llms-full.txt','robots.txt','sitemap.xml',
-            'feed.json','estate-records.json','zh-hans/index.html','lkt/index.html']) {
+            'feed.json','feed-input-receipt.json','feed-provenance.jsonld',
+            'estate-records.json','zh-hans/index.html','lkt/index.html']) {
             const target='/'+path;
             const asset=await read(target);
-            if(!asset.ok)throw Error('Original generated public artifact unavailable: '+target+' '+asset.status);
+            if(!asset.ok || asset.redirected)
+              throw Error('Original generated public artifact unavailable or redirected: '+target+' '+asset.status);
             const raw=await asset.arrayBuffer();
+            if(semanticPublicationPaths.has(path)) {
+              if(raw.byteLength>2*1024*1024 ||
+                 !(asset.headers.get('content-type')??'').toLowerCase().includes('json'))
+                throw Error('Public syndication evidence lacks bounded JSON media type: '+target);
+              publicationBodies.set(path,new TextDecoder('utf-8',{fatal:true}).decode(raw));
+            }
             const bytes=new Uint8Array(await crypto.subtle.digest('SHA-256',raw));
             const digest='sha256:'+Array.from(bytes,b=>b.toString(16).padStart(2,'0')).join('');
             if(receipt.artifactDigests?.[path]!==digest) {
               throw Error('Deployed public bytes differ from original release receipt: '+target);
             }
           }
+          // These are the exact already-fetched public bytes, not a second
+          // crawler or a check of unpublished checkout-only representations.
+          const {readFile}=await import('node:fs/promises');
+          const {assayPublicFeedProjection}=await import('./scripts/assay-public-feed.mjs');
+          const sourceHome=JSON.parse(await readFile('data/home.json','utf8'));
+          const feedReceipt=assayPublicFeedProjection({
+            home:sourceHome,
+            feed:JSON.parse(publicationBodies.get('feed.json')),
+            receipt:JSON.parse(publicationBodies.get('feed-input-receipt.json')),
+            graph:JSON.parse(publicationBodies.get('feed-provenance.jsonld'))
+          });
+          console.log('Independent public source/metadata receiving: '+JSON.stringify(feedReceipt));
 
           // Marketing copy is owned by the public editorial source, not by
           // frozen release-workflow prose. Verify current purpose, not a
