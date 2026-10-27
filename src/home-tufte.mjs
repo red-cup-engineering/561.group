@@ -534,6 +534,8 @@ function aboutPage(home, frontdoor) {
       para("The original public websites, company repositories, feeds and machine descriptions are linked from this site.") +
       anchor(home.group.githubOrg,"Group source on GitHub") +
       '<p>' + anchor("/llms.txt","Plain-text site guide") + "</p>" +
+      '<p>' + anchor("/editorial-question-provenance.jsonld","Source-bound public questions and citations (JSON-LD)") + "</p>" +
+      note("This graph preserves the Group\'s editorial words and linked original readings; it does not independently verify their scientific claims or article revisions.") +
       anchor(home.group.actor,"Federated Group actor"),4)
   ];
 }
@@ -618,6 +620,7 @@ export function project561GroupHead(home) {
     alternate("text/plain","For language models, in full","/llms-full.txt"),
     alternate("application/json","Live public estate","/estate.json"),
     alternate("application/feed+json","Group public writing","/feed.json"),
+    alternate("application/ld+json","Source-backed public questions and citations","/editorial-question-provenance.jsonld"),
     alternate("application/atom+xml","Group publications (Atom)","/feed.atom.xml"),
     alternate("application/rss+xml","Group publications (RSS)","/feed.rss.xml"),
     ...[["en","/"],["zh-Hans","/zh-hans/"],["lkt","/lkt/"]].map(([tag,href]) =>
