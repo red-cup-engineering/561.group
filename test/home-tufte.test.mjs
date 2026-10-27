@@ -138,18 +138,24 @@ test("different ecological readers find original evidence and explicit limits",(
   }
   assert.ok(html.includes("no independently received successful partition test"),
     "a research design must not be misrepresented as a verified disconnected operation");
-  assert.ok(html.includes("does not prove a live public edition"),
-    "source-admitted Science article must not be misrepresented as publicly received");
+  assert.ok(html.includes("does not authenticate its current publisher source-to-provider release chain"),
+    "an outside public 200 must not counterfeit the original Science provider/source chain");
   assert.ok(html.includes("does not establish a community"),
     "ecological work cannot silently assert someone else's consent");
   for (const next of research.nextSteps)
     assert.ok(html.includes('href="'+next.href+'"'),"voluntary original reader path");
-  assert.ok(html.includes("As of October 27, 2026"),
+  assert.ok(html.includes("As observed on October 27, 2026"),
     "publication-state qualifier is sourced and dated");
   assert.ok(html.includes("Use the released free climate exposure worksheet"),
     "one real already published climate resource is actionable");
+  assert.ok(html.includes('href="https://science.561.group/climate-breakdown-ergodicity-and-water-governance/"'),
+    "a real publicly observed research article should not be hidden behind the generic Science entrance");
+  assert.ok(html.includes('href="https://science.561.group/rendanheyi-living-union-organizational-science/"'),
+    "the original institutional research should have a direct qualified reading path");
+  assert.ok(html.includes("Engineering and Operations climate article URLs returned HTTP 404"),
+    "source must distinguish actually observed missing articles from unavailable house sites");
   assert.ok(!html.includes("Our published climate analysis"),
-    "unreceived science page may not acquire a public release by copy");
+    "publicly observed Science must still not claim an audited provider/source release");
   assert.ok(!homePage.tiles.some(t=>t.id==="ecology-and-adaptation"),
     "keep the public homepage focused on institution and jobs, not thematic campaigns");
 });
