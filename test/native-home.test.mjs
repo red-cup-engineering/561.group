@@ -284,3 +284,20 @@ test("original ecological reader routes match independent article visibility acr
   assert.ok(markdown.includes("As observed on October 27, 2026"));
   assert.ok(markdown.includes("HTTP 404"));
 });
+
+test("original installed About reader discovers editorial provenance in HTML, JSON and Markdown",async()=>{
+  const {request}=fixture();
+  const htmlResponse=await request("/about/",{headers:{accept:"text/html"}});
+  assert.equal(htmlResponse.status,200);
+  const html=await htmlResponse.text();
+  assert.ok(html.includes('href="/editorial-question-provenance.jsonld"'));
+  assert.ok(html.includes('type="application/ld+json"'));
+  assert.ok(html.includes("does not independently verify their scientific claims"));
+  const model=await (await request("/about/",{headers:{accept:"application/json"}})).json();
+  const source=model.tiles.find(tile=>tile.id==="source");
+  assert.ok(source?.html.includes('href="/editorial-question-provenance.jsonld"'));
+  assert.equal(model.metadata.canonical,"https://561.group/about/");
+  const markdown=await (await request("/about/",{headers:{accept:"text/markdown"}})).text();
+  assert.ok(markdown.includes("/editorial-question-provenance.jsonld"));
+  assert.match(markdown,/source|citation/i);
+});
