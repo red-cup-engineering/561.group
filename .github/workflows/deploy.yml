@@ -476,7 +476,9 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: 561-group-post-release-public-observation
-          path: observations/561.group-public-delivery.json
+          path: |
+            observations/561.group-public-delivery.json
+            observations/561.group-publication-transition-review.json
           if-no-files-found: warn
           retention-days: 30
       - name: Retain original section publication receipts
