@@ -200,7 +200,10 @@ export function renderFeedInputReceipt(home, sources, items, excluded = []) {
     sources,
     excludedItemCounts: Object.fromEntries(Object.entries(counts).sort(([a], [b]) => a.localeCompare(b))),
     emittedItems: items.length,
-    completeness: sources.every(source => source.state === "received") ?
+    expectedSourceCount: home.group.companies.length,
+    completeness: sources.length === home.group.companies.length &&
+      sources.every((source, index) => source.state === "received" &&
+        source.companyId === home.group.companies[index].id) ?
       "all-sources-received" : "partial-source-coverage",
   }, null, 2) + "\n";
 }
