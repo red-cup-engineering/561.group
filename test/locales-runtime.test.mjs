@@ -60,9 +60,14 @@ test("untrusted interpolation is escaped, explicit trusted HTML is bounded to it
 });
 
 test("English fallback is marked in Lakota HTML but not in text-only values",()=>{
-  const html=say("lkt").html("home.description");
+  const original=parseArb({"@@locale":"en","home.description":home.description});
+  const explicitSpace={source:original,targets:[]};
+  const explicitSay=tag=>speaker(explicitSpace,tag,{origin:"https://561.group"});
+  const html=explicitSay("lkt").html("home.description");
   assert.equal(html,'<span lang="en">'+home.description+'</span>');
-  assert.equal(say("lkt").text("home.description"),home.description);
+  assert.equal(explicitSay("lkt").text("home.description"),home.description);
+  assert.equal(say("lkt").text("home.description").length > 0, true);
+  assert.notEqual(say("lkt").text("home.description"), home.description);
   assert.equal(say("lkt").text("ui.languages"),"Iyápi");
 });
 

@@ -1,8 +1,7 @@
 {
   "kind": "561.market-worker-carrier-selection/v1",
   "repository": "561-group/561-group-frontdoor-services-section",
-  "revision": "d8f994dd516d9cab72445a4761356ad215c74a0d",
-  "directory": ".service-releases/market/20261027-multilingual-diagnostic-b1ec2d8",
-  "manifestSha256": "d34b5a701b04b844452090b21a41aa8308bdf11868932704bf050d80215d039f",
-  "operation": "release"
+  "revision": "4d9c747aa6d5f039417671d1b26e2d44ef1ea23c",
+  "directory": ".service-releases/market/20261027-lakota-memory-a1ddfe2",
+  "manifestSha256": "681af6e8c67065e51d4bb47e9fb9e6727c546fa539872f5ca533bcddcdd23a5e"
 }
