@@ -70,7 +70,8 @@ test("political-economy readers can find evidence rather than technology hype",(
     assert.ok(full.includes(q.question));
     assert.ok(full.includes('href="'+q.href+'"'),"readers can inspect a source");
   }
-  assert.ok(full.includes(frontdoor.discovery.boundary));
+  assert.ok(full.includes(frontdoor.discovery.boundary.replace(/&/gu,"&amp;").replace(/\x27/gu,"&#39;")),
+    "the source-qualified commercial disclosure is preserved in escaped TUFTE HTML");
   for(const x of frontdoor.discovery.nextSteps) assert.ok(full.includes('href="'+x.href+'"'));
   assert.match(full,/does not by itself|not one political program/u);
   const known=homePage.metadata.structuredData["@graph"][0].knowsAbout;
