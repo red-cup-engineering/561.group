@@ -80,8 +80,8 @@ jobs:
       - name: Restore bounded gzip transport or fabricate the selected original bytes
         id: receive
         env:
-          MARKET_SOURCE_DEPLOY_KEY: ${{ secrets.MARKET_SOURCE_DEPLOY_KEY }}
-          MARKET_PARAMETERS_DEPLOY_KEY: ${{ secrets.MARKET_PARAMETERS_DEPLOY_KEY }}
+          MARKET_SOURCE_GITHUB_TOKEN: ${{ secrets.MARKET_SOURCE_GITHUB_TOKEN }}
+          MARKET_PARAMETERS_GITHUB_TOKEN: ${{ secrets.MARKET_PARAMETERS_GITHUB_TOKEN }}
         run: node .releases/market/release.mjs receive "$RELEASE_DIRECTORY" "$RELEASE_MANIFEST" "$RELEASE_WORK_ORDER"
       - name: Receive selected bytes, original source owners and native qualification
         env:

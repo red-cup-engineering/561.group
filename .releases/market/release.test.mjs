@@ -5,11 +5,13 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createHash } from 'node:crypto';
 import { gzipSync } from 'node:zlib';
-import { execFileSync } from 'node:child_process';
+import { execFile, execFileSync } from 'node:child_process';
+import { promisify } from 'node:util';
 import { fileURLToPath } from 'node:url';
 import {
   admitMarketFabricationWorkOrder,
   checkoutMarketFabricationSources,
+  checkoutPinnedGitRepository,
   fabricateMarketCarrier,
   installFrozenMarketSuppliers,
   readMarketFabricationWorkOrder,
@@ -19,6 +21,8 @@ import {
   verifyMarketCarrier,
   verifyMarketFabricationInputs,
 } from './release.mjs';
+
+const defaultExec = promisify(execFile);
 
 const sha = bytes => createHash('sha256').update(bytes).digest('hex');
 
@@ -796,26 +800,26 @@ test('checkoutMarketFabricationSources and fabricateMarketCarrier assemble the f
       workOrder,
     } = fixture;
 
-    // Missing private SSH deploy keys are refused before any Git checkout
+    // Missing repository-scoped GitHub tokens are refused before any Git checkout
     await assert.rejects(
-      checkoutMarketFabricationSources(join(root, 'missing-key'), workOrder, {
-        marketDeployKey: '',
-        parametersDeployKey: 'dummy-key',
+      checkoutMarketFabricationSources(join(root, 'missing-token'), workOrder, {
+        marketGitHubToken: '',
+        parametersGitHubToken: 'dummy-token',
       }),
-      { code: 'PRIVATE_MARKET_SOURCE_KEY_REQUIRED' },
+      { code: 'MARKET_SOURCE_GITHUB_TOKEN_REQUIRED' },
     );
     await assert.rejects(
-      checkoutMarketFabricationSources(join(root, 'missing-param-key'), workOrder, {
-        marketDeployKey: 'dummy-key',
-        parametersDeployKey: '',
+      checkoutMarketFabricationSources(join(root, 'missing-param-token'), workOrder, {
+        marketGitHubToken: 'dummy-token',
+        parametersGitHubToken: '',
       }),
-      { code: 'PRIVATE_PARAMETERS_SOURCE_KEY_REQUIRED' },
+      { code: 'PARAMETERS_GITHUB_TOKEN_REQUIRED' },
     );
 
     // Checkout from pinned local Git remotes verifies commits, trees, gitlink, and canonical origins
     const checkedOut = await checkoutMarketFabricationSources(join(root, 'checked-out-workspace'), workOrder, {
-      marketDeployKey: 'fixture-ssh-key',
-      parametersDeployKey: 'fixture-ssh-key',
+      marketGitHubToken: 'fixture-token',
+      parametersGitHubToken: 'fixture-token',
       marketRemoteUrl: sourceRoot,
       parametersRemoteUrl: parametersRoot,
     });
@@ -1037,7 +1041,7 @@ test('checkoutMarketFabricationSources and fabricateMarketCarrier assemble the f
       RUNNER_TEMP: root,
       FIXTURE_ARGUMENTS: argsFile,
       CLOUDFLARE_API_TOKEN: 'fixture-only-token',
-      MARKET_SOURCE_DEPLOY_KEY: 'fixture-source-key',
+      MARKET_SOURCE_GITHUB_TOKEN: 'fixture-source-token',
     };
 
     execFileSync(process.execPath, [cli, 'verify', fabricated.carrierDirectory, fabricated.manifestSha256, 'release'], { cwd: groupRepo, env });
@@ -1097,18 +1101,17 @@ test('deploy-market.yml confines private source keys to receive, Cloudflare cred
   assert.match(retainBlock, /path: \$\{\{ runner\.temp \}\}\/market-release\/receipt\.json/u);
   assert.doesNotMatch(retainBlock, /market-fabricated-carrier/u);
   assert.doesNotMatch(retainBlock, /\.market-release/u);
-  assert.match(receiveBlock, /MARKET_SOURCE_DEPLOY_KEY/u);
-  assert.match(receiveBlock, /MARKET_PARAMETERS_DEPLOY_KEY/u);
+  assert.match(receiveBlock, /MARKET_SOURCE_GITHUB_TOKEN/u);
+  assert.match(receiveBlock, /MARKET_PARAMETERS_GITHUB_TOKEN/u);
   assert.doesNotMatch(receiveBlock, /CLOUDFLARE_API_TOKEN/u);
+  assert.doesNotMatch(verifyBlock, /GITHUB_TOKEN/u);
   assert.doesNotMatch(verifyBlock, /DEPLOY_KEY/u);
   assert.doesNotMatch(verifyBlock, /CLOUDFLARE_/u);
   assert.match(executeBlock, /CLOUDFLARE_API_TOKEN/u);
   assert.match(executeBlock, /CLOUDFLARE_ACCOUNT_ID/u);
+  assert.doesNotMatch(executeBlock, /GITHUB_TOKEN/u);
   assert.doesNotMatch(executeBlock, /DEPLOY_KEY/u);
 });
-
-
-
 
 test('frozen install receives the selected effective PNPM version before install and records its custody', async () => {
   const fixture = await createCanonicalMarketFabricationFixture();
@@ -1150,4 +1153,380 @@ test('actual CLI contains receiver failure diagnostics in private custody and em
     assert.equal((await lstat(directory)).mode & 0o777, 0o700);
     assert.equal((await lstat(join(directory, 'failure.log'))).mode & 0o777, 0o600);
   });
+});
+
+test('Git HTTP Basic source authentication uses ephemeral child config with distinct sentinels, host/path matching, and excludes tokens from argv, config, and URLs', async () => {
+  const fixture = await createCanonicalMarketFabricationFixture();
+  try {
+    const fakeMarketSentinel = 'FAKE_RAW_TOKEN_MARKET_SENTINEL_ALPHA_109283';
+    const fakeParametersSentinel = 'FAKE_RAW_TOKEN_PARAMETERS_SENTINEL_BETA_475829';
+    const expectedMarketBasic = Buffer.from(`x-access-token:${fakeMarketSentinel}`).toString('base64');
+    const expectedParametersBasic = Buffer.from(`x-access-token:${fakeParametersSentinel}`).toString('base64');
+
+    const recordedCalls = [];
+    const capturingExec = async (cmd, args, opts) => {
+      recordedCalls.push({
+        cmd,
+        args: [...args],
+        env: opts?.env ? { ...opts.env } : undefined,
+        cwd: opts?.cwd,
+      });
+      return defaultExec(cmd, args, opts);
+    };
+
+    const destination = join(fixture.root, 'sentinel-checkout');
+    const checkedOut = await checkoutMarketFabricationSources(destination, fixture.workOrder, {
+      marketGitHubToken: fakeMarketSentinel,
+      parametersGitHubToken: fakeParametersSentinel,
+      marketRemoteUrl: fixture.sourceRoot,
+      parametersRemoteUrl: fixture.parametersRoot,
+      exec: capturingExec,
+    });
+
+    assert.equal(checkedOut.marketCheckout.revision, fixture.workOrder.source.market.revision);
+    assert.equal(checkedOut.parametersCheckout.revision, fixture.workOrder.source.public.revision);
+
+    const fetchCalls = recordedCalls.filter(call => call.cmd === 'git' && call.args.includes('fetch'));
+    assert.equal(fetchCalls.length, 2, 'Expected exactly two fetch calls (market and parameters)');
+
+    const [marketFetch, paramFetch] = fetchCalls;
+
+    // Verify market fetch argv does not contain any token or basic auth
+    assert.ok(!marketFetch.args.some(arg => arg.includes(fakeMarketSentinel)));
+    assert.ok(!marketFetch.args.some(arg => arg.includes(expectedMarketBasic)));
+    assert.ok(!marketFetch.args.some(arg => arg.includes('x-access-token')));
+
+    // Verify market fetch ephemeral child env
+    assert.equal(marketFetch.env.GIT_CONFIG_COUNT, '1');
+    assert.equal(marketFetch.env.GIT_CONFIG_KEY_0, 'http.https://github.com/red-cup-engineering/market.561.group.git.extraheader');
+    assert.equal(marketFetch.env.GIT_CONFIG_VALUE_0, `Authorization: Basic ${expectedMarketBasic}`);
+    assert.ok(!JSON.stringify(marketFetch.env).includes(fakeParametersSentinel));
+    assert.ok(!JSON.stringify(marketFetch.env).includes(expectedParametersBasic));
+
+    // Verify parameters fetch argv does not contain any token or basic auth
+    assert.ok(!paramFetch.args.some(arg => arg.includes(fakeParametersSentinel)));
+    assert.ok(!paramFetch.args.some(arg => arg.includes(expectedParametersBasic)));
+    assert.ok(!paramFetch.args.some(arg => arg.includes('x-access-token')));
+
+    // Verify parameters fetch ephemeral child env
+    assert.equal(paramFetch.env.GIT_CONFIG_COUNT, '1');
+    assert.equal(paramFetch.env.GIT_CONFIG_KEY_0, 'http.https://github.com/causeway-services/public-market-services-section.git.extraheader');
+    assert.equal(paramFetch.env.GIT_CONFIG_VALUE_0, `Authorization: Basic ${expectedParametersBasic}`);
+    assert.ok(!JSON.stringify(paramFetch.env).includes(fakeMarketSentinel));
+    assert.ok(!JSON.stringify(paramFetch.env).includes(expectedMarketBasic));
+
+    // Verify all git calls: no token or auth in any argv, and config keys not leaked to non-fetch calls
+    for (const call of recordedCalls) {
+      for (const arg of call.args) {
+        assert.ok(!arg.includes(fakeMarketSentinel), `Token found in git argv: ${arg}`);
+        assert.ok(!arg.includes(fakeParametersSentinel), `Token found in git argv: ${arg}`);
+        assert.ok(!arg.includes(expectedMarketBasic), `Basic auth found in git argv: ${arg}`);
+        assert.ok(!arg.includes(expectedParametersBasic), `Basic auth found in git argv: ${arg}`);
+      }
+      if (!call.args.includes('fetch') && call.env) {
+        assert.equal(call.env.GIT_CONFIG_COUNT, undefined, 'GIT_CONFIG_COUNT leaked to non-fetch call');
+        assert.equal(call.env.GIT_CONFIG_KEY_0, undefined, 'GIT_CONFIG_KEY_0 leaked to non-fetch call');
+        assert.equal(call.env.GIT_CONFIG_VALUE_0, undefined, 'GIT_CONFIG_VALUE_0 leaked to non-fetch call');
+      }
+    }
+
+    // Verify actual host/path Git matching with real git subprocess
+    const marketMatched = execFileSync('git', ['-c', 'gc.auto=0', '-c', 'maintenance.auto=false', 'config', '--get-urlmatch', 'http.extraheader', 'https://github.com/red-cup-engineering/market.561.group.git'], {
+      env: marketFetch.env,
+      encoding: 'utf8',
+    }).trim();
+    assert.equal(marketMatched, `Authorization: Basic ${expectedMarketBasic}`);
+
+    let wrongPathMatch = '';
+    try {
+      wrongPathMatch = execFileSync('git', ['-c', 'gc.auto=0', '-c', 'maintenance.auto=false', 'config', '--get-urlmatch', 'http.extraheader', 'https://github.com/causeway-services/public-market-services-section.git'], {
+        env: marketFetch.env,
+        encoding: 'utf8',
+        stdio: ['pipe', 'pipe', 'ignore'],
+      }).trim();
+    } catch { wrongPathMatch = ''; }
+    assert.equal(wrongPathMatch, '');
+
+    let wrongHostMatch = '';
+    try {
+      wrongHostMatch = execFileSync('git', ['-c', 'gc.auto=0', '-c', 'maintenance.auto=false', 'config', '--get-urlmatch', 'http.extraheader', 'https://gitlab.com/red-cup-engineering/market.561.group.git'], {
+        env: marketFetch.env,
+        encoding: 'utf8',
+        stdio: ['pipe', 'pipe', 'ignore'],
+      }).trim();
+    } catch { wrongHostMatch = ''; }
+    assert.equal(wrongHostMatch, '');
+
+    const paramMatched = execFileSync('git', ['-c', 'gc.auto=0', '-c', 'maintenance.auto=false', 'config', '--get-urlmatch', 'http.extraheader', 'https://github.com/causeway-services/public-market-services-section.git'], {
+      env: paramFetch.env,
+      encoding: 'utf8',
+    }).trim();
+    assert.equal(paramMatched, `Authorization: Basic ${expectedParametersBasic}`);
+
+    // Verify persisted .git/config on disk does not contain any credentials
+    const marketGitConfig = await readFile(join(destination, 'source/.git/config'), 'utf8');
+    assert.ok(!marketGitConfig.includes(fakeMarketSentinel));
+    assert.ok(!marketGitConfig.includes(expectedMarketBasic));
+    assert.ok(!marketGitConfig.includes('x-access-token'));
+    assert.ok(marketGitConfig.includes('https://github.com/red-cup-engineering/market.561.group.git'));
+
+    const paramGitConfig = await readFile(join(destination, 'source/parameters/.git/config'), 'utf8');
+    assert.ok(!paramGitConfig.includes(fakeParametersSentinel));
+    assert.ok(!paramGitConfig.includes(expectedParametersBasic));
+    assert.ok(!paramGitConfig.includes('x-access-token'));
+    assert.ok(paramGitConfig.includes('https://github.com/causeway-services/public-market-services-section.git'));
+  } finally {
+    await rm(fixture.root, { recursive: true, force: true });
+  }
+});
+
+test('failed fetch cleans up workspace, leaves clean canonical git config without tokens, and prevents factory callbacks from executing', async () => {
+  const fixture = await createCanonicalMarketFabricationFixture();
+  try {
+    let buildWorkerCalled = false;
+    let receiveWorkerCalled = false;
+    let buildReceiverCalled = false;
+    const failDest = join(fixture.root, 'failed-fetch-fabrication');
+    await assert.rejects(
+      fabricateMarketCarrier(fixture.workOrder, {
+        destination: failDest,
+        marketGitHubToken: 'fake-fail-market-token',
+        parametersGitHubToken: 'fake-fail-param-token',
+        marketRemoteUrl: join(fixture.root, 'nonexistent-remote'),
+        parametersRemoteUrl: fixture.parametersRoot,
+        buildWorker: async () => { buildWorkerCalled = true; },
+        receiveWorker: async () => { receiveWorkerCalled = true; },
+        buildReceiver: async () => { buildReceiverCalled = true; },
+      }),
+    );
+    assert.equal(buildWorkerCalled, false, 'buildWorker callback must not run after failed checkout');
+    assert.equal(receiveWorkerCalled, false, 'receiveWorker callback must not run after failed checkout');
+    assert.equal(buildReceiverCalled, false, 'buildReceiver callback must not run after failed checkout');
+    await assert.rejects(lstat(join(failDest, 'workspace')), { code: 'ENOENT' }, 'Workspace directory must be cleaned up on failed checkout');
+
+    const standaloneFail = join(fixture.root, 'standalone-fail-checkout');
+    await assert.rejects(
+      checkoutPinnedGitRepository(standaloneFail, {
+        repository: 'red-cup-engineering/market.561.group',
+        revision: fixture.workOrder.source.market.revision,
+        tree: fixture.workOrder.source.market.tree,
+        token: 'fake-fail-token-xyz',
+        remoteUrl: join(fixture.root, 'nonexistent-remote'),
+      }),
+    );
+    const failGitConfig = await readFile(join(standaloneFail, '.git/config'), 'utf8');
+    assert.ok(!failGitConfig.includes('fake-fail-token-xyz'));
+    assert.ok(!failGitConfig.includes('x-access-token'));
+    assert.ok(failGitConfig.includes('https://github.com/red-cup-engineering/market.561.group.git'));
+  } finally {
+    await rm(fixture.root, { recursive: true, force: true });
+  }
+});
+
+async function writeMockBuildOutputs(outputRoot, currentSourceRoot, fixture, { extraFile = false, externalSourcePath = false } = {}) {
+  const { root, files, supplierManifestBytes, parametersPkgBytes, workOrder } = fixture;
+  await mkdir(outputRoot, { recursive: true });
+  const workerBytes = Buffer.from('export default { async fetch() { return new Response("built-worker"); } };\n');
+  const mapBytes = Buffer.from(JSON.stringify({ version: 3, sources: ['src/worker.mjs'], sourcesContent: [files['src/worker.mjs'].toString('utf8')] }));
+  const metafileBytes = Buffer.from(JSON.stringify({ inputs: {}, outputs: { 'worker.js': { entryPoint: 'src/worker.mjs' } } }));
+  const sourceInputsData = [
+    {
+      path: 'src/worker.mjs',
+      kind: 'physical',
+      source: externalSourcePath ? join(root, 'outside.mjs') : join(currentSourceRoot, 'src/worker.mjs'),
+      bytes: files['src/worker.mjs'].length,
+      sha256: sha(files['src/worker.mjs']),
+      packageManifestSha256: sha(files['package.json']),
+    },
+  ];
+  const sourceInputsBytes = Buffer.from(`${JSON.stringify(sourceInputsData, null, 2)}\n`);
+  const packageManifestsData = [
+    {
+      path: join(currentSourceRoot, 'package.json'),
+      name: '@causeway-services/market.561.group',
+      version: '0.1.0',
+      bytes: files['package.json'].length,
+      sha256: sha(files['package.json']),
+      sideEffects: null,
+      manifestBase64: files['package.json'].toString('base64'),
+    },
+    {
+      path: join(currentSourceRoot, 'node_modules/@red-cup-engineering/mcp-engineering-services-section/package.json'),
+      name: '@red-cup-engineering/mcp-engineering-services-section',
+      version: '0.1.9',
+      bytes: supplierManifestBytes.length,
+      sha256: sha(supplierManifestBytes),
+      sideEffects: null,
+      manifestBase64: supplierManifestBytes.toString('base64'),
+    },
+  ];
+  const packageManifestsBytes = Buffer.from(`${JSON.stringify(packageManifestsData, null, 2)}\n`);
+
+  await writeFile(join(outputRoot, 'worker.js'), workerBytes);
+  await writeFile(join(outputRoot, 'worker.js.map'), mapBytes);
+  await writeFile(join(outputRoot, 'esbuild.metafile.json'), metafileBytes);
+  await writeFile(join(outputRoot, 'source-inputs.json'), sourceInputsBytes);
+  await writeFile(join(outputRoot, 'package-manifests.json'), packageManifestsBytes);
+  await writeFile(join(outputRoot, 'source-package.json'), files['package.json']);
+  await writeFile(join(outputRoot, 'parameters-package.json'), parametersPkgBytes);
+  await writeFile(join(outputRoot, 'pnpm-lock.yaml'), files['pnpm-lock.yaml']);
+  await writeFile(join(outputRoot, 'wrangler.jsonc'), files['wrangler.jsonc']);
+  if (extraFile) {
+    await writeFile(join(outputRoot, 'undeclared-extra.js'), 'export const undeclared = true;\n');
+  }
+
+  const descriptor = (name, bytes) => ({ path: name, bytes: bytes.length, sha256: sha(bytes) });
+  const receipt = {
+    kind: 'native-market-worker-build',
+    source: { repository: 'red-cup-engineering/market.561.group', revision: workOrder.source.market.revision },
+    sourceBindings: {
+      parameters: {
+        repository: 'causeway-services/public-market-services-section',
+        path: 'parameters',
+        mode: '160000',
+        revision: workOrder.source.public.revision,
+        gitlink: workOrder.source.public.gitlink,
+      },
+    },
+    deploymentBindings: { MARKET_BUILD_SHA: workOrder.source.market.revision },
+    predecessorClosureReplayed: false,
+    nativeMetadataComplete: true,
+    output: join(outputRoot, 'worker.js'),
+    bytes: workerBytes.length,
+    sha256: sha(workerBytes),
+    inputs: 1,
+    physicalInputs: 1,
+    generatedInputs: 0,
+    sourceInputs: descriptor('source-inputs.json', sourceInputsBytes),
+    packageManifests: descriptor('package-manifests.json', packageManifestsBytes),
+    sourceManifest: descriptor('source-package.json', files['package.json']),
+    parameterSourceManifest: descriptor('parameters-package.json', parametersPkgBytes),
+    lockfile: descriptor('pnpm-lock.yaml', files['pnpm-lock.yaml']),
+    configuration: descriptor('wrangler.jsonc', files['wrangler.jsonc']),
+    metafile: descriptor('esbuild.metafile.json', metafileBytes),
+    sourceMap: descriptor('worker.js.map', mapBytes),
+  };
+  await writeFile(join(outputRoot, 'build-receipt.json'), `${JSON.stringify(receipt, null, 2)}\n`);
+  return receipt;
+}
+
+const mockReceiveWorker = async request => {
+  await mkdir(request.outputRoot, { recursive: true });
+  const qualification = {
+    kind: '561.market-worker-native-qualification/v1',
+    sourceRevision: request.source.revision,
+    workerSha256: request.artifact.sha256,
+    outsidePaymentReceived: false,
+    artifactInternalComputationInstrumented: false,
+    checks: {
+      startup: { passed: true },
+      sourceSuite: { passed: true },
+    },
+  };
+  await writeFile(join(request.outputRoot, 'native-qualification.json'), `${JSON.stringify(qualification, null, 2)}\n`);
+};
+
+const mockBuildReceiver = async request => {
+  await mkdir(request.outputRoot, { recursive: true });
+  const receiverBytes = Buffer.from(
+    "require('node:fs').writeFileSync(process.env.FIXTURE_ARGUMENTS, JSON.stringify({args:process.argv.slice(2),credentialPresent:Boolean(process.env.CLOUDFLARE_API_TOKEN)}));\n",
+  );
+  await writeFile(join(request.outputRoot, 'receiver.cjs'), receiverBytes);
+  const receiverInputs = {
+    kind: '561.market-worker-receiver-build/v1',
+    source: { repository: 'red-cup-engineering/market.561.group', revision: request.sourceRevision },
+    cloudflare: { repository: 'red-cup-engineering/cloudflare-engineering-services-section', revision: request.cloudflareRevision },
+    output: { path: 'receiver.cjs', bytes: receiverBytes.length, sha256: sha(receiverBytes) },
+  };
+  await writeFile(join(request.outputRoot, 'receiver-inputs.json'), `${JSON.stringify(receiverInputs, null, 2)}\n`);
+};
+
+test('source auth isolates full five-name credentials during callbacks and restores caller phase environment on both success and failure', async () => {
+  const fixture = await createCanonicalMarketFabricationFixture();
+  try {
+    const fiveNames = [
+      'MARKET_SOURCE_GITHUB_TOKEN',
+      'MARKET_PARAMETERS_GITHUB_TOKEN',
+      'MARKET_SOURCE_DEPLOY_KEY',
+      'MARKET_PARAMETERS_DEPLOY_KEY',
+      'SITE_CONTENT_DEPLOY_KEY',
+    ];
+    const originalValues = {};
+    for (const name of fiveNames) {
+      originalValues[name] = process.env[name];
+      process.env[name] = `SENTINEL_VAL_PHASE_${name}`;
+    }
+
+    let observedInBuildWorker = {};
+    let observedInReceiveWorker = {};
+    let observedInBuildReceiver = {};
+
+    const successDest = join(fixture.root, 'phase-isolation-success');
+    await fabricateMarketCarrier(fixture.workOrder, {
+      destination: successDest,
+      sourceRoot: fixture.sourceRoot,
+      incumbentCarrierDirectory: fixture.incumbentCarrierRoot,
+      installSuppliers: false,
+      marketGitHubToken: 'SENTINEL_VAL_PHASE_MARKET_SOURCE_GITHUB_TOKEN',
+      parametersGitHubToken: 'SENTINEL_VAL_PHASE_MARKET_PARAMETERS_GITHUB_TOKEN',
+      buildWorker: async ({ outputRoot, sourceRoot: sr }) => {
+        for (const name of fiveNames) {
+          observedInBuildWorker[name] = process.env[name];
+        }
+        await writeMockBuildOutputs(outputRoot, sr, fixture);
+      },
+      receiveWorker: async request => {
+        for (const name of fiveNames) {
+          observedInReceiveWorker[name] = process.env[name];
+        }
+        await mockReceiveWorker(request);
+      },
+      buildReceiver: async request => {
+        for (const name of fiveNames) {
+          observedInBuildReceiver[name] = process.env[name];
+        }
+        await mockBuildReceiver(request);
+      },
+    });
+
+    for (const name of fiveNames) {
+      assert.equal(observedInBuildWorker[name], undefined, `${name} must be undefined in buildWorker`);
+      assert.equal(observedInReceiveWorker[name], undefined, `${name} must be undefined in receiveWorker`);
+      assert.equal(observedInBuildReceiver[name], undefined, `${name} must be undefined in buildReceiver`);
+    }
+
+    for (const name of fiveNames) {
+      assert.equal(process.env[name], `SENTINEL_VAL_PHASE_${name}`, `${name} must be restored on success`);
+    }
+
+    const failureDest = join(fixture.root, 'phase-isolation-failure');
+    await assert.rejects(
+      fabricateMarketCarrier(fixture.workOrder, {
+        destination: failureDest,
+        sourceRoot: fixture.sourceRoot,
+        incumbentCarrierDirectory: fixture.incumbentCarrierRoot,
+        installSuppliers: false,
+        marketGitHubToken: 'SENTINEL_VAL_PHASE_MARKET_SOURCE_GITHUB_TOKEN',
+        parametersGitHubToken: 'SENTINEL_VAL_PHASE_MARKET_PARAMETERS_GITHUB_TOKEN',
+        buildWorker: async () => {
+          throw new Error('deliberate-build-worker-phase-failure');
+        },
+      }),
+      /deliberate-build-worker-phase-failure/u,
+    );
+
+    for (const name of fiveNames) {
+      assert.equal(process.env[name], `SENTINEL_VAL_PHASE_${name}`, `${name} must be restored on failure`);
+    }
+
+    for (const name of fiveNames) {
+      if (originalValues[name] !== undefined) {
+        process.env[name] = originalValues[name];
+      } else {
+        delete process.env[name];
+      }
+    }
+  } finally {
+    await rm(fixture.root, { recursive: true, force: true });
+  }
 });

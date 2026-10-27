@@ -71,6 +71,13 @@ const ADMITTED_BUILD_OUTPUT_NAMES = new Set([
   'request.json',
   'build-receipt.json',
 ]);
+const SOURCE_AUTH_ENV_KEYS = [
+  'MARKET_SOURCE_GITHUB_TOKEN',
+  'MARKET_PARAMETERS_GITHUB_TOKEN',
+  'MARKET_SOURCE_DEPLOY_KEY',
+  'MARKET_PARAMETERS_DEPLOY_KEY',
+  'SITE_CONTENT_DEPLOY_KEY',
+];
 
 const hash = bytes => createHash('sha256').update(bytes).digest('hex');
 const equal = isDeepStrictEqual;
@@ -371,24 +378,12 @@ export async function receiveMarketCarrier(directory, expectedManifestSha256) {
   return { ...await verifyMarketCarrier(root, expectedManifestSha256), restoredArtifacts };
 }
 
-async function withPrivateKey(deployKey, keyRequiredCode, fn) {
-  requireThat(typeof deployKey === 'string' && deployKey.trim().length > 0, keyRequiredCode);
-  const directory = await mkdtemp(join(tmpdir(), 'market-ssh-'));
-  const keyFile = join(directory, 'deploy_key');
-  try {
-    await writeFile(keyFile, `${deployKey.trim()}\n`, { mode: 0o600 });
-    return await fn(`ssh -i ${keyFile} -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new`);
-  } finally {
-    await rm(directory, { recursive: true, force: true });
-  }
-}
-
-async function checkoutPinnedGitRepository(checkoutRoot, {
+export async function checkoutPinnedGitRepository(checkoutRoot, {
   repository,
   revision,
   tree,
   sparseDirectory,
-  sshCommand,
+  token,
   remoteUrl,
   canonicalOriginUrl = `https://github.com/${repository}.git`,
   exec = defaultExec,
@@ -399,7 +394,6 @@ async function checkoutPinnedGitRepository(checkoutRoot, {
   const env = {
     PATH: process.env.PATH ?? '',
     HOME: process.env.HOME ?? tmpdir(),
-    ...(sshCommand ? { GIT_SSH_COMMAND: sshCommand } : {}),
   };
   const git = (...args) => exec('git', ['-c', 'gc.auto=0', '-c', 'maintenance.auto=false', '--no-optional-locks', ...args], {
     cwd: checkoutRoot,
@@ -408,15 +402,34 @@ async function checkoutPinnedGitRepository(checkoutRoot, {
     maxBuffer: 16 * 1024 * 1024,
   });
   await git('init', '--quiet');
-  await git('remote', 'add', 'origin', remoteUrl ?? `git@github.com:${repository}.git`);
+  const baseRemoteUrl = remoteUrl ?? `https://github.com/${repository}.git`;
+  await git('remote', 'add', 'origin', baseRemoteUrl);
   if (sparseDirectory) {
     await git('sparse-checkout', 'init', '--cone');
     await git('sparse-checkout', 'set', sparseDirectory);
   }
-  await git('-c', 'protocol.version=2', 'fetch', '--quiet', '--depth', '1', '--no-tags', '--no-recurse-submodules', 'origin', revision);
-  await git('checkout', '--quiet', '--detach', 'FETCH_HEAD');
-  if (canonicalOriginUrl) {
-    await git('remote', 'set-url', 'origin', canonicalOriginUrl);
+  const fetchArgs = ['-c', 'protocol.version=2'];
+  const fetchEnv = { ...env };
+  if (token) {
+    const basicAuth = Buffer.from(`x-access-token:${token}`).toString('base64');
+    fetchEnv.GIT_CONFIG_COUNT = '1';
+    fetchEnv.GIT_CONFIG_KEY_0 = `http.https://github.com/${repository}.git.extraheader`;
+    fetchEnv.GIT_CONFIG_VALUE_0 = `Authorization: Basic ${basicAuth}`;
+  }
+  const gitFetch = (...args) => exec('git', ['-c', 'gc.auto=0', '-c', 'maintenance.auto=false', '--no-optional-locks', ...args], {
+    cwd: checkoutRoot,
+    env: fetchEnv,
+    timeout: 120_000,
+    maxBuffer: 16 * 1024 * 1024,
+  });
+  fetchArgs.push('fetch', '--quiet', '--depth', '1', '--no-tags', '--no-recurse-submodules', 'origin', revision);
+  try {
+    await gitFetch(...fetchArgs);
+    await git('checkout', '--quiet', '--detach', 'FETCH_HEAD');
+  } finally {
+    if (canonicalOriginUrl) {
+      await git('remote', 'set-url', 'origin', canonicalOriginUrl).catch(() => {});
+    }
   }
   const head = (await git('rev-parse', '--verify', 'HEAD')).stdout.trim();
   requireThat(head === revision, revisionMismatchCode);
@@ -547,45 +560,41 @@ export async function verifyMarketFabricationInputs(sourceRoot, workOrder, {
 }
 
 export async function checkoutMarketFabricationSources(destination, workOrder, {
-  marketDeployKey = process.env.MARKET_SOURCE_DEPLOY_KEY ?? '',
-  parametersDeployKey = process.env.MARKET_PARAMETERS_DEPLOY_KEY ?? '',
+  marketGitHubToken = process.env.MARKET_SOURCE_GITHUB_TOKEN ?? '',
+  parametersGitHubToken = process.env.MARKET_PARAMETERS_GITHUB_TOKEN ?? '',
   marketRemoteUrl,
   parametersRemoteUrl,
   exec = defaultExec,
 } = {}) {
   admitMarketFabricationWorkOrder(workOrder);
-  requireThat(typeof marketDeployKey === 'string' && marketDeployKey.trim().length > 0, 'PRIVATE_MARKET_SOURCE_KEY_REQUIRED');
-  requireThat(typeof parametersDeployKey === 'string' && parametersDeployKey.trim().length > 0, 'PRIVATE_PARAMETERS_SOURCE_KEY_REQUIRED');
+  requireThat(typeof marketGitHubToken === 'string' && marketGitHubToken.trim().length > 0, 'MARKET_SOURCE_GITHUB_TOKEN_REQUIRED');
+  requireThat(typeof parametersGitHubToken === 'string' && parametersGitHubToken.trim().length > 0, 'PARAMETERS_GITHUB_TOKEN_REQUIRED');
   const root = resolve(destination);
   const sourceRoot = join(root, 'source');
   const parametersRoot = join(sourceRoot, 'parameters');
   await rm(sourceRoot, { recursive: true, force: true });
 
-  await withPrivateKey(marketDeployKey, 'PRIVATE_MARKET_SOURCE_KEY_REQUIRED', async sshCommand => {
-    await checkoutPinnedGitRepository(sourceRoot, {
-      repository: MARKET_REPOSITORY,
-      revision: workOrder.source.market.revision,
-      tree: workOrder.source.market.tree,
-      sshCommand,
-      remoteUrl: marketRemoteUrl,
-      exec,
-      revisionMismatchCode: 'MARKET_SOURCE_REVISION_MISMATCH',
-      treeMismatchCode: 'MARKET_SOURCE_TREE_MISMATCH',
-    });
+  await checkoutPinnedGitRepository(sourceRoot, {
+    repository: MARKET_REPOSITORY,
+    revision: workOrder.source.market.revision,
+    tree: workOrder.source.market.tree,
+    token: marketGitHubToken,
+    remoteUrl: marketRemoteUrl,
+    exec,
+    revisionMismatchCode: 'MARKET_SOURCE_REVISION_MISMATCH',
+    treeMismatchCode: 'MARKET_SOURCE_TREE_MISMATCH',
   });
 
   await rm(parametersRoot, { recursive: true, force: true });
-  await withPrivateKey(parametersDeployKey, 'PRIVATE_PARAMETERS_SOURCE_KEY_REQUIRED', async sshCommand => {
-    await checkoutPinnedGitRepository(parametersRoot, {
-      repository: PARAMETERS_REPOSITORY,
-      revision: workOrder.source.public.revision,
-      tree: workOrder.source.public.tree,
-      sshCommand,
-      remoteUrl: parametersRemoteUrl,
-      exec,
-      revisionMismatchCode: 'PARAMETERS_REVISION_MISMATCH',
-      treeMismatchCode: 'PARAMETERS_TREE_MISMATCH',
-    });
+  await checkoutPinnedGitRepository(parametersRoot, {
+    repository: PARAMETERS_REPOSITORY,
+    revision: workOrder.source.public.revision,
+    tree: workOrder.source.public.tree,
+    token: parametersGitHubToken,
+    remoteUrl: parametersRemoteUrl,
+    exec,
+    revisionMismatchCode: 'PARAMETERS_REVISION_MISMATCH',
+    treeMismatchCode: 'PARAMETERS_TREE_MISMATCH',
   });
 
   return verifyMarketFabricationInputs(sourceRoot, workOrder, { exec });
@@ -766,6 +775,8 @@ export async function fabricateMarketCarrier(workOrder, {
   candidateDeclarationsBytes: suppliedCandidateDeclarationsBytes,
   installSuppliers = suppliedSourceRoot === undefined,
   retainWorkspace = false,
+  marketGitHubToken = process.env.MARKET_SOURCE_GITHUB_TOKEN ?? '',
+  parametersGitHubToken = process.env.MARKET_PARAMETERS_GITHUB_TOKEN ?? '',
   marketDeployKey,
   parametersDeployKey,
   marketRemoteUrl,
@@ -792,17 +803,34 @@ export async function fabricateMarketCarrier(workOrder, {
   await mkdir(workspaceRoot, { recursive: true, mode: 0o700 });
 
   let workspaceDisposed = false;
+  const originalEnv = {};
+  for (const key of SOURCE_AUTH_ENV_KEYS) {
+    if (Object.hasOwn(process.env, key)) {
+      originalEnv[key] = process.env[key];
+    }
+  }
+
   try {
+    if (marketGitHubToken) process.env.MARKET_SOURCE_GITHUB_TOKEN = marketGitHubToken;
+    if (parametersGitHubToken) process.env.MARKET_PARAMETERS_GITHUB_TOKEN = parametersGitHubToken;
+
     const verifiedInputs = suppliedSourceRoot
       ? await verifyMarketFabricationInputs(suppliedSourceRoot, workOrder, { exec })
       : await checkoutMarketFabricationSources(workspaceRoot, workOrder, {
-        marketDeployKey,
-        parametersDeployKey,
+        marketGitHubToken,
+        parametersGitHubToken,
         marketRemoteUrl,
         parametersRemoteUrl,
         exec,
       });
     const { sourceRoot } = verifiedInputs;
+
+    // Source authentication must be consumed/isolated BEFORE original native producer,
+    // receiver, qualification, compiler, install and test callbacks/children,
+    // including IN-PROCESS environment access.
+    for (const key of SOURCE_AUTH_ENV_KEYS) {
+      delete process.env[key];
+    }
 
     const supplierVerification = installSuppliers
       ? await installFrozenMarketSuppliers(sourceRoot, workOrder, {
@@ -1136,6 +1164,14 @@ export async function fabricateMarketCarrier(workOrder, {
       receiptFile,
     };
   } finally {
+    for (const key of SOURCE_AUTH_ENV_KEYS) {
+      if (Object.hasOwn(originalEnv, key)) {
+        process.env[key] = originalEnv[key];
+      } else {
+        delete process.env[key];
+      }
+    }
+
     if (!retainWorkspace && !workspaceDisposed) {
       await rm(workspaceRoot, { recursive: true, force: true }).catch(() => {});
     }
@@ -1259,7 +1295,7 @@ if (import.meta.main) {
       const env = Object.fromEntries(
         Object.entries(process.env).filter(
           ([key]) => !key.startsWith('CLOUDFLARE_') &&
-            !['SITE_CONTENT_DEPLOY_KEY', 'MARKET_SOURCE_DEPLOY_KEY', 'MARKET_PARAMETERS_DEPLOY_KEY'].includes(key),
+            !SOURCE_AUTH_ENV_KEYS.includes(key),
         ),
       );
       execFileSync(
