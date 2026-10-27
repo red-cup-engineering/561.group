@@ -16,7 +16,13 @@ test("a visitor can tell what the Group is, what they can hire, and where to go 
   assert.equal(root.title,home.name);
   assert.equal(root.metadata.description,home.description);
   assert.equal(root.metadata.canonical,"https://561.group/");
-  assert.equal(root.metadata.structuredData["@graph"][0].subOrganization.length,4);
+  const organization=root.metadata.structuredData["@graph"][0];
+  assert.equal(organization.subOrganization.length,4);
+  assert.deepEqual(organization.logo,{
+    "@type":"ImageObject",url:home.origin+"/logo.png",width:512,height:512
+  }, "the original Group mark identifies the canonical organization");
+  assert.deepEqual(organization.sameAs,[home.group.githubOrg,home.group.actor],
+    "only source-owned Group identities belong on the canonical organization");
   assert.deepEqual(root.navigation.map(x=>x.href),
     ["/","/work/","/projects/","/about/","/for-agents/","/contact/"]);
   assert.deepEqual(root.tiles.map(x=>x.id),
