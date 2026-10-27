@@ -435,10 +435,10 @@ function blogPage(home, blog) {
       " · " + anchor("/projects/","Explore projects and publications"),12),
     panel("coverage","What this build actually received",
       para(coverage.received+" of "+coverage.expected+" original company feeds received; "+
-        coverage.admitted+" source items admitted, "+coverage.selected+
+        coverage.admitted+" source "+(coverage.admitted===1?"item":"items")+" admitted, "+coverage.selected+
         " selected for the capped Group feed, and "+coverage.omittedByLimit+
         " left outside its 60-item selection.") +
-      para(coverage.rejected+" source entries rejected during this build. "+
+      para(coverage.rejected+" source "+(coverage.rejected===1?"entry":"entries")+" rejected during this build. "+
         (coverage.complete ? "All four company feed endpoints were received." :
          "This was a partial input snapshot: missing company feeds are not empty archives.")) +
       '<ul class="site-service-grid">'+originalSources+'</ul>'+
