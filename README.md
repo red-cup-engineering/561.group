@@ -26,11 +26,26 @@ JSON Feed into human HTML, machine JSON and negotiated Markdown.
   A single invalid upstream item no longer brings down the entire blog.
 - `/feed-input-receipt.json` is a public build artifact with one source
   observation per original company (received, unavailable or refused), source
-  item counts where known, and aggregated item-exclusion reasons. The blog links
-  to it. The receipt is included in the same exact artifact-digest map verified
-  by the production pipeline; it cannot establish a source's complete archive,
-  indexed coverage, signed federation delivery, or a transparent correction log.
-  Upstream post revisions and correction decisions remain source-owned.
+  item counts where known, SHA-256 of the **decoded original HTTP response
+  bytes** for received feeds, and aggregated item-exclusion reasons. Streaming
+  intake is capped at 2 MiB per original source. The build rejects source
+  items whose declared byline differs from the declared corporate author,
+  rather than quietly replacing one author's identity with another's.
+- `/feed-provenance.jsonld` is a pure, deterministic PROV-O/Schema.org
+  projection over that **same** bounded source admission and resulting
+  syndication items. Each generated `schema:DataFeedItem` links its canonical
+  original article URL, unchanged source identifier, specific source-feed
+  snapshot (`urn:sha256:` of received bytes) and attributed publisher. The
+  snapshot entity is itself derived from the original company feed URL.
+  Identifiers are stable under input ordering and no agent invents author,
+  revision, article verification, quote, correction or research attestation.
+- Both artifacts are linked from the actual TUFTE blog and `llms.txt`,
+  included in the original exact output digest manifest and exercised in
+  deterministic build and public-read tests. They are **not** claims of
+  original-archive completeness, claim-level research provenance, site
+  indexation, ActivityPub delivery, rights clearance or a transparent
+  correction log. Upstream post revisions and correction decisions remain
+  source-owned.
 - The hub reflects *up to 60 articles received during the last accepted site
   build*. It is **not** a complete archive, a live crawl, or an observed
   ActivityPub delivery receipt. An empty build-time feed does not mean the
