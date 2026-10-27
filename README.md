@@ -49,6 +49,18 @@ JSON Feed into human HTML, machine JSON and negotiated Markdown.
   indexation, ActivityPub delivery, rights clearance or a transparent
   correction log. Upstream post revisions and correction decisions remain
   source-owned.
+- The **original main release** separately fetches the public JSON Feed,
+  source-input receipt and PROV-O graph, refuses missing/redirected or
+  non-JSON media responses, checks each delivered byte stream against the
+  exact source-qualified artifact manifest and calls the pure
+  `assayPublicFeedProjection` on those same HTTP response bodies. It verifies
+  company identities, bounded snapshots, admission/omission arithmetic,
+  original article and publisher references, every graph relation and absent
+  forged entries. This check fails the release receiving step when public
+  bytes differ or linked-data meaning was corrupted; a green branch test
+  or successful Cloudflare upload is not substituted for public receiving.
+  The semantic receipt explicitly leaves article fact-checking, signed
+  federation delivery and search indexing unproved.
 - The hub reflects *up to 60 articles received during the last accepted site
   build*. It is **not** a complete archive, a live crawl, or an observed
   ActivityPub delivery receipt. An empty build-time feed does not mean the
