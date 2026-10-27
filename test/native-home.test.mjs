@@ -7,6 +7,14 @@ const read=path=>JSON.parse(readFileSync(new URL("../"+path,import.meta.url),"ut
 const home=read("data/home.json");
 const estate={...read("data/estate.json"),revision:"installed-editorial-fixture"};
 const frontdoor=read("data/frontdoor.json");
+const feed={
+  version:"https://jsonfeed.org/version/1.1",
+  home_page_url:home.origin+"/",feed_url:home.origin+"/feed.json",
+  items:[{id:"science-post-1",url:"https://science.561.group/source-bound-research/",
+    title:"Source-bound research",summary:"A company-authored article.",
+    date_published:"2026-10-26T11:00:00Z",
+    authors:[{name:home.group.companies[0].name,url:home.group.companies[0].url}]}],
+};
 const htmlText=value=>String(value).replaceAll("&","&amp;").replaceAll("'","&#39;");
 function fixture(){
   const reads=[];
@@ -14,7 +22,8 @@ function fixture(){
     releaseHome:home,
     readHome:async context=>{reads.push(["home",context.request.method]);return home;},
     readEstate:async context=>{reads.push(["estate",context.request.method]);return estate;},
-    readFrontdoor:async context=>{reads.push(["frontdoor",context.request.method]);return frontdoor;}
+    readFrontdoor:async context=>{reads.push(["frontdoor",context.request.method]);return frontdoor;},
+    readFeed:async context=>{reads.push(["feed",context.request.method]);return feed;}
   });
   const request=(path="/",options={})=>app.fetch(new Request("https://561.group"+path,options));
   return {app,reads,request};
@@ -39,7 +48,7 @@ test("real installed TUFTE/LWS gives a useful homepage in HTML, not a pipeline r
     "Beyond settler-colonial governance","Toward a second lineage of living matter"]) {
     assert.ok(html.includes(term),"a visitor needs to see "+term);
   }
-  for(const path of ["/work/","/projects/","/about/","/for-agents/"])
+  for(const path of ["/work/","/projects/","/blog/","/about/","/for-agents/"])
     assert.ok(html.includes('href="'+path+'"'),"one-click meaningful journey "+path);
   assert.match(html,/rel="canonical" href="https:\/\/561\.group\/"/u);
   assert.match(html,/name="fediverse:creator"/u);
@@ -87,16 +96,17 @@ test("the original five public pages serve the same source and actionable links 
     const head=await f.request(path,{method:"HEAD",headers:{accept:"text/markdown"}});
     assert.equal(head.status,200);assert.equal(await head.text(),"");
   }
-  assert.equal(f.reads.length,PUBLIC_ROUTES.length*2*3);
+  assert.equal(f.reads.length,PUBLIC_ROUTES.length*2*3+2);
   const offsite=await f.app.fetch(new Request("https://other.example/",{headers:{accept:"text/markdown"}}));
   assert.equal(offsite.status,421);
-  assert.equal(f.reads.length,PUBLIC_ROUTES.length*2*3);
+  assert.equal(f.reads.length,PUBLIC_ROUTES.length*2*3+2);
 });
 test("each substantive source-owned page renders different useful HTML AND JSON",async()=>{
   const f=fixture();
   const cells=[
     {path:"/work/",phrase:"Areas we can scope",id:"services"},
     {path:"/projects/",phrase:"Shop, Bazaar and Market",id:"trade"},
+    {path:"/blog/",phrase:"Recent published writing",id:"posts"},
     {path:"/about/",phrase:"The four accountable companies",id:"companies"},
     {path:"/for-agents/",phrase:"Published machine-readable interfaces",id:"endpoints"}
   ];
@@ -137,14 +147,14 @@ test("each substantive source-owned page renders different useful HTML AND JSON"
         !("offers" in x.item)),"no unauthorized checkout terms");
     }
   }
-  assert.equal(f.reads.length,3*cells.length*2);
+  assert.equal(f.reads.length,3*cells.length*2+2);
 });
 test("origin, method and undeclared URL cannot acquire a public source read",async()=>{
   const f=fixture();
   const offsite=await f.app.fetch(new Request("https://other.example/"));
   assert.equal(offsite.status,421);
   assert.deepEqual(f.reads,[]);
-  for(const path of ["/","/work/","/projects/","/about/","/for-agents/"]){
+  for(const path of ["/","/work/","/projects/","/blog/","/about/","/for-agents/"]){
     const post=await f.request(path,{method:"POST"});
     assert.notEqual(post.status,200);
   }
@@ -161,10 +171,35 @@ test("all admitted pages implement native HEAD without leaking response body",as
     assert.equal(await response.text(),"",path+" HEAD response");
   }
 });
+test("native blog negotiates identical TUFTE original feed as HTML, JSON and Markdown",async()=>{
+  const f=fixture();
+  const htmlResponse=await f.request("/blog/",{headers:{accept:"text/html"}});
+  assert.equal(htmlResponse.status,200);
+  const html=await htmlResponse.text();
+  assert.ok(html.includes("Source-bound research"));
+  assert.ok(html.includes('href="https://science.561.group/source-bound-research/"'));
+  assert.ok(html.includes("https://science.561.group/actors/science"));
+  assert.ok(html.includes('href="https://561.group/blog/"'));
+  const json=await (await f.request("/blog/",{headers:{accept:"application/json"}})).json();
+  assert.equal(json.kind,"tufte.projection");
+  assert.equal(json.metadata.canonical,"https://561.group/blog/");
+  assert.deepEqual(json.metadata.structuredData["@graph"][2].mainEntity.itemListElement
+    .map(x=>x.item.author.name),[home.group.companies[0].name]);
+  const markdown=await (await f.request("/blog/",{headers:{accept:"text/markdown"}})).text();
+  assert.match(markdown,/Source-bound research/u);
+  assert.match(markdown,/science\.561\.group\/source-bound-research/u);
+  assert.equal(f.reads.filter(x=>x[0]==="feed").length,3);
+  assert.equal(f.reads.filter(x=>x[0]==="home").length,3);
+  assert.equal(f.reads.filter(x=>x[0]==="frontdoor").length,3);
+});
+
 test("new front-door reader is required; missing source cannot yield a vague blank homepage",()=>{
   assert.throws(()=>create561GroupLivingApplication({
     readHome:()=>home,readEstate:()=>estate,releaseHome:home
   }),/readFrontdoor/);
+  assert.throws(()=>create561GroupLivingApplication({
+    readHome:()=>home,readEstate:()=>estate,readFrontdoor:()=>frontdoor,releaseHome:home
+  }),/readFeed/);
 });
 
 
