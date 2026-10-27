@@ -10,9 +10,9 @@ export { PUBLIC_ROUTES } from "./home-tufte.mjs";
  * caller's Worker owns HTTP routing and ActivityPub remains its own provider.
  */
 export function create561GroupLivingApplication({
-  readHome, readEstate, readFrontdoor, releaseHome
+  readHome, readEstate, readFrontdoor, readFeed, releaseHome
 } = {}) {
-  for (const [name, reader] of Object.entries({readHome,readEstate,readFrontdoor})) {
+  for (const [name, reader] of Object.entries({readHome,readEstate,readFrontdoor,readFeed})) {
     if (typeof reader !== "function")
       throw new TypeError("Original " + name + " source reader is required");
   }
@@ -20,9 +20,11 @@ export function create561GroupLivingApplication({
     const [home,estate,frontdoor] = await Promise.all([
       readHome(context),readEstate(context),readFrontdoor(context)
     ]);
-    return project561GroupPage({home,estate,frontdoor,path});
+    // Only a declared blog read sees the bounded original generated feed.
+    const feed = path === "/blog/" ? await readFeed(context) : undefined;
+    return project561GroupPage({home,estate,frontdoor,feed,path});
   };
-  const permitted = new Set(["home","work","projects","about","agents"]);
+  const permitted = new Set(["home","work","projects","blog","about","agents"]);
   return createLivingWebServer({
     origin:"https://561.group",
     markdown:createLivingWebMarkdownProjection(),
@@ -33,6 +35,7 @@ export function create561GroupLivingApplication({
     pages:[
       {match:"/work/",name:"work",read:context => read(context,"/work/")},
       {match:"/projects/",name:"projects",read:context => read(context,"/projects/")},
+      {match:"/blog/",name:"blog",read:context => read(context,"/blog/")},
       {match:"/about/",name:"about",read:context => read(context,"/about/")},
       {match:"/for-agents/",name:"agents",read:context => read(context,"/for-agents/")}
     ]
