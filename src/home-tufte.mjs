@@ -58,6 +58,21 @@ function checkedSources(home, estate, frontdoor) {
         !["title","thesis","present","boundary"].every(
           field => typeof f[field] === "string" && f[field].trim())))
     throw new TypeError("Two complete, distinct, source-authored civilizational frontiers are required");
+
+  const discovery = frontdoor.discovery;
+  if (!discovery || !["headline","summary","intro","boundary"].every(
+      key => typeof discovery[key] === "string" && discovery[key].trim()) ||
+      !Array.isArray(discovery.questions) || discovery.questions.length !== 3 ||
+      new Set(discovery.questions.map(q => q.id)).size !== 3 ||
+      discovery.questions.some(q => !q || !slug.test(q.id) ||
+        !["question","answer","href","label"].every(
+          key => typeof q[key] === "string" && q[key].trim())) ||
+      !Array.isArray(discovery.nextSteps) || discovery.nextSteps.length !== 3 ||
+      discovery.nextSteps.some(x => !x || !["href","label"].every(
+        key => typeof x[key] === "string" && x[key].trim())))
+    throw new TypeError("Evidence-linked public AI and political economy questions are required");
+  for (const question of discovery.questions) publicHref(question.href);
+  for (const next of discovery.nextSteps) publicHref(next.href);
   if (frontdoor.schema !== "561.group/public-frontdoor/v1")
     throw new TypeError("Public editorial record has an unrecognized schema");
   if (typeof home.public?.headline !== "string" ||
@@ -257,6 +272,20 @@ function lead(kicker, headline, description, calls = []) {
     '<h3 class="site-display">' + esc(headline) + "</h3>" +
     para(description,"site-intro") + (calls.length ? actions(calls) : "");
 }
+
+function technologyAndPower(frontdoor, concise = false) {
+  const discovery = frontdoor.discovery;
+  const questions = concise ? discovery.questions.slice(0, 1) : discovery.questions;
+  return para(discovery.intro,"site-section-lead") +
+    '<ul class="site-card-grid">' + questions.map(q =>
+      '<li class="site-card" id="' + esc(q.id) + '"><h3>' + esc(q.question) +
+      '</h3>' + para(q.answer) + '<p>' + anchor(q.href,q.label) + '</p></li>'
+    ).join("") + "</ul>" +
+    (concise
+      ? actions([{href:"/about/#technology-and-power",label:"Read all three questions and sources"}])
+      : para(discovery.boundary) + actions(discovery.nextSteps));
+}
+
 function frontiers(frontdoor, concise = false) {
   const vision = frontdoor.vision;
   return para(vision.intro,"site-section-lead") +
@@ -304,6 +333,8 @@ function homepage(home, estate, frontdoor, source) {
       para(home.public.intro,"site-hero-note"),12,"rail"),
     selfService(home,frontdoor),
     panel("frontiers",frontdoor.vision.headline,frontiers(frontdoor,true),12),
+    panel("technology-and-power",frontdoor.discovery.headline,
+      technologyAndPower(frontdoor,true),12),
     panel("paths","What brings you here?",pathways(frontdoor),12),
     panel("services","Work you can ask us to do",
       para("We can scope actual research, technical and public-service work with an accountable company.","site-section-lead") +
@@ -385,6 +416,8 @@ function aboutPage(home, frontdoor) {
         "The 561 Group brings research, engineering, operations and public services together without pretending that a proposal is a finished product.",
         [{href:"/work/",label:"Work with the Group"},{href:"/projects/",label:"Explore the public estate"}]),12),
     panel("frontiers","What we are trying to make real",frontiers(frontdoor,false),12),
+    panel("technology-and-power",frontdoor.discovery.headline,
+      technologyAndPower(frontdoor),12),
     panel("companies","The four accountable companies",houses(home),12),
     panel("process","How work moves",processSteps(frontdoor) +
       note("An accepted outcome is checked independently of supplier activity."),12),
@@ -427,7 +460,7 @@ export function project561GroupPage({home,estate,frontdoor,path = "/"}) {
     "/": {title:home.name,subtitle:"Indigenous-grounded governance · Artificial abiogenesis · Practical services"},
     "/work/": {title:"Work with the 561 Group",subtitle:"Capabilities, scoping, providers and actual terms"},
     "/projects/": {title:"Explore the 561 Group",subtitle:"Public projects, commerce, worlds and publications"},
-    "/about/": {title:"About the 561 Group",subtitle:"Four companies, one accountable source of work"},
+    "/about/": {title:"About the 561 Group",subtitle:frontdoor.discovery.summary},
     "/for-agents/": {title:"For agents · 561 Group",subtitle:"Public machine endpoints and authorization boundaries"}
   }[path];
   const tiles = path === "/" ? homepage(home,estate,frontdoor,source) :
