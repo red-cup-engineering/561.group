@@ -434,7 +434,7 @@ jobs:
              !frontdoor.ecologicalDiscovery.questions?.some(question=>
                question.id==='climate-adaptation-and-moving-baselines'&&
                question.href==='https://science.561.group/climate-breakdown-ergodicity-and-water-governance/')||
-             !frontdoor.ecologicalDiscovery.boundary.includes('Coesite climate article routes returned HTTP 404'))
+             !frontdoor.ecologicalDiscovery.boundary.includes('Engineering and Operations climate article URLs returned HTTP 404'))
             throw Error('Original Group public ecological questions or observed worksheet release boundaries missing');
           const exactQuestions=(text,group)=>
             group.questions.every(question=>
