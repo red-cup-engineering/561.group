@@ -5,7 +5,7 @@ import { mkdir, readFile, writeFile, rename, rm } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { createHash } from "node:crypto";
 import { renderHumans, renderSecurity, renderIndex, renderLlms, renderLlmsFull, renderRobots, renderSitemap } from "../src/render.mjs";
-import { readFeedsWithCoverage, mergeItems, renderFeedInputReceipt, renderJsonFeed, renderAtom, renderRss } from "../src/feed.mjs";
+import { readFeedsWithCoverage, mergeItems, renderFeedInputReceipt, renderFeedItemProvenance, renderJsonFeed, renderAtom, renderRss } from "../src/feed.mjs";
 import { LOCALES, localePath, siteSpace, speaker } from "../src/locales.mjs";
 
 const root = new URL("../", import.meta.url);
@@ -67,6 +67,7 @@ const files = {
   // English / is served by TUFTE + LivingWebServer, never by a competing static index.
   ...Object.fromEntries(LOCALES.filter(tag => tag !== "en").map((tag) => [`public${localePath(tag)}index.html`, renderIndex(home, estate, speakers[tag], items)])),
   "public/feed-input-receipt.json": renderFeedInputReceipt(home, feedSources, items, withheldFeedItems),
+  "public/feed-provenance.jsonld": renderFeedItemProvenance(home, feedSources, items),
   "public/feed.json": renderJsonFeed(home, items),
   "public/feed.atom.xml": renderAtom(home, items),
   "public/feed.rss.xml": renderRss(home, items),
