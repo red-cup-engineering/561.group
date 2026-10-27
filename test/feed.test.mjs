@@ -189,3 +189,90 @@ test("bounded feed intake refuses oversized bodies and non-UTF-8 JSON, never pro
     {id:"unwitnessed",url:services.url+"ghost/",authors:[{name:services.name,url:services.url}]}
   ]),/unobserved source provenance/);
 });
+
+import { assayPublicFeedProjection } from "../scripts/assay-public-feed.mjs";
+
+function aCompletePublication() {
+  const submitted=home.group.companies.map((company,i)=>{
+    const one=feed(company,[item(company,company.id+"-observed","2026-10-2"+i+"T00:00:00Z")]);
+    const body=JSON.stringify(one);
+    return {
+      company,feed:one,
+      source:{companyId:company.id,feedUrl:company.feeds.json,state:"received",
+        inputItems:1,bytes:Buffer.byteLength(body),
+        sha256:"sha256:"+createHash("sha256").update(body).digest("hex")}
+    };
+  });
+  const items=mergeItems(submitted.map(x=>({company:x.company,feed:x.feed})));
+  const sources=submitted.map(x=>x.source);
+  return {
+    home,
+    feed:JSON.parse(renderJsonFeed(home,items)),
+    receipt:JSON.parse(renderFeedInputReceipt(home,sources,items)),
+    graph:JSON.parse(renderFeedItemProvenance(home,sources,items)),
+  };
+}
+test("real public release assessor joins original feed, receipt and every PROV-O author/source item",()=>{
+  const publication=aCompletePublication();
+  const observed=assayPublicFeedProjection(publication);
+  assert.equal(observed.schema,"561.group/public-feed-receiving/v1");
+  assert.equal(observed.observedSourceFeeds,4);
+  assert.equal(observed.sourceItems,4);
+  assert.equal(observed.admittedItems,4);
+  assert.equal(observed.excludedItems,0);
+  assert.equal(observed.emittedItems,4);
+  assert.equal(observed.omittedByAggregateLimit,0);
+  assert.equal(observed.semanticProjectionReceived,true);
+  assert.equal(observed.independentlyFactChecked,false);
+  assert.equal(observed.externallyIndexed,null);
+  assert.equal(observed.signedFederationDelivered,null);
+});
+
+test("release refuses forged or orphaned public article-to-source mappings",()=>{
+  const original=aCompletePublication();
+  for(const sabotage of [
+    x=>x.graph["@graph"].find(y=>Array.isArray(y["@type"])&&y["@type"].includes("schema:DataFeedItem"))["prov:wasDerivedFrom"]["@id"]="urn:sha256:"+"f".repeat(64),
+    x=>x.graph["@graph"].find(y=>Array.isArray(y["@type"])&&y["@type"].includes("schema:DataFeedItem"))["schema:item"]["@id"]="https://other.invalid/forged/",
+    x=>x.graph["@graph"].find(y=>Array.isArray(y["@type"])&&y["@type"].includes("schema:DataFeedItem"))["prov:wasAttributedTo"]["@id"]="https://other.invalid/",
+    x=>x.graph["@graph"].push(structuredClone(x.graph["@graph"][0])),
+    x=>x.feed.items[0].authors[0].name="Unverified Source",
+    x=>x.graph["@context"].prov="http://forged.example/ns#",
+    x=>x.receipt.sources[1].sha256="sha256:"+"f".repeat(64),
+    x=>x.receipt.sourceItemCount+=1,
+    x=>x.receipt.completeness="partial-source-coverage",
+    x=>x.receipt.sources[0].feedUrl="https://imposter.invalid/feed.json",
+    x=>x.receipt.omittedByAggregateLimit=1,
+  ]){
+    const damaged=structuredClone(original);
+    sabotage(damaged);
+    assert.throws(()=>assayPublicFeedProjection(damaged),/Unreceived public feed evidence/);
+  }
+});
+
+test("partial feed reception stays visibly partial without counterfeiting missing source evidence",()=>{
+  const fixture=aCompletePublication();
+  const held=fixture.receipt.sources[1];
+  fixture.receipt.sources[1]={companyId:held.companyId,feedUrl:held.feedUrl,state:"unavailable"};
+  fixture.receipt.sourceItemCount=3;
+  fixture.receipt.admittedItems=3;
+  fixture.receipt.emittedItems=3;
+  fixture.receipt.completeness="partial-source-coverage";
+  fixture.feed.items=fixture.feed.items.filter(x=>x.authors[0].url!==home.group.companies[1].url);
+  fixture.graph=JSON.parse(renderFeedItemProvenance(home,fixture.receipt.sources,fixture.feed.items));
+  const accepted=assayPublicFeedProjection(fixture);
+  assert.equal(accepted.observedSourceFeeds,3);
+  assert.equal(accepted.emittedItems,3);
+  fixture.receipt.sources[1].inputItems=1;
+  assert.throws(()=>assayPublicFeedProjection(fixture),/unreceived source claims input evidence/);
+});
+
+test("original main release witnesses exact public provenance bytes, MIME and semantic relations",()=>{
+  const workflow=readFileSync(new URL("../.github/workflows/deploy.yml",import.meta.url),"utf8");
+  assert.match(workflow,/feed-input-receipt\.json/u);
+  assert.match(workflow,/feed-provenance\.jsonld/u);
+  assert.match(workflow,/Deployed public bytes differ from original release receipt/u);
+  assert.match(workflow,/assayPublicFeedProjection\(\{/u);
+  assert.match(workflow,/publicationBodies\.get\('feed\.json'\)/u);
+  assert.match(workflow,/new TextDecoder\('utf-8',\{fatal:true\}\)/u);
+  assert.match(workflow,/Public syndication evidence lacks bounded JSON media type/u);
+});
