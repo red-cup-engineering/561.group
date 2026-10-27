@@ -490,3 +490,39 @@ test("Markdown escaped hyphens cannot fabricate or hide a different blog selecti
   const workflow=readFileSync(new URL("../.github/workflows/deploy.yml",import.meta.url),"utf8");
   assert.match(workflow,/normalizeMarkdownLiteralHyphens\(blogMarkdown\)/u);
 });
+
+
+test("Original Group ecological source questions are independently read after public release",()=>{
+  const source=readFileSync(new URL("../.github/workflows/deploy.yml",import.meta.url),"utf8");
+  const deployed=source.indexOf("      - name: Receive independent public revision, human/agent and retained site routes");
+  const observed=source.indexOf("      - name: Record original public delivery observation after release",deployed);
+  assert.ok(deployed>0 && observed>deployed);
+  const release=source.slice(deployed,observed);
+  const matches=release.match(/          node --input-type=module <<'NODE'\n([\s\S]*?)\n          NODE\n/u);
+  assert.ok(matches,"The actual original Cloudflare receiving must have its Node check");
+  const script=matches[1].split("\n").map(line=>
+    line.startsWith("          ")?line.slice(10):line).join("\n");
+  const checked=spawnSync(process.execPath,["--check","--input-type=module"],
+    {input:script,encoding:"utf8",timeout:10000});
+  assert.equal(checked.status,0,checked.stderr);
+  for(const evidence of [
+    "const frontdoor=JSON.parse(readFileSync('data/frontdoor.json','utf8'))",
+    "const namedQuestions=[frontdoor.discovery,frontdoor.ecologicalDiscovery]",
+    "const exactQuestions=(text,group)=>",
+    "page.path==='/about/'",
+    "model.tiles.find(item=>item.id===id)",
+    "tile.title!==group.headline",
+    "sourceQuestions:frontdoor.discovery.questions.length+frontdoor.ecologicalDiscovery.questions.length",
+    "https://services.561.group/climate-water-and-energy-exposure-worksheet/",
+    "As of October 27, 2026",
+    "does not prove a live public edition",
+    "Independent Group ecological reader evidence received",
+    "html:true,json:true,markdown:true",
+  ])assert.ok(release.includes(evidence),"Original public receiving omitted "+evidence);
+  assert.ok(release.indexOf("const home=await read('/','text/html')")<
+    release.indexOf("for(const page of ["),
+    "Actual Group front-door HTML is read before selected visitor tasks");
+  assert.ok(release.indexOf("for(const page of [")<
+    release.indexOf("for(const path of ['/','/work/','/projects/','/about/','/for-agents/'])"),
+    "Public machine and HTML attestations precede Markdown conformance");
+});

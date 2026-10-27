@@ -46,11 +46,17 @@ test("a visitor can tell what the Group is, what they can hire, and where to go 
   assert.equal(root.title,home.name);
   assert.equal(root.metadata.description,home.description);
   assert.equal(root.metadata.canonical,"https://561.group/");
-  assert.equal(root.metadata.structuredData["@graph"][0].subOrganization.length,4);
+  const organization=root.metadata.structuredData["@graph"][0];
+  assert.equal(organization.subOrganization.length,4);
+  assert.deepEqual(organization.logo,{
+    "@type":"ImageObject",url:home.origin+"/logo.png",width:512,height:512
+  }, "the original Group mark identifies the canonical organization");
+  assert.deepEqual(organization.sameAs,[home.group.githubOrg,home.group.actor],
+    "only source-owned Group identities belong on the canonical organization");
   assert.deepEqual(root.navigation.map(x=>x.href),
     ["/","/work/","/projects/","/blog/","/about/","/for-agents/","/contact/"]);
   assert.deepEqual(root.tiles.map(x=>x.id),
-    ["introduction","self-service","frontiers","paths","services","method","physical-world","explore","trade","companies","agents","support"]);
+    ["introduction","self-service","frontiers","technology-and-power","paths","services","method","physical-world","explore","trade","companies","agents","support"]);
   const hero=tile(root,"introduction").html;
   assert.ok(hero.includes(frontdoor.proposition));
   assert.ok(hero.includes(frontdoor.promise.replace(/&/gu,"&amp;").replace(/'/gu,"&#39;")));
@@ -85,6 +91,69 @@ test("a visitor can tell what the Group is, what they can hire, and where to go 
   assert.ok(root.tiles.findIndex(t=>t.id==="services")<root.tiles.findIndex(t=>t.id==="support"),
     "public sales and use are not hidden behind a donation pitch");
 });
+
+test("political-economy readers can find evidence rather than technology hype",()=>{
+  const homePage=model("/"), about=model("/about/");
+  const invitation=tile(homePage,"technology-and-power").html;
+  assert.equal(about.metadata.description,frontdoor.discovery.summary + " " + frontdoor.ecologicalDiscovery.summary);
+  assert.ok(invitation.includes(frontdoor.discovery.intro.replace(/&/gu,"&amp;").replace(/'/gu,"&#39;")));
+  assert.ok(invitation.includes("Can AI alignment be anti-capitalist?"));
+  assert.ok(invitation.includes('href="/about/#technology-and-power"'));
+  const full=tile(about,"technology-and-power").html;
+  for(const q of frontdoor.discovery.questions){
+    assert.ok(full.includes('id="'+q.id+'"'),"question needs an actual fragment identity");
+    assert.ok(full.includes(q.question));
+    assert.ok(full.includes('href="'+q.href+'"'),"readers can inspect a source");
+  }
+  assert.ok(full.includes(frontdoor.discovery.boundary.replace(/&/gu,"&amp;").replace(/\x27/gu,"&#39;")),
+    "the source-qualified commercial disclosure is preserved in escaped TUFTE HTML");
+  for(const x of frontdoor.discovery.nextSteps) assert.ok(full.includes('href="'+x.href+'"'));
+  assert.match(full,/does not by itself|not one political program/u);
+  const known=homePage.metadata.structuredData["@graph"][0].knowsAbout;
+  assert.ok(known.includes("AI alignment and political economy"));
+  assert.ok(known.includes("post-capitalist institutional alternatives"));
+});
+
+
+test("different ecological readers find original evidence and explicit limits",()=>{
+  const homePage=model("/"), about=model("/about/");
+  const homepageMaterial=tile(homePage,"physical-world").html;
+  assert.ok(homepageMaterial.includes('href="/about/#ecology-and-adaptation"'),
+    "one existing material-world entrance leads to three distinct questions without a new homepage billboard");
+  const eco=tile(about,"ecology-and-adaptation");
+  assert.equal(eco.title,frontdoor.ecologicalDiscovery.headline);
+  const html=eco.html;
+  const research=frontdoor.ecologicalDiscovery;
+  assert.ok(about.metadata.description.includes(research.summary),
+    "About's public metadata should expose the ecological topics to readers and crawlers");
+  assert.ok(html.includes(research.intro.replace(/&/gu,"&amp;").replace(/'/gu,"&#39;")));
+  assert.equal((html.match(/class="site-card" id="/gu)||[]).length,3);
+  assert.equal(new Set(research.questions.map(q=>q.audience)).size,3);
+  for (const q of research.questions) {
+    assert.ok(html.includes('id="'+q.id+'"'),"each reader problem has its own accessible anchor");
+    assert.ok(html.includes(q.question.replace(/&/gu,"&amp;").replace(/\x27/gu,"&#39;")),
+      "each entry answers a real public question with escaped HTML");
+    assert.ok(html.includes('href="'+q.href+'"'),"each answer links an original primary source");
+    assert.ok(html.includes(q.label),"each public source has a human-readable label");
+  }
+  assert.ok(html.includes("no independently received successful partition test"),
+    "a research design must not be misrepresented as a verified disconnected operation");
+  assert.ok(html.includes("does not prove a live public edition"),
+    "source-admitted Science article must not be misrepresented as publicly received");
+  assert.ok(html.includes("does not establish a community"),
+    "ecological work cannot silently assert someone else's consent");
+  for (const next of research.nextSteps)
+    assert.ok(html.includes('href="'+next.href+'"'),"voluntary original reader path");
+  assert.ok(html.includes("As of October 27, 2026"),
+    "publication-state qualifier is sourced and dated");
+  assert.ok(html.includes("Use the released free climate exposure worksheet"),
+    "one real already published climate resource is actionable");
+  assert.ok(!html.includes("Our published climate analysis"),
+    "unreceived science page may not acquire a public release by copy");
+  assert.ok(!homePage.tiles.some(t=>t.id==="ecology-and-adaptation"),
+    "keep the public homepage focused on institution and jobs, not thematic campaigns");
+});
+
 
 test("services are tied to an existing accountable company, and only inquiry is offered",()=>{
   const root=model("/");
