@@ -4,9 +4,10 @@
 // selected links and page-specific models, never another renderer or router.
 import { HOUSE_STYLES } from "./apex-house-style.mjs";
 import { SITE_STYLES } from "./public-home-style.mjs";
+import { admitGroupBlogFeed } from "./group-blog.mjs";
 
 const ORIGIN = "https://561.group";
-export const PUBLIC_ROUTES = Object.freeze(["/", "/work/", "/projects/", "/about/", "/for-agents/"]);
+export const PUBLIC_ROUTES = Object.freeze(["/", "/work/", "/projects/", "/blog/", "/about/", "/for-agents/"]);
 const esc = value => String(value ?? "").replace(/[&<>"']/gu,
   c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"})[c]);
 const slug = /^[a-z][a-z0-9-]*$/u;
@@ -58,7 +59,6 @@ function checkedSources(home, estate, frontdoor) {
         !["title","thesis","present","boundary"].every(
           field => typeof f[field] === "string" && f[field].trim())))
     throw new TypeError("Two complete, distinct, source-authored civilizational frontiers are required");
-
   const discovery = frontdoor.discovery;
   if (!discovery || !["headline","summary","intro","boundary"].every(
       key => typeof discovery[key] === "string" && discovery[key].trim()) ||
@@ -169,7 +169,7 @@ function checkedSources(home, estate, frontdoor) {
   publicHref(support.billingHelp);
   return {providers, nodes, support};
 }
-function structure(home, pathname, frontdoor) {
+function structure(home, pathname, frontdoor, blog = null) {
   const org = {
     "@type":"Organization","@id":home.origin + "/#organization",
     name:home.name,url:home.origin + "/",description:home.description,
@@ -184,7 +184,7 @@ function structure(home, pathname, frontdoor) {
       name:company.name,url:company.url,sameAs:[company.github,company.actor]
     }))
   };
-  const page = {"@type":pathname === "/projects/" ? "CollectionPage" : "WebPage",
+  const page = {"@type":["/projects/","/blog/"].includes(pathname) ? "CollectionPage" : "WebPage",
     "@id":home.origin + pathname + "#webpage",
     url:home.origin + pathname,inLanguage:"en",
     isPartOf:{"@id":home.origin + "/#website"},
@@ -196,6 +196,19 @@ function structure(home, pathname, frontdoor) {
       identifier:[{ "@type":"PropertyValue",propertyID:"SignCell",value:example.cell },
         { "@type":"PropertyValue",propertyID:"Operation law",value:example.law }]
     }));
+  }
+  if (pathname === "/blog/" && blog) {
+    page.mainEntity = {
+      "@type":"ItemList",name:"Recent writing published by the four Group companies",
+      itemListElement:blog.items.map((item,index) => ({
+        "@type":"ListItem",position:index + 1,
+        item:{"@type":"BlogPosting","@id":item.url,url:item.url,
+          headline:item.title,
+          ...(item.published ? {datePublished:item.published} : {}),
+          ...(item.modified ? {dateModified:item.modified} : {}),
+          author:{"@type":"Organization",name:item.company.name,url:item.company.url}}
+      }))
+    };
   }
   // Project only real publicly visible inquiry areas; no prices, purchases,
   // merchant promises, review scores or invented customer endorsement.
@@ -225,6 +238,7 @@ function navigation(pathname) {
     {href:"/",label:"Home"},
     {href:"/work/",label:"Work with us"},
     {href:"/projects/",label:"Projects"},
+    {href:"/blog/",label:"Blog"},
     {href:"/about/",label:"About"},
     {href:"/for-agents/",label:"For agents"},
     {href:"/contact/",label:"Contact"}
@@ -289,7 +303,6 @@ function lead(kicker, headline, description, calls = []) {
     '<h3 class="site-display">' + esc(headline) + "</h3>" +
     para(description,"site-intro") + (calls.length ? actions(calls) : "");
 }
-
 function technologyAndPower(frontdoor, concise = false) {
   const discovery = frontdoor.discovery;
   const questions = concise ? discovery.questions.slice(0, 1) : discovery.questions;
@@ -382,7 +395,8 @@ function homepage(home, estate, frontdoor, source) {
     panel("explore","Places, publications and tools",
       para("These are public entry points, not a blanket promise that every project is production-ready.","site-section-lead") +
       projects(home,estate,source.nodes) +
-      actions([{href:"/projects/",label:"Browse the full public estate"}]),12),
+      actions([{href:"/projects/",label:"Browse the full public estate"},
+               {href:"/blog/",label:"Read our published writing"}]),12),
     panel("trade","Choose how to buy or use",trade(home),12),
     panel("companies","Four companies with distinct responsibilities",houses(home),12),
     panel("agents","Interfaces for software agents",
@@ -437,6 +451,40 @@ function projectsPage(home, estate, frontdoor, source) {
       anchor("/estate.json","Read the actual dated connectivity observations"),12)
   ];
 }
+function blogPage(home, blog) {
+  const posts = blog.items.map(item =>
+    '<li class="site-card h-entry"><span class="site-category">' + esc(item.company.name) +
+    '</span><h3>' + anchor(item.url,item.title,"p-name u-url") + '</h3>' +
+    (item.published ? '<p class="site-muted"><time class="dt-published" datetime="' +
+       esc(item.published) + '">' + esc(item.published.slice(0,10)) + '</time></p>' : "") +
+    (item.summary ? para(item.summary,"p-summary") : "") +
+    '</li>').join("");
+  const follow = blog.companies.map(company =>
+    '<li class="site-service"><h3>' + anchor(company.url,company.name) + '</h3>' +
+    para(company.role) +
+    '<p>' + anchor(company.feeds.rss,"RSS") + ' · ' +
+      anchor(company.feeds.atom,"Atom") + ' · ' +
+      anchor(company.feeds.json,"JSON Feed") + '</p>' +
+    '<p>' + anchor(company.actor,"Follow the original Fediverse Actor") + '</p></li>'
+  ).join("");
+  return [
+    panel("lead","561 Group · Blog",
+      lead("ORIGINAL WRITING / FOUR ACCOUNTABLE PUBLISHERS",
+        "Writing from the 561 Group",
+        "Research, engineering, operations and public services, published by their own companies. Each link opens the original article; the Group does not claim to have authored these posts.",
+        [{href:"/feed.rss.xml",label:"Subscribe by RSS"},
+         {href:"/feed.atom.xml",label:"Atom"},
+         {href:"/feed.json",label:"JSON Feed"}]),12),
+    panel("posts","Recent published writing",
+      '<ol class="site-card-grid h-feed">' + posts + '</ol>' +
+      (!blog.items.length ? para("This build received no published posts from the company feeds. It is not evidence that their archives are empty.") : "") +
+      note("This is a bounded, build-time selection of up to 60 items, not a complete archive or a live count.") +
+      anchor("/projects/","Explore projects and publications"),12),
+    panel("follow","Follow each original publisher",
+      para("Subscribe to the company feeds, or follow its genuine ActivityPub identity. A Group-wide feed does not replace individual author identities.") +
+      '<ul class="site-service-grid">' + follow + '</ul>',12),
+  ];
+}
 function aboutPage(home, frontdoor) {
   return [
     panel("lead","About the 561 Group",
@@ -484,19 +532,22 @@ function agentPage(home, estate, frontdoor) {
       actions([{href:home.group.marketGuide,label:"Current merchant guide"},{href:"/work/",label:"Human scoping and contact"}]),12)
   ];
 }
-export function project561GroupPage({home,estate,frontdoor,path = "/"}) {
+export function project561GroupPage({home,estate,frontdoor,feed,path = "/"}) {
   if (!PUBLIC_ROUTES.includes(path)) throw new RangeError("Unadmitted Group public route");
   const source = checkedSources(home,estate,frontdoor);
+  const blog = path === "/blog/" ? admitGroupBlogFeed(home,feed) : null;
   const page = {
     "/": {title:home.name,subtitle:"Indigenous-grounded governance · Artificial abiogenesis · Practical services"},
     "/work/": {title:"Work with the 561 Group",subtitle:"Capabilities, scoping, providers and actual terms"},
     "/projects/": {title:"Explore the 561 Group",subtitle:"Public projects, commerce, worlds and publications"},
+    "/blog/": {title:"Blog · 561 Group",subtitle:"Recent source-published writing from the four 561 Group companies"},
     "/about/": {title:"About the 561 Group",subtitle:frontdoor.discovery.summary + " " + frontdoor.ecologicalDiscovery.summary},
     "/for-agents/": {title:"For agents · 561 Group",subtitle:"Public machine endpoints and authorization boundaries"}
   }[path];
   const tiles = path === "/" ? homepage(home,estate,frontdoor,source) :
     path === "/work/" ? workPage(home,frontdoor,source) :
     path === "/projects/" ? projectsPage(home,estate,frontdoor,source) :
+    path === "/blog/" ? blogPage(home,blog) :
     path === "/about/" ? aboutPage(home,frontdoor) :
     agentPage(home,estate,frontdoor);
   return {
@@ -505,7 +556,7 @@ export function project561GroupPage({home,estate,frontdoor,path = "/"}) {
     metadata:{
       title:page.title,description:path === "/" ? home.description : page.subtitle,
       language:"en",canonical:ORIGIN + path,image:ORIGIN + "/card.png",
-      type:"website",siteName:home.name,structuredData:structure(home,path,frontdoor)
+      type:"website",siteName:home.name,structuredData:structure(home,path,frontdoor,blog)
     },
     revision:estate.revision ?? "unversioned",
     navigation:navigation(path),
