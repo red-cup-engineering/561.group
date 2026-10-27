@@ -38,6 +38,18 @@ test("feeds merge newest first with the company as author, drop bodies, dedupe a
   assert.equal(mergeItems([{ company: science, feed: feed(science,
     Array.from({ length: 100 }, (_, i) => item(science, "n" + i,
       "2026-01-" + String(1 + i % 28).padStart(2, "0") + "T00:00:00Z"))) }]).length, 60);
+  const sourceItems=Array.from({length:100},(_,i)=>item(science,"capped-"+i,
+    "2026-01-"+String(1+i%28).padStart(2,"0")+"T00:00:00Z"));
+  const selected=mergeItems([{company:science,feed:feed(science,sourceItems)}]);
+  const capReceipt=JSON.parse(renderFeedInputReceipt(home,[
+    {companyId:science.id,feedUrl:science.feeds.json,state:"received",inputItems:sourceItems.length}
+  ],selected));
+  assert.equal(capReceipt.sourceItemCount,100);
+  assert.equal(capReceipt.admittedItems,100);
+  assert.equal(capReceipt.omittedByAggregateLimit,40);
+  assert.equal(capReceipt.emittedItems,60);
+  assert.equal(capReceipt.completeness,"partial-source-coverage");
+
 });
 
 test("an unreachable or malformed feed is logged and skipped, never fatal", async () => {
