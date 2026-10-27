@@ -13,6 +13,7 @@ const pages=Object.freeze([
   {name:"home",path:"/",width:1440,height:900},
   {name:"home-mobile",path:"/",width:390,height:844},
   {name:"work-mobile",path:"/work/",width:390,height:844},
+  {name:"blog-mobile",path:"/blog/",width:390,height:844},
   {name:"about",path:"/about/",width:1440,height:900}
 ]);
 const expectedFontNames=["Space Grotesk","Roboto Slab","JetBrains Mono"];
@@ -52,12 +53,12 @@ export function qualifyRenderedBrand(value,{path="/"}={}) {
 }
 
 async function servedOriginalApplication() {
-  const [home,estate,frontdoor]=await Promise.all([
-    readJson("data/home.json"),readJson("data/estate.json"),readJson("data/frontdoor.json")
+  const [home,estate,frontdoor,feed]=await Promise.all([
+    readJson("data/home.json"),readJson("data/estate.json"),readJson("data/frontdoor.json"),readJson("public/feed.json")
   ]);
   const application=create561GroupLivingApplication({
     readHome:async()=>home,readEstate:async()=>estate,readFrontdoor:async()=>frontdoor,
-    releaseHome:home
+    readFeed:async()=>feed,releaseHome:home
   });
   const server=createServer(async(req,res)=>{
     try{
@@ -67,7 +68,7 @@ async function servedOriginalApplication() {
         res.writeHead(200,{"content-type":"font/woff2","cache-control":"no-store"});
         res.end(bytes);return;
       }
-      if(!["/","/work/","/about/"].includes(pathname)||req.method!=="GET"){
+      if(!["/","/work/","/blog/","/about/"].includes(pathname)||req.method!=="GET"){
         res.writeHead(404);res.end();return;
       }
       // Same original application as src/worker.mjs, with canonical Request
