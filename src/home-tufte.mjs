@@ -405,8 +405,10 @@ function blogPage(home, blog) {
   const posts = blog.items.map(item =>
     '<li class="site-card h-entry"><span class="site-category">' + esc(item.company.name) +
     '</span><h3>' + anchor(item.url,item.title,"p-name u-url") + '</h3>' +
-    (item.published ? '<p class="site-muted"><time class="dt-published" datetime="' +
+    (item.published ? '<p class="site-muted">Published by source: <time class="dt-published" datetime="' +
        esc(item.published) + '">' + esc(item.published.slice(0,10)) + '</time></p>' : "") +
+    (item.modified ? '<p class="site-muted">Source reports updated: <time class="dt-updated" datetime="' +
+       esc(item.modified) + '">' + esc(item.modified.slice(0,10)) + '</time></p>' : "") +
     (item.summary ? para(item.summary,"p-summary") : "") +
     '</li>').join("");
   const follow = blog.companies.map(company =>
@@ -429,6 +431,7 @@ function blogPage(home, blog) {
       '<ol class="site-card-grid h-feed">' + posts + '</ol>' +
       (!blog.items.length ? para("This build received no published posts from the company feeds. It is not evidence that their archives are empty.") : "") +
       note("This is a bounded, build-time selection of up to 60 items, not a complete archive or a live count.") +
+      note("Publication and modification dates come from original company feeds. A reported update is not itself an accepted correction or retraction; follow the original article for its publisher's revision history.") +
       para("Check which original company feeds were actually received and which upstream records were withheld from this build.") +
       anchor("/feed-input-receipt.json","Inspect this build\u2019s source admission receipt") +
       " · " + anchor("/feed-provenance.jsonld","Trace syndicated items to original feed snapshots") +

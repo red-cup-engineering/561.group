@@ -35,6 +35,13 @@ JSON Feed into human HTML, machine JSON and negotiated Markdown.
   partial, not converted into a claim that an unreachable publisher has no
   work. Source input is **one release-time snapshot**, not a current live
   inventory, independent article fact check or correction/withdrawal event.
+- Blog article cards project **only source-supplied** `date_published` and
+  `date_modified` (if present), with separate human-readable labels, HTML
+  `dt-published` / `dt-updated` timestamps, and the existing original
+  Schema.org `datePublished` / `dateModified`. They do not turn an upstream
+  `date_modified` timestamp into a claimed verified correction, independent
+  fact-check, retraction or an editor-signed disclosure. The source company
+  retains that original editorial authority.
 - `/feed-input-receipt.json` is a public build artifact with one source
   observation per original company (received, unavailable or refused), source
   item counts where known, SHA-256 of the **decoded original HTTP response

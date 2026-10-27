@@ -16,6 +16,7 @@ const originalFeed=Object.freeze({
       title:"AI alignment and institutions <draft?>",
       summary:"Questions about ownership & autonomy <script>untrusted</script>",
       date_published:"2026-10-26T12:00:00Z",
+      date_modified:"2026-10-27T13:02:03Z",
       authors:[{name:home.group.companies[0].name,url:home.group.companies[0].url}]},
     {id:"engineering-article",url:"https://engineering.561.group/content-addressed-evidence/",
       title:"Content-addressed evidence",date_published:"2026-10-25T12:00:00Z",
@@ -232,8 +233,17 @@ test("Group blog receives only exact company-authored feed articles and preserve
   assert.equal(entries.length,2);
   assert.equal(entries[0].item.url,originalFeed.items[0].url);
   assert.equal(entries[0].item.author.name,home.group.companies[0].name);
+  assert.equal(entries[0].item.datePublished,"2026-10-26T12:00:00Z");
+  assert.equal(entries[0].item.dateModified,"2026-10-27T13:02:03Z");
+  assert.equal(entries[1].item.dateModified,undefined,
+    "modification timestamp cannot be invented for a source which omitted it");
   const html=tile(blog,"posts").html;
   assert.ok(html.includes("AI alignment and institutions &lt;draft?&gt;"));
+  assert.ok(html.includes('class="dt-published" datetime="2026-10-26T12:00:00Z"'));
+  assert.ok(html.includes('class="dt-updated" datetime="2026-10-27T13:02:03Z"'));
+  assert.ok(html.includes("Published by source: "));
+  assert.ok(html.includes("Source reports updated: "));
+  assert.ok(!html.includes("Corrected by 561 Group") && !html.includes("retracted"));
   assert.ok(html.includes("Questions about ownership &amp; autonomy &lt;script&gt;"));
   assert.ok(!html.includes("<script>"));
   assert.ok(!html.includes("Science home is not an article"),
@@ -241,6 +251,8 @@ test("Group blog receives only exact company-authored feed articles and preserve
   assert.ok(html.includes('href="https://science.561.group/ai-alignment-and-institutions/"'));
   assert.ok(!html.includes('href="https://561.group/ai-alignment-and-institutions/"'));
   assert.ok(html.includes("bounded, build-time"));
+  assert.match(tile(blog,"posts").html,/original company feeds/);
+  assert.ok(tile(blog,"posts").html.includes("A reported update is not itself an accepted correction or retraction"));
   const follow=tile(blog,"follow").html;
   for(const company of home.group.companies){
     assert.ok(follow.includes(company.actor));
