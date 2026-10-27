@@ -77,3 +77,66 @@ export function admitGroupBlogFeed(home, feed) {
     coverage:"bounded-build-snapshot",
   });
 }
+
+
+/** Reader-readable description of the SAME build's public input receipt.
+ * This refuses claims of complete coverage that lack all original publisher
+ * source observations. It is not a fresh fetch, fact-check, correction
+ * acceptance, or a claim that sixty items represent the whole archive. */
+export function admitGroupBlogCoverage(home,feed,receipt){
+  if(home?.origin!=="https://561.group"||
+     !Array.isArray(home.group?.companies)||home.group.companies.length!==4||
+     !receipt||receipt.schema!=="561.group/feed-input-receipt/v1"||
+     receipt.origin!==home.origin||receipt.expectedSourceCount!==4||
+     !Array.isArray(receipt.sources)||receipt.sources.length!==4)
+    throw new TypeError("Blog source coverage requires the original four-company build receipt");
+  const companies=home.group.companies;
+  const digest=/^sha256:[a-f0-9]{64}$/u;
+  const validCount=n=>Number.isSafeInteger(n)&&n>=0;
+  let observedItems=0,received=0;
+  const sources=companies.map((company,i)=>{
+    const entry=receipt.sources[i];
+    if(!entry||entry.companyId!==company.id||
+       entry.feedUrl!==company.feeds?.json||
+       !["received","unavailable","refused"].includes(entry.state))
+      throw new TypeError("Blog input receipt does not preserve original source order and custody");
+    if(entry.state==="received"){
+      if(!validCount(entry.inputItems)||!validCount(entry.bytes)||
+         entry.bytes>2*1024*1024||!digest.test(entry.sha256))
+        throw new TypeError("Blog source lacks bounded original feed evidence");
+      observedItems+=entry.inputItems;
+      received++;
+    }else if(entry.inputItems!==undefined||entry.bytes!==undefined||
+             entry.sha256!==undefined)
+      throw new TypeError("Unread company feeds cannot claim observed content or bytes");
+    return Object.freeze({company,state:entry.state,
+      ...(entry.state==="received"?{inputItems:entry.inputItems}:{})});
+  });
+  if(!receipt.excludedItemCounts||typeof receipt.excludedItemCounts!=="object"||
+     Array.isArray(receipt.excludedItemCounts))
+    throw new TypeError("Blog build cannot hide invalid feed-exclusion counts");
+  let rejected=0;
+  for(const [reason,count] of Object.entries(receipt.excludedItemCounts)){
+    if(!/^[a-z][a-z0-9-]{0,79}$/u.test(reason)||!Number.isSafeInteger(count)||count<1)
+      throw new TypeError("Blog exclusion accounting is malformed");
+    rejected+=count;
+  }
+  const admitted=observedItems-rejected;
+  if(!validCount(receipt.sourceItemCount)||
+     !validCount(receipt.admittedItems)||
+     !validCount(receipt.emittedItems)||
+     !validCount(receipt.omittedByAggregateLimit)||
+     !Array.isArray(feed?.items)||
+     observedItems!==receipt.sourceItemCount||
+     admitted<0||admitted!==receipt.admittedItems||
+     feed.items.length!==receipt.emittedItems||
+     admitted-receipt.emittedItems!==receipt.omittedByAggregateLimit)
+    throw new TypeError("Blog received and selected article counts disagree");
+  const complete=received===4;
+  if(receipt.completeness!==(complete?"all-sources-received":"partial-source-coverage"))
+    throw new TypeError("Blog source snapshot claims unwitnessed completeness");
+  return Object.freeze({sources:Object.freeze(sources),
+    received,expected:4,observedItems,admitted,rejected,
+    selected:receipt.emittedItems,omittedByLimit:receipt.omittedByAggregateLimit,
+    complete});
+}
