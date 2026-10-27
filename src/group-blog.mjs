@@ -130,6 +130,7 @@ export function admitGroupBlogCoverage(home,feed,receipt){
      observedItems!==receipt.sourceItemCount||
      admitted<0||admitted!==receipt.admittedItems||
      feed.items.length!==receipt.emittedItems||
+     receipt.emittedItems!==Math.min(admitted,GROUP_BLOG_LIMIT)||
      admitted-receipt.emittedItems!==receipt.omittedByAggregateLimit)
     throw new TypeError("Blog received and selected article counts disagree");
   const complete=received===4;
