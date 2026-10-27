@@ -4,6 +4,7 @@
 import estate from "../public/estate-records.json";
 import home from "../data/home.json";
 import frontdoor from "../data/frontdoor.json";
+import groupFeed from "../public/feed.json";
 import { create561GroupLivingApplication, PUBLIC_ROUTES } from "./living-home.mjs";
 import { toldOf } from "./told.mjs";
 import { readSourceRevision } from "./source-revision.mjs";
@@ -17,7 +18,7 @@ const ESTATE_TTL_S = 300;
 // TUFTE is the root-page producer; the existing Worker still owns routing and federation fallback.
 const livingHome = create561GroupLivingApplication({
   readHome: () => home, readEstate: () => estate,
-  readFrontdoor: () => frontdoor, releaseHome: home
+  readFrontdoor: () => frontdoor, readFeed: () => groupFeed, releaseHome: home
 });
 
 const SECURITY_HEADERS = {
@@ -126,7 +127,7 @@ export default {
     // The root goes to a reader's preferred served language (a stored `lang` choice first); every other path is exact.
     const redirect = localeRedirect(request, { locales: LOCALES });
     if (redirect) return withHeaders(redirect);
-    // LWS owns five exact public pages. Do not seize the static contact page,
+    // LWS owns six exact public pages, including its source-bound blog. Do not seize the static contact page,
     // original ActivityPub routes, unknown paths or machine-service endpoints.
     const safeRead = request.method === "GET" || request.method === "HEAD";
     if (safeRead) {
