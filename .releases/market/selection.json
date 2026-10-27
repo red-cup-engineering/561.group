@@ -1,8 +1,8 @@
 {
   "kind": "561.market-worker-carrier-selection/v1",
   "repository": "561-group/561-group-frontdoor-services-section",
-  "revision": "23e6125ac3e3fb4110efe1131a51f9a062ac7407",
-  "directory": ".service-releases/market/20261027-multilingual-sparql-198e420",
-  "manifestSha256": "9d5f1eb4183863731ddd56216def0440aadce4fd6e2cfdb71e572d9919a09a03",
+  "revision": "81dbbc748d74766549bd3fcff6fae35ac2f5f823",
+  "directory": ".service-releases/market/20261027-multilingual-sparql-resume-198e420",
+  "manifestSha256": "e7eaac69e235caf68343724831a65807339b6362387c48af035fd64447f39a17",
   "operation": "release"
 }
