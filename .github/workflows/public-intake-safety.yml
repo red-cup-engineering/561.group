@@ -46,7 +46,7 @@ jobs:
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           repository: 561-group/561-group-frontdoor-services-section
-          ref: d6ea7d248db4e6d3d82841917a56c50bdee126ff
+          ref: 2e00cffb7a029889bd20764ce32d09e5ba5feaf8
           path: content
           ssh-key: ${{ secrets.SITE_CONTENT_DEPLOY_KEY }}
           persist-credentials: false
