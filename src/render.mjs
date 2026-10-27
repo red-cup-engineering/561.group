@@ -580,6 +580,7 @@ function publicGuide(home, editorial) {
     "## Start with the real service and project entry points", "",
     "- [Work with us](" + home.origin + "/work/): accountable providers, scoping and terms.",
     "- [Projects](" + home.origin + "/projects/): tools, books, games, worlds, news and commerce.",
+    "- [Blog](" + home.origin + "/blog/): source-authored writing from the four companies; original articles remain canonical.",
     "- [About](" + home.origin + "/about/): four companies and work method.",
     "- [For agents](" + home.origin + "/for-agents/): public machine interfaces and permissions.",
     "- [Contact](" + home.origin + "/contact/): human inquiries and public reports.", "",
@@ -625,7 +626,7 @@ ${designTerms(home).map(({ text, gloss }) => `- ${text}: ${gloss}`).join("\n")}
 
 ${companyLines(g)}
 
-What the Group is publishing, merged from the four companies: [JSON Feed](${home.origin}/feed.json), [Atom](${home.origin}/feed.atom.xml), [RSS](${home.origin}/feed.rss.xml).
+What the Group is publishing, merged from the four companies: [Read the blog](${home.origin}/blog/), [JSON Feed](${home.origin}/feed.json), [Atom](${home.origin}/feed.atom.xml), [RSS](${home.origin}/feed.rss.xml). [Build source-admission receipt](${home.origin}/feed-input-receipt.json) reports the four original company feed reads and withheld-record counts; it does not attest indexing, federation delivery or full archive coverage.
 
 GitHub organization of the parent: ${g.githubOrg}. Full prose, doctrine and told values: [llms-full.txt](${home.origin}/llms-full.txt).
 
