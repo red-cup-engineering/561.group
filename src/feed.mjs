@@ -193,12 +193,26 @@ export function mergeItems(feeds, limit = FEED_LIMIT, { onReject = () => {} } = 
 export function renderFeedInputReceipt(home, sources, items, excluded = []) {
   const counts = {};
   for (const { reason } of excluded) counts[reason] = (counts[reason] ?? 0) + 1;
+  for (const source of sources) {
+    if (source.state === "received" &&
+        (!Number.isSafeInteger(source.inputItems) || source.inputItems < 0))
+      throw new TypeError("A received source must disclose its observed item count");
+  }
+  const sourceItemCount = sources.reduce((total, source) =>
+    total + (source.state === "received" ? source.inputItems : 0), 0);
+  const admittedItems = sourceItemCount - excluded.length;
+  if (admittedItems < items.length || !Number.isSafeInteger(admittedItems))
+    throw new TypeError("Published item counts exceed witnessed admitted source items");
   return JSON.stringify({
     schema: "561.group/feed-input-receipt/v1",
     origin: home.origin,
     scope: "One build-time read per named company feed; not a complete archive, delivery, indexing or correction receipt",
     sources,
     excludedItemCounts: Object.fromEntries(Object.entries(counts).sort(([a], [b]) => a.localeCompare(b))),
+    sourceItemCount,
+    admittedItems,
+    omittedByAggregateLimit: admittedItems - items.length,
+    selectionPolicy: "newest first by parseable publication timestamp then canonical URL; at most " + FEED_LIMIT + " items",
     emittedItems: items.length,
     expectedSourceCount: home.group.companies.length,
     completeness: sources.length === home.group.companies.length &&
