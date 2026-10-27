@@ -20,7 +20,7 @@ test("a visitor can tell what the Group is, what they can hire, and where to go 
   assert.deepEqual(root.navigation.map(x=>x.href),
     ["/","/work/","/projects/","/about/","/for-agents/","/contact/"]);
   assert.deepEqual(root.tiles.map(x=>x.id),
-    ["introduction","self-service","frontiers","paths","services","method","physical-world","explore","trade","companies","agents","support"]);
+    ["introduction","self-service","frontiers","technology-and-power","paths","services","method","physical-world","explore","trade","companies","agents","support"]);
   const hero=tile(root,"introduction").html;
   assert.ok(hero.includes(frontdoor.proposition));
   assert.ok(hero.includes(frontdoor.promise.replace(/&/gu,"&amp;").replace(/'/gu,"&#39;")));
@@ -54,6 +54,28 @@ test("a visitor can tell what the Group is, what they can hire, and where to go 
   assert.match(tile(root,"physical-world").html,/Indigenous authority, treaty rights/u);
   assert.ok(root.tiles.findIndex(t=>t.id==="services")<root.tiles.findIndex(t=>t.id==="support"),
     "public sales and use are not hidden behind a donation pitch");
+});
+
+
+test("political-economy readers can find evidence rather than technology hype",()=>{
+  const homePage=model("/"), about=model("/about/");
+  const invitation=tile(homePage,"technology-and-power").html;
+  assert.equal(about.metadata.description,frontdoor.discovery.summary);
+  assert.ok(invitation.includes(frontdoor.discovery.intro.replace(/&/gu,"&amp;").replace(/'/gu,"&#39;")));
+  assert.ok(invitation.includes("Can AI alignment be anti-capitalist?"));
+  assert.ok(invitation.includes('href="/about/#technology-and-power"'));
+  const full=tile(about,"technology-and-power").html;
+  for(const q of frontdoor.discovery.questions){
+    assert.ok(full.includes('id="'+q.id+'"'),"question needs an actual fragment identity");
+    assert.ok(full.includes(q.question));
+    assert.ok(full.includes('href="'+q.href+'"'),"readers can inspect a source");
+  }
+  assert.ok(full.includes(frontdoor.discovery.boundary));
+  for(const x of frontdoor.discovery.nextSteps) assert.ok(full.includes('href="'+x.href+'"'));
+  assert.match(full,/does not by itself|not one political program/u);
+  const known=homePage.metadata.structuredData["@graph"][0].knowsAbout;
+  assert.ok(known.includes("AI alignment and political economy"));
+  assert.ok(known.includes("post-capitalist institutional alternatives"));
 });
 
 test("services are tied to an existing accountable company, and only inquiry is offered",()=>{
