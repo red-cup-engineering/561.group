@@ -22,6 +22,17 @@ export function qualifyPublicAssetReadPath({origin,path,redirected,responseUrl,c
   return Object.freeze({mode:"localized-html-redirect",canonical:final.href});
 }
 
+/** LivingWebServer's Markdown projector escapes hyphens as \- within
+ * ordinary source words (e.g., "60\-item"). Those escape markers are
+ * presentation syntax, not differences in the received publication counts.
+ * Normalize only this reversible Markdown escape, not digits or prose.
+ */
+export function normalizeMarkdownLiteralHyphens(value) {
+  if (typeof value !== "string")
+    throw new TypeError("Public Markdown coverage must be received as text");
+  return value.replaceAll("\\-", "-");
+}
+
 // Read-only release assay for the ONE Group publisher: verifies the same
 // source-qualified feed, input receipt and PROV-O graph after public HTTP
 // readback. No new publisher, crawler, author or federation identity.
