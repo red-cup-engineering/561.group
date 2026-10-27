@@ -4,12 +4,44 @@ Received 2026-10-24 from 561-group/561.group@384700ec75288831b76e602071aa7744905
 
 The original public site of the **561 Group** at **https://561.group/** is served from this repository's `main` through the existing Cloudflare Worker `561-group-site`. It is one genuine TUFTE + LivingWebServer application, not a separate static marketing site.
 
+## The Group's publication hub
+
+`/blog/` is an original TUFTE + LivingWebServer page of the same Worker,
+not a duplicate CMS or another publisher. The original `scripts/build.mjs`
+already reads accepted public JSON Feeds from the four company sites,
+combines them into one capped, build-time `public/feed.json`, and writes
+RSS/Atom feed representations. The Worker now projects **that same** generated
+JSON Feed into human HTML, machine JSON and negotiated Markdown.
+
+- Every entry retains its original canonical company URL and sole attributable
+  company author; the Group never creates an ActivityPub post or signs on the
+  source company's behalf. The blog links to the original company Actors and
+  RSS, Atom and JSON subscription surfaces.
+- A required `readFeed` reader is called **only** for authorized `/blog/`
+  GET/HEAD; other original pages keep their three source reads. A malformed,
+  cross-origin, oversized or falsely attributed feed refuses rather than
+  converting arbitrary input into apparent official Group writing.
+- The hub reflects *up to 60 articles received during the last accepted site
+  build*. It is **not** a complete archive, a live crawl, or an observed
+  ActivityPub delivery receipt. An empty build-time feed does not mean the
+  company archives are empty.
+- Original articles, their site-owned publishing and revisions, metadata,
+  search and moderation remain with Science/Engineering/Operations/Services.
+  Each site's original `site.json` may additionally opt into the upstream
+  TUFTE `blog: true` reader projection; no duplicate source store is made.
+
+This is intentionally separate from the open experimental political-economy
+homepage work: the blog uses original main's authoritative pinned Group
+content. Future source/PR reconciliation may add the research introduction
+without changing who owns a published post.
+
 ## Jobs the site should make easy
 
 | Visitor goal | Real entry |
 |---|---|
 | Bring research, software, AI operations or governance work | [/work/](https://561.group/work/) → [/contact/#work](https://561.group/contact/#work) |
 | Explore actual projects, games, worlds and publications | [/projects/](https://561.group/projects/) |
+| Read original Group writing and subscribe | [/blog/](https://561.group/blog/) → [RSS](https://561.group/feed.rss.xml) |
 | Distinguish Shop, Bazaar and Market before buying | [/projects/#trade](https://561.group/projects/#trade) |
 | Understand accountability and working philosophy | [/about/](https://561.group/about/) |
 | Discover public machine interfaces and rights boundaries | [/for-agents/](https://561.group/for-agents/) |
