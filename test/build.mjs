@@ -34,7 +34,7 @@ const obsolete=await readFile(path.join(app,"public/index.html"),"utf8").then(()
 check("root has one TUFTE authority and stale static index is removed",()=>assert.equal(obsolete,false));
 const names=["source-revision.json","estate-records.json","zh-hans/index.html",
   "lkt/index.html","llms.txt","llms-full.txt","feed.json","feed.atom.xml",
-  "feed.rss.xml","feed-input-receipt.json",".well-known/security.txt","8d232583e7cba18a83bf5c0325fcc7c9.txt",
+  "feed.rss.xml","feed-input-receipt.json","feed-provenance.jsonld",".well-known/security.txt","8d232583e7cba18a83bf5c0325fcc7c9.txt",
   "humans.txt","robots.txt","sitemap.xml"];
 const readOutputs=async()=>Object.fromEntries(await Promise.all(names.map(async name=>[
   name,await readFile(path.join(app,"public",name),"utf8")])));
@@ -49,6 +49,11 @@ check("offline source-input receipt distinguishes missing inputs from absent ori
     ["unavailable","unavailable","unavailable","unavailable"]);
   assert.equal(receipt.completeness,"partial-source-coverage");
   assert.equal(receipt.emittedItems,0);
+  assert.equal(receipt.expectedSourceCount,4);
+  const graph=JSON.parse(before["feed-provenance.jsonld"]);
+  assert.equal(graph["@context"].prov,"http://www.w3.org/ns/prov#");
+  assert.equal(graph["@id"],"https://561.group/feed-provenance.jsonld");
+  assert.equal(graph["@graph"].filter(x=>x["@type"]?.includes("schema:DataFeedItem")).length,0);
   assert.equal(receipt.sources.some(s=>s.inputItems!==undefined),false);
 });
 
