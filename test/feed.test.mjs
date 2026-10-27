@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { createHash } from "node:crypto";
+import { spawnSync } from "node:child_process";
 import {
   readFeeds, readFeedsWithCoverage, mergeItems, renderFeedInputReceipt,
   renderFeedItemProvenance, renderJsonFeed, renderAtom, renderRss
@@ -190,7 +191,7 @@ test("bounded feed intake refuses oversized bodies and non-UTF-8 JSON, never pro
   ]),/unobserved source provenance/);
 });
 
-import { assayPublicFeedProjection, qualifyPublicAssetReadPath } from "../scripts/assay-public-feed.mjs";
+import { assayPublicFeedProjection, qualifyPublicAssetReadPath, comparePublicFeedRevisions } from "../scripts/assay-public-feed.mjs";
 
 function aCompletePublication() {
   const submitted=home.group.companies.map((company,i)=>{
@@ -312,4 +313,136 @@ test("original release accepts only same-language canonical HTML redirects, neve
   assert.match(workflow,/qualifyPublicAssetReadPath\(\{/u);
   assert.match(workflow,/asset\.url,contentType:asset\.headers\.get\('content-type'\)/u);
   assert.match(workflow,/Deployed public bytes differ from original release receipt/u);
+});
+
+
+const RELEASE_SHA_A="1".repeat(40),RELEASE_SHA_B="2".repeat(40);
+function publicationWithRevision(){
+  const snapshot=aCompletePublication();
+  snapshot.sourceRevision={
+    repository:"561-group/561.group",origin:home.origin,renderer:"TUFTE",
+    application:"LivingWebServer",sourceCommit:RELEASE_SHA_A,
+    workerVersionId:"aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee"
+  };
+  return snapshot;
+}
+function proposedFrom(snapshot){
+  const proposed=structuredClone(snapshot);
+  proposed.sourceRevision.sourceCommit=RELEASE_SHA_B;
+  return proposed;
+}
+const revisionDelta=(past,next)=>comparePublicFeedRevisions({
+  home,previous:past,proposed:next,observedAt:"2026-10-27T18:00:00.000Z"
+});
+test("unchanged public metadata is not invented into an editorial correction",()=>{
+  const before=publicationWithRevision(),after=proposedFrom(before);
+  const report=revisionDelta(before,after);
+  assert.equal(report.editorialReviewRequired,false);
+  assert.equal(report.counts.unchanged,4);
+  assert.deepEqual(report.metadataRevisions,[]);
+  assert.deepEqual(report.aggregateExits,[]);
+  assert.equal(report.originalCorrectionPublished,false);
+  assert.equal(report.proposedRelease.deployed,false);
+});
+test("source metadata revisions trigger review with both prior and proposed versions",()=>{
+  const before=publicationWithRevision(),after=proposedFrom(before);
+  after.feed.items[0].title="Correction candidate: pending source editorial review";
+  after.feed.items[0].summary="Changed claimed summary; not a scientific verification";
+  const report=revisionDelta(before,after);
+  assert.equal(report.editorialReviewRequired,true);
+  assert.equal(report.counts.metadataRevisions,1);
+  assert.deepEqual(report.metadataRevisions[0].changedFields,["title","summary"]);
+  assert.equal(report.metadataRevisions[0].previous.url,
+    report.metadataRevisions[0].proposed.url);
+  assert.match(report.metadataRevisions[0].previous.title,/T /u);
+  assert.equal(report.editorialDecision,"not-admitted");
+  assert.equal(report.originalCorrectionPublished,false);
+});
+test("a new admitted company item is selection, not an implied correction",()=>{
+  const before=publicationWithRevision(),after=proposedFrom(before);
+  const addition={
+    id:"science-new-post",url:science.url+"science-new-post/",
+    title:"New accepted science post",summary:"No earlier Group aggregate representation",
+    date_published:"2026-10-27T18:00:00Z",
+    authors:[{name:science.name,url:science.url}],tags:["research"]
+  };
+  after.feed.items.unshift(addition);
+  after.receipt.sources[0].inputItems++;
+  after.receipt.sourceItemCount++;
+  after.receipt.admittedItems++;
+  after.receipt.emittedItems++;
+  after.receipt.sources[0].sha256="sha256:"+"f".repeat(64);
+  after.graph=JSON.parse(renderFeedItemProvenance(home,after.receipt.sources,after.feed.items));
+  const report=revisionDelta(before,after);
+  assert.equal(report.editorialReviewRequired,false);
+  assert.equal(report.counts.newlySelected,1);
+  assert.equal(report.counts.metadataRevisions,0);
+  assert.equal(report.sourceChanges[0].snapshotChanged,true);
+});
+test("leaving the capped aggregate is a review signal, never a declared withdrawal",()=>{
+  const before=publicationWithRevision(),after=proposedFrom(before);
+  const omitted=after.feed.items.pop();
+  after.receipt.emittedItems--;
+  after.receipt.omittedByAggregateLimit++;
+  after.graph=JSON.parse(renderFeedItemProvenance(home,after.receipt.sources,after.feed.items));
+  const report=revisionDelta(before,after);
+  assert.equal(report.editorialReviewRequired,true);
+  assert.equal(report.counts.aggregateExits,1);
+  assert.equal(report.aggregateExits[0].url,omitted.url);
+  assert.equal(report.aggregateExits[0].classification,"absent-from-new-sixty-item-aggregate");
+  assert.match(report.aggregateExits[0].qualification,/Not evidence of deletion/);
+  assert.equal(report.originalCorrectionPublished,false);
+});
+test("canonical identifiers cannot move silently to new original articles",()=>{
+  const before=publicationWithRevision(),after=proposedFrom(before);
+  after.feed.items[0].id="changed-identifier";
+  after.graph=JSON.parse(renderFeedItemProvenance(home,after.receipt.sources,after.feed.items));
+  const report=revisionDelta(before,after);
+  assert.equal(report.editorialReviewRequired,true);
+  assert.equal(report.counts.identityConflicts,1);
+  assert.equal(report.identityChanges[0].classification,"same-url-new-id");
+  assert.equal(report.counts.newlySelected,0);
+});
+test("partial source coverage is never represented as an authorized retraction",()=>{
+  const before=publicationWithRevision(),after=proposedFrom(before);
+  const unavailable=after.receipt.sources[1];
+  after.receipt.sources[1]={companyId:unavailable.companyId,feedUrl:unavailable.feedUrl,state:"unavailable"};
+  after.receipt.sourceItemCount--;
+  after.receipt.admittedItems--;
+  after.receipt.emittedItems--;
+  after.receipt.completeness="partial-source-coverage";
+  after.feed.items=after.feed.items.filter(x=>x.authors[0].url!==engineering.url);
+  after.graph=JSON.parse(renderFeedItemProvenance(home,after.receipt.sources,after.feed.items));
+  const report=revisionDelta(before,after);
+  assert.equal(report.coverageProposed,"partial-source-coverage");
+  assert.equal(report.editorialReviewRequired,true);
+  assert.equal(report.originalCorrectionPublished,false);
+});
+test("previous live publication is observed before Wrangler, saved in original artifact",()=>{
+  const workflow=readFileSync(new URL("../.github/workflows/deploy.yml",import.meta.url),"utf8");
+  const observe=workflow.indexOf("Observe previous public feed before replacing it");
+  const deploy=workflow.indexOf("uses: cloudflare/wrangler-action@v3");
+  const preflight=workflow.indexOf("Refuse incomplete release, duplicate homepage");
+  assert.ok(preflight>=0 && observe>preflight && deploy>observe);
+  assert.match(workflow,/comparePublicFeedRevisions\(\{home,previous,proposed:current,observedAt\}\)/u);
+  assert.match(workflow,/sourceRevision\.artifactDigests\?\.\[name\]/u);
+  assert.match(workflow,/observations\/561\.group-publication-transition-review\.json/u);
+  assert.match(workflow,/observations\/561\.group-public-delivery\.json/u);
+  assert.match(workflow,/originalCorrectionPublished:false/u);
+});
+
+
+test("inline original predeploy observation is a parseable Node module, not dead workflow prose",()=>{
+  const workflow=readFileSync(new URL("../.github/workflows/deploy.yml",import.meta.url),"utf8");
+  const start=workflow.indexOf("      - name: Observe previous public feed before replacing it;");
+  const end=workflow.indexOf("      - uses: cloudflare/wrangler-action@v3",start);
+  assert.ok(start>0 && end>start);
+  const section=workflow.slice(start,end);
+  const found=section.match(/          node --input-type=module <<'NODE'\n([\s\S]*?)\n          NODE\n/u);
+  assert.ok(found,"original release includes a bounded inline Node script");
+  const source=found[1].split("\n").map(line=>
+    line.startsWith("          ")?line.slice(10):line).join("\n");
+  const result=spawnSync(process.execPath,["--check","--input-type=module"],
+    {input:source,encoding:"utf8",timeout:10000});
+  assert.equal(result.status,0,result.stderr);
 });

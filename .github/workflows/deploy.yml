@@ -166,6 +166,113 @@ jobs:
           }
           console.log('Admitted exact TUFTE + LivingWebServer source '+receipt.sourceCommit);
           NODE
+      - name: Observe previous public feed before replacing it; route changes to editorial review
+        timeout-minutes: 2
+        run: |
+          node --input-type=module <<'NODE'
+          import {createHash} from 'node:crypto';
+          import {readFile,mkdir,writeFile,appendFile} from 'node:fs/promises';
+          import {assayPublicFeedProjection,comparePublicFeedRevisions} from './scripts/assay-public-feed.mjs';
+          const origin='https://561.group';
+          const load=async path=>JSON.parse(await readFile(path,'utf8'));
+          const home=await load('data/home.json');
+          const sourceRevision=await load('public/source-revision.json');
+          if(sourceRevision.sourceCommit!==process.env.GITHUB_SHA)
+            throw Error('Proposed publication revision not bound to original main');
+          const current={sourceRevision,feed:await load('public/feed.json'),
+            receipt:await load('public/feed-input-receipt.json'),
+            graph:await load('public/feed-provenance.jsonld')};
+          for(const name of ['feed.json','feed-input-receipt.json','feed-provenance.jsonld']){
+            const digest='sha256:'+createHash('sha256')
+              .update(await readFile('public/'+name)).digest('hex');
+            if(sourceRevision.artifactDigests?.[name]!==digest)
+              throw Error('Unqualified proposed publication bytes: '+name);
+          }
+          assayPublicFeedProjection({home,feed:current.feed,
+            receipt:current.receipt,graph:current.graph});
+          const previousJson=async name=>{
+            const url=origin+'/'+name;
+            let response;
+            try{
+              response=await fetch(url,{method:'GET',redirect:'manual',
+                cache:'no-store',headers:{accept:'application/json',
+                  'accept-encoding':'identity','cache-control':'no-cache'},
+                signal:AbortSignal.timeout(10000)});
+            }catch(error){
+              const out=Error('Prior public release unreachable: '+name);
+              out.code='PRIOR_UNAVAILABLE';throw out;
+            }
+            if(response.status!==200){
+              const out=Error('Prior public release HTTP '+response.status+' at '+name);
+              out.code='PRIOR_UNAVAILABLE';throw out;
+            }
+            if(response.redirected||response.url!==url||
+               !(response.headers.get('content-type')??'').toLowerCase().includes('json'))
+              throw Error('Prior public evidence URL/media identity refused: '+name);
+            const chunks=[];let total=0;
+            for await(const chunk of response.body){
+              total+=chunk.byteLength;
+              if(total>2*1024*1024)throw Error('Prior public evidence exceeds 2MiB bound: '+name);
+              chunks.push(Buffer.from(chunk));
+            }
+            const raw=Buffer.concat(chunks,total);
+            let body;
+            try{body=JSON.parse(new TextDecoder('utf-8',{fatal:true}).decode(raw));}
+            catch{throw Error('Prior public evidence is not exact UTF-8 JSON: '+name);}
+            return {body,digest:'sha256:'+createHash('sha256').update(raw).digest('hex')};
+          };
+          let previous,reason=null;
+          try{
+            const result=await previousJson('source-revision.json');
+            const revision=result.body;
+            if(revision.repository!=='561-group/561.group'||
+               revision.origin!==origin||revision.renderer!=='TUFTE'||
+               revision.application!=='LivingWebServer'||
+               !/^[a-f0-9]{40}$/u.test(revision.sourceCommit??''))
+              throw Error('Prior source-revision is not an original Group publisher');
+            previous={sourceRevision:revision};
+            for(const [name,key] of [['feed.json','feed'],
+              ['feed-input-receipt.json','receipt'],
+              ['feed-provenance.jsonld','graph']]){
+              const read=await previousJson(name);
+              if(revision.artifactDigests?.[name]!==read.digest)
+                throw Error('Prior deployed artifact did not match its manifest: '+name);
+              previous[key]=read.body;
+            }
+          }catch(error){
+            if(error.code==='PRIOR_UNAVAILABLE'){reason='prior-public-source-unavailable';previous=null;}
+            else throw error;
+          }
+          const observedAt=new Date().toISOString();
+          const report=previous?
+            comparePublicFeedRevisions({home,previous,proposed:current,observedAt}):
+            {schema:'561.group/publication-transition-review/v1',observedAt,
+              scope:'Previous public release was not independently readable; no article withdrawal or revision inferred',
+              previousRelease:null,
+              proposedRelease:{sourceCommit:sourceRevision.sourceCommit,deployed:false},
+              editorialReviewRequired:true,editorialDecision:'not-admitted',
+              originalCorrectionPublished:false,reason,
+              metadataRevisions:[],identityChanges:[],aggregateExits:[],newlySelected:[]};
+          await mkdir('observations',{recursive:true});
+          await writeFile('observations/561.group-publication-transition-review.json',
+            JSON.stringify(report,null,2)+'\n');
+          console.log('Predeploy Group editorial-change evidence: '+JSON.stringify({
+            previous:report.previousRelease?.sourceCommit??null,
+            proposed:sourceRevision.sourceCommit,counts:report.counts??null,
+            editorialReviewRequired:report.editorialReviewRequired,reason}));
+          if(report.editorialReviewRequired)
+            console.log('::warning::Group feed revisions, aggregate exits or incomplete prior coverage require subject-owned editorial review; no correction/retraction is inferred or automatically published.');
+          if(process.env.GITHUB_STEP_SUMMARY)
+            await appendFile(process.env.GITHUB_STEP_SUMMARY,
+              '### Capped-feed change review (predeploy candidate, not publisher decision)\n'+
+              'Previous release '+(report.previousRelease?.sourceCommit??'unavailable')+
+              '; proposed '+sourceRevision.sourceCommit+
+              '; subject-owned review required '+report.editorialReviewRequired+
+              '. Changed metadata '+(report.counts?.metadataRevisions??'unknown')+
+              ', identity collisions '+(report.counts?.identityConflicts??'unknown')+
+              ', aggregate exits '+(report.counts?.aggregateExits??'unknown')+
+              '. No original article correction or withdrawal is inferred.\n\n');
+          NODE
       - uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -369,7 +476,9 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: 561-group-post-release-public-observation
-          path: observations/561.group-public-delivery.json
+          path: |
+            observations/561.group-public-delivery.json
+            observations/561.group-publication-transition-review.json
           if-no-files-found: warn
           retention-days: 30
       - name: Retain original section publication receipts

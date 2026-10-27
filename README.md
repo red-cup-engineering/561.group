@@ -61,6 +61,25 @@ JSON Feed into human HTML, machine JSON and negotiated Markdown.
   or successful Cloudflare upload is not substituted for public receiving.
   The semantic receipt explicitly leaves article fact-checking, signed
   federation delivery and search indexing unproved.
+- **Before replacing a live release**, the same source-qualified pipeline
+  reads its previous public `source-revision.json`, `feed.json`,
+  `feed-input-receipt.json`, and `feed-provenance.jsonld`. It checks the
+  original SHA-256 response manifest and both semantic snapshots, then
+  records changed titles, summaries, dates, tags, stable identities,
+  newly selected records and departures from the capped Group aggregate.
+  Source-feed byte changes alone are observations, **not** evidence that any
+  particular article changed. Missing old public evidence is recorded as
+  unknown, never interpreted as an empty source archive.
+- The original public-delivery GitHub Actions artifact additionally retains
+  `observations/561.group-publication-transition-review.json` for 30 days.
+  The workflow warns and marks `editorialReviewRequired` for disputed
+  identities, changed represented metadata, aggregate departures or partial
+  source coverage. These are **proposed review obligations**, not automatic
+  editorial judgments: a sixty-item selection change is not an original
+  withdrawal, and only subject owners may issue an actual correction or
+  retraction. The record contains old and proposed metadata for comparison,
+  but it is not a complete or perpetual correction ledger. The source Git
+  history and upstream published editions retain their separate identities.
 - The hub reflects *up to 60 articles received during the last accepted site
   build*. It is **not** a complete archive, a live crawl, or an observed
   ActivityPub delivery receipt. An empty build-time feed does not mean the
