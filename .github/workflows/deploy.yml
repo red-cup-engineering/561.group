@@ -4,6 +4,12 @@ name: Publish and receive 561.group (TUFTE + LivingWebServer)
 # original tests, builds the pinned supplier, deploys, then reads public bytes.
 on:
   workflow_dispatch:
+    inputs:
+      publish_sections:
+        description: "Republish the selected Services and Science section bundle"
+        type: boolean
+        default: false
+        required: false
   # The Leader's received alpha-site repair can ship only from an already
   # qualified ORIGINAL main CI push. Untrusted PR runs never deploy.
   workflow_run:
@@ -52,7 +58,7 @@ jobs:
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           repository: 561-group/561-group-frontdoor-services-section
-          ref: bb74ebc6b7f89cf050988fee58ece79356a70fe0
+          ref: b0832778396a5688f2165f61eac448411b3f8f19
           path: content
           ssh-key: ${{ secrets.SITE_CONTENT_DEPLOY_KEY }}
           persist-credentials: false
@@ -94,6 +100,7 @@ jobs:
           npm test
           npm run build
       - name: Publish selected sections through their original publisher
+        if: github.event_name == 'workflow_dispatch' && inputs.publish_sections
         env:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
