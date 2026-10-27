@@ -320,11 +320,12 @@ jobs:
             await import('./scripts/assay-public-feed.mjs');
           const publicationBodies=new Map();
           const semanticPublicationPaths=new Set([
-            'feed.json','feed-input-receipt.json','feed-provenance.jsonld'
+            'feed.json','feed-input-receipt.json','feed-provenance.jsonld',
+            'editorial-question-provenance.jsonld'
           ]);
           for(const path of ['llms.txt','llms-full.txt','robots.txt','sitemap.xml',
             'feed.json','feed-input-receipt.json','feed-provenance.jsonld',
-            'estate-records.json','zh-hans/index.html','lkt/index.html']) {
+            'editorial-question-provenance.jsonld','estate-records.json','zh-hans/index.html','lkt/index.html']) {
             const target='/'+path;
             const asset=await read(target);
             if(!asset.ok)throw Error('Original generated public artifact unavailable: '+target+' '+asset.status);
@@ -359,6 +360,25 @@ jobs:
             graph:JSON.parse(publicationBodies.get('feed-provenance.jsonld'))
           });
           console.log('Independent public source/metadata receiving: '+JSON.stringify(feedReceipt));
+          // One original editorial source already bound by the source-qualified
+          // checkout. This compares the EXACT public JSON-LD response bytes to
+          // six source-owned Question/Answer carriers and cited company URLs.
+          // A source match is never independently verified scientific truth.
+          const editorialSourceBytes=await readFile('data/frontdoor.json');
+          const editorialShaBytes=new Uint8Array(await crypto.subtle.digest(
+            'SHA-256',editorialSourceBytes));
+          const editorialSha=Array.from(editorialShaBytes,b=>
+            b.toString(16).padStart(2,'0')).join('');
+          const {assayEditorialQuestionProvenance}=
+            await import('./src/editorial-question-provenance.mjs');
+          const editorialReadback=assayEditorialQuestionProvenance({
+            home:sourceHome,
+            frontdoor:JSON.parse(new TextDecoder('utf-8',{fatal:true}).decode(editorialSourceBytes)),
+            frontdoorSha256:editorialSha,
+            graph:JSON.parse(publicationBodies.get('editorial-question-provenance.jsonld'))
+          });
+          console.log('Independent public editorial provenance receiving: '+JSON.stringify(editorialReadback));
+
           // Independently read the actual reader-facing blog, not only its
           // source feed: TUFTE HTML, machine JSON and negotiated Markdown must
           // tell the same truth as the exact public input receipt just fetched.
