@@ -73,6 +73,20 @@ function checkedSources(home, estate, frontdoor) {
     throw new TypeError("Evidence-linked public AI and political economy questions are required");
   for (const question of discovery.questions) publicHref(question.href);
   for (const next of discovery.nextSteps) publicHref(next.href);
+  const ecological = frontdoor.ecologicalDiscovery;
+  if (!ecological || !["headline","summary","intro","boundary"].every(
+      key => typeof ecological[key] === "string" && ecological[key].trim()) ||
+      !Array.isArray(ecological.questions) || ecological.questions.length !== 3 ||
+      new Set(ecological.questions.map(q => q.id)).size !== 3 ||
+      ecological.questions.some(q => !q || !slug.test(q.id) ||
+        !["audience","question","answer","href","label"].every(
+          key => typeof q[key] === "string" && q[key].trim())) ||
+      !Array.isArray(ecological.nextSteps) || ecological.nextSteps.length !== 3 ||
+      ecological.nextSteps.some(x => !x ||
+        !["href","label"].every(key => typeof x[key] === "string" && x[key].trim())))
+    throw new TypeError("Three separate source-qualified ecological reader paths are required");
+  for (const question of ecological.questions) publicHref(question.href);
+  for (const next of ecological.nextSteps) publicHref(next.href);
   if (frontdoor.schema !== "561.group/public-frontdoor/v1")
     throw new TypeError("Public editorial record has an unrecognized schema");
   if (typeof home.public?.headline !== "string" ||
@@ -286,6 +300,18 @@ function technologyAndPower(frontdoor, concise = false) {
       : para(discovery.boundary) + actions(discovery.nextSteps));
 }
 
+function ecologicalReaders(frontdoor) {
+  const ecological = frontdoor.ecologicalDiscovery;
+  return para(ecological.intro,"site-section-lead") +
+    '<ul class="site-card-grid">' + ecological.questions.map(q =>
+      '<li class="site-card" id="' + esc(q.id) +
+      '"><span class="site-category">' + esc(q.audience) +
+      '</span><h3>' + esc(q.question) + '</h3>' +
+      para(q.answer) + '<p>' + anchor(q.href,q.label) + '</p></li>'
+    ).join("") + "</ul>" +
+    para(ecological.boundary) + actions(ecological.nextSteps);
+}
+
 function frontiers(frontdoor, concise = false) {
   const vision = frontdoor.vision;
   return para(vision.intro,"site-section-lead") +
@@ -349,7 +375,7 @@ function homepage(home, estate, frontdoor, source) {
     panel("physical-world",home.public.materialApproach.headline,
       para(home.public.materialApproach.body,"site-quote") +
       para(home.public.materialApproach.scope) +
-      anchor("/about/", "How material constraints shape our work"),12),
+      anchor("/about/#ecology-and-adaptation", "Explore ecological justice, adaptation and resilience"),12),
     panel("explore","Places, publications and tools",
       para("These are public entry points, not a blanket promise that every project is production-ready.","site-section-lead") +
       projects(home,estate,source.nodes) +
@@ -418,6 +444,8 @@ function aboutPage(home, frontdoor) {
     panel("frontiers","What we are trying to make real",frontiers(frontdoor,false),12),
     panel("technology-and-power",frontdoor.discovery.headline,
       technologyAndPower(frontdoor),12),
+    panel("ecology-and-adaptation",frontdoor.ecologicalDiscovery.headline,
+      ecologicalReaders(frontdoor),12),
     panel("companies","The four accountable companies",houses(home),12),
     panel("process","How work moves",processSteps(frontdoor) +
       note("An accepted outcome is checked independently of supplier activity."),12),
@@ -460,7 +488,7 @@ export function project561GroupPage({home,estate,frontdoor,path = "/"}) {
     "/": {title:home.name,subtitle:"Indigenous-grounded governance · Artificial abiogenesis · Practical services"},
     "/work/": {title:"Work with the 561 Group",subtitle:"Capabilities, scoping, providers and actual terms"},
     "/projects/": {title:"Explore the 561 Group",subtitle:"Public projects, commerce, worlds and publications"},
-    "/about/": {title:"About the 561 Group",subtitle:frontdoor.discovery.summary},
+    "/about/": {title:"About the 561 Group",subtitle:frontdoor.discovery.summary + " " + frontdoor.ecologicalDiscovery.summary},
     "/for-agents/": {title:"For agents · 561 Group",subtitle:"Public machine endpoints and authorization boundaries"}
   }[path];
   const tiles = path === "/" ? homepage(home,estate,frontdoor,source) :
