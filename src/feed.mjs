@@ -6,39 +6,150 @@ export const FEED_LIMIT = 60;
 const xml = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&apos;" })[c]);
 const time = (item) => (Number.isFinite(Date.parse(item.date_published)) ? Date.parse(item.date_published) : -Infinity);
 
-/** Read each company's feed.json; an unreadable one is logged and skipped. Returns [{ company, feed }]. */
-export async function readFeeds(companies, { fetchImpl = fetch, log = console.warn } = {}) {
-  const read = async (company) => {
-    try {
-      const response = await fetchImpl(company.feeds.json, { signal: AbortSignal.timeout(8000), headers: { accept: "application/feed+json, application/json" } });
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      const feed = await response.json();
-      if (!Array.isArray(feed.items)) throw new Error("not a JSON Feed");
-      return { company, feed };
-    } catch (error) {
-      log(`feed of ${company.name} not read (${error.message}); continuing without it`);
-      return undefined;
-    }
-  };
-  return (await Promise.all(companies.map(read))).filter(Boolean);
+// Admission happens BEFORE all three public feed formats are generated. The
+// blog renderer has its own last-line check, but a bad upstream record must
+// neither poison its whole reading nor acquire a company's forged authorship.
+const MAX_SOURCE_ITEMS = 500;
+const MAX_TITLE = 512;
+const MAX_SUMMARY = 4096;
+
+function articleUrl(company, value) {
+  if (typeof value !== "string" || value.length > 2048) return null;
+  let article, owner;
+  try { article = new URL(value); owner = new URL(company.url); }
+  catch { return null; }
+  if (article.protocol !== "https:" || article.origin !== owner.origin ||
+      article.username || article.password || article.search || article.hash ||
+      !article.pathname.endsWith("/") || article.pathname.includes("//") ||
+      article.href !== value) return null;
+  return article.href;
 }
 
-/** Merge feeds newest first, one entry per item id, capped. Each item keeps its own fields and gains its company as author. */
-export function mergeItems(feeds, limit = FEED_LIMIT) {
+function admittedDate(value) {
+  if (typeof value !== "string" ||
+      !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/u.test(value) ||
+      !Number.isFinite(Date.parse(value))) return false;
+  const day = value.slice(0, 10);
+  return new Date(day + "T00:00:00Z").toISOString().slice(0, 10) === day;
+}
+
+function sourceItem(company, item) {
+  if (!item || typeof item !== "object" || Array.isArray(item))
+    return { reason: "not-an-object" };
+  const url = articleUrl(company, item.url);
+  if (!url) return { reason: "noncanonical-or-foreign-article" };
+  if (item.id !== undefined &&
+      (typeof item.id !== "string" || !item.id.trim() || item.id.length > 1024))
+    return { reason: "invalid-article-id" };
+  if (typeof item.title !== "string" || !item.title.trim() ||
+      item.title.length > MAX_TITLE) return { reason: "invalid-title" };
+  if (item.summary !== undefined &&
+      (typeof item.summary !== "string" || item.summary.length > MAX_SUMMARY))
+    return { reason: "invalid-summary" };
+  if ((item.date_published !== undefined && !admittedDate(item.date_published)) ||
+      (item.date_modified !== undefined && !admittedDate(item.date_modified)))
+    return { reason: "invalid-date" };
+  if (item.tags !== undefined &&
+      (!Array.isArray(item.tags) || item.tags.length > 30 ||
+       item.tags.some(tag => typeof tag !== "string" || !tag.trim() || tag.length > 120)))
+    return { reason: "invalid-tags" };
+  return { item: {
+    id: item.id ?? url, url, title: item.title.trim(),
+    ...(item.summary === undefined ? {} : { summary: item.summary }),
+    ...(item.date_published === undefined ? {} : { date_published: item.date_published }),
+    ...(item.date_modified === undefined ? {} : { date_modified: item.date_modified }),
+    ...(item.tags === undefined ? {} : { tags: [...item.tags] }),
+    authors: [{ name: company.name, url: company.url }],
+  }};
+}
+
+/** One actual read per source. Missing/rejected sources have an explicit status,
+ * rather than silently turning a partial build into a purported complete archive. */
+export async function readFeedsWithCoverage(companies, { fetchImpl = fetch, log = console.warn } = {}) {
+  const reads = await Promise.all(companies.map(async company => {
+    const source = { companyId: company.id, feedUrl: company.feeds.json };
+    let response;
+    try {
+      response = await fetchImpl(company.feeds.json, {
+        signal: AbortSignal.timeout(8000),
+        headers: { accept: "application/feed+json, application/json" },
+      });
+      if (!response.ok) throw new Error("HTTP " + response.status);
+    } catch (error) {
+      log('feed of ' + company.name + ' unavailable (' + error.message + '); continuing without it');
+      return { status: { ...source, state: "unavailable" } };
+    }
+    try {
+      const feed = await response.json();
+      if (!feed || feed.version !== "https://jsonfeed.org/version/1.1" ||
+          feed.home_page_url !== company.url ||
+          feed.feed_url !== company.feeds.json ||
+          !Array.isArray(feed.items) || feed.items.length > MAX_SOURCE_ITEMS) {
+        throw new TypeError("invalid or foreign JSON Feed 1.1 identity/size");
+      }
+      return {
+        status: { ...source, state: "received", inputItems: feed.items.length },
+        received: { company, feed },
+      };
+    } catch (error) {
+      log('feed of ' + company.name + ' refused (' + error.message + '); continuing without it');
+      return { status: { ...source, state: "refused" } };
+    }
+  }));
+  return {
+    feeds: reads.flatMap(read => read.received ? [read.received] : []),
+    sources: reads.map(read => read.status), // stable original company order
+  };
+}
+
+/** Compatibility reader for the original callers; use the coverage variant to
+ * emit a public build receipt without fetching any source a second time. */
+export async function readFeeds(companies, options = {}) {
+  return (await readFeedsWithCoverage(companies, options)).feeds;
+}
+
+/** Merge source-admitted items only, newest first, cap output, and retain the
+ * original author, item identifier and URL. Invalid items are withheld alone. */
+export function mergeItems(feeds, limit = FEED_LIMIT, { onReject = () => {} } = {}) {
+  if (!Number.isSafeInteger(limit) || limit < 0 || limit > FEED_LIMIT)
+    throw new TypeError("Group feed output limit must be bounded");
   const seen = new Set();
+  const seenUrls = new Set();
   const items = [];
   for (const { company, feed } of feeds) {
-    const authors = [{ name: company.name, url: company.url }];
-    for (const item of feed.items) {
-      const key = item.id ?? item.url;
-      if (!key || !item.url || seen.has(key)) continue;
-      seen.add(key);
-      const kept = { id: item.id ?? item.url, url: item.url, title: item.title ?? item.url };
-      for (const field of ["summary", "date_published", "date_modified", "tags"]) if (item[field] !== undefined) kept[field] = item[field];
-      items.push({ ...kept, authors });
+    for (const candidate of feed.items) {
+      const { item, reason } = sourceItem(company, candidate);
+      if (!item) {
+        onReject({ companyId: company.id, reason });
+        continue;
+      }
+      if (seen.has(item.id) || seenUrls.has(item.url)) {
+        onReject({ companyId: company.id, reason: "duplicate-id-or-url" });
+        continue;
+      }
+      seen.add(item.id);
+      seenUrls.add(item.url);
+      items.push(item);
     }
   }
   return items.sort((a, b) => time(b) - time(a) || a.url.localeCompare(b.url)).slice(0, limit);
+}
+
+/** Build-time admission evidence only: no crawl, index, federation delivery or
+ * completeness claim beyond the four named source read attempts. */
+export function renderFeedInputReceipt(home, sources, items, excluded = []) {
+  const counts = {};
+  for (const { reason } of excluded) counts[reason] = (counts[reason] ?? 0) + 1;
+  return JSON.stringify({
+    schema: "561.group/feed-input-receipt/v1",
+    origin: home.origin,
+    scope: "One build-time read per named company feed; not a complete archive, delivery, indexing or correction receipt",
+    sources,
+    excludedItemCounts: Object.fromEntries(Object.entries(counts).sort(([a], [b]) => a.localeCompare(b))),
+    emittedItems: items.length,
+    completeness: sources.every(source => source.state === "received") ?
+      "all-sources-received" : "partial-source-coverage",
+  }, null, 2) + "\n";
 }
 
 const TITLE = (home) => `${home.name}: what the Group is publishing`;
