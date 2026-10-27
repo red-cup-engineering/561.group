@@ -191,7 +191,7 @@ test("bounded feed intake refuses oversized bodies and non-UTF-8 JSON, never pro
   ]),/unobserved source provenance/);
 });
 
-import { assayPublicFeedProjection, qualifyPublicAssetReadPath, comparePublicFeedRevisions } from "../scripts/assay-public-feed.mjs";
+import { assayPublicFeedProjection, qualifyPublicAssetReadPath, comparePublicFeedRevisions, normalizeMarkdownLiteralHyphens } from "../scripts/assay-public-feed.mjs";
 
 function aCompletePublication() {
   const submitted=home.group.companies.map((company,i)=>{
@@ -472,6 +472,21 @@ test("original deployed blog receiving checks all three public media views again
     "inputReceipt.emittedItems!==feedReceipt.emittedItems",
     "expected.every(term=>blogHtml.includes(term))",
     "expected.every(term=>originalCoverageTile.html?.includes(term))",
-    "expected.every(term=>blogMarkdown.includes(term))",
+    "expected.every(term=>normalizedBlogMarkdown.includes(term))",
+    "normalizedBlogMarkdown=normalizeMarkdownLiteralHyphens(blogMarkdown)",
   ])assert.ok(current.includes(required),"original public receiving must verify "+required);
+});
+
+
+test("Markdown escaped hyphens cannot fabricate or hide a different blog selection count",()=>{
+  const expected="22 left outside its 60-item selection";
+  const actual="22 left outside its 60\\-item selection";
+  assert.equal(normalizeMarkdownLiteralHyphens(actual),expected);
+  assert.equal(normalizeMarkdownLiteralHyphens(actual).includes(expected),true);
+  assert.equal(normalizeMarkdownLiteralHyphens("21 left outside its 60\\-item selection").includes(expected),false);
+  assert.equal(normalizeMarkdownLiteralHyphens("no source data"),"no source data");
+  assert.equal(normalizeMarkdownLiteralHyphens("not a \\*verified\\* count"),"not a \\*verified\\* count");
+  assert.throws(()=>normalizeMarkdownLiteralHyphens(null),/public Markdown/i);
+  const workflow=readFileSync(new URL("../.github/workflows/deploy.yml",import.meta.url),"utf8");
+  assert.match(workflow,/normalizeMarkdownLiteralHyphens\(blogMarkdown\)/u);
 });

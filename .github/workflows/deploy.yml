@@ -316,7 +316,7 @@ jobs:
           // A source commit alone does not attest generated external-feed
           // snapshots. Independently compare original published bytes with
           // their release-time artifact digests at the public origin.
-          const {assayPublicFeedProjection,qualifyPublicAssetReadPath}=
+          const {assayPublicFeedProjection,qualifyPublicAssetReadPath,normalizeMarkdownLiteralHyphens}=
             await import('./scripts/assay-public-feed.mjs');
           const publicationBodies=new Map();
           const semanticPublicationPaths=new Set([
@@ -397,11 +397,12 @@ jobs:
             throw Error('Published TUFTE blog JSON loses original company and source-receipt evidence');
           const blogMarkdownResponse=await read('/blog/','text/markdown');
           const blogMarkdown=await blogMarkdownResponse.text();
+          const normalizedBlogMarkdown=normalizeMarkdownLiteralHyphens(blogMarkdown);
           if(!blogMarkdownResponse.ok||blogMarkdownResponse.redirected||
              !(blogMarkdownResponse.headers.get('content-type')??'').startsWith('text/markdown')||
              !/^(?:#|##) .+/mu.test(blogMarkdown)||
-             !expected.every(term=>blogMarkdown.includes(term))||
-             !blogMarkdown.includes('build-time feed input and selection counts'))
+             !expected.every(term=>normalizedBlogMarkdown.includes(term))||
+             !normalizedBlogMarkdown.includes('build-time feed input and selection counts'))
             throw Error('Published accessible blog Markdown disagrees with original feed receipt');
           if(inputReceipt.emittedItems!==feedReceipt.emittedItems)
             throw Error('Reader-facing blog is using another source snapshot');
