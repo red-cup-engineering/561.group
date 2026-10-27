@@ -423,6 +423,7 @@ function blogPage(home, blog) {
       note("This is a bounded, build-time selection of up to 60 items, not a complete archive or a live count.") +
       para("Check which original company feeds were actually received and which upstream records were withheld from this build.") +
       anchor("/feed-input-receipt.json","Inspect this build\u2019s source admission receipt") +
+      " · " + anchor("/feed-provenance.jsonld","Trace syndicated items to original feed snapshots") +
       " · " + anchor("/projects/","Explore projects and publications"),12),
     panel("follow","Follow each original publisher",
       para("Subscribe to the company feeds, or follow its genuine ActivityPub identity. A Group-wide feed does not replace individual author identities.") +
