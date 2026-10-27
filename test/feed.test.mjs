@@ -515,7 +515,7 @@ test("Original Group ecological source questions are independently read after pu
     "sourceQuestions:frontdoor.discovery.questions.length+frontdoor.ecologicalDiscovery.questions.length",
     "https://services.561.group/climate-water-and-energy-exposure-worksheet/",
     "https://science.561.group/climate-breakdown-ergodicity-and-water-governance/",
-    "Coesite climate article routes returned HTTP 404",
+    "Engineering and Operations climate article URLs returned HTTP 404",
     "As observed on October 27, 2026",
     "does not authenticate its current publisher source-to-provider release chain",
     "Independent Group ecological reader evidence received",
