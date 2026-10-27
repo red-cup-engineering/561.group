@@ -173,6 +173,9 @@ function structure(home, pathname, frontdoor) {
   const org = {
     "@type":"Organization","@id":home.origin + "/#organization",
     name:home.name,url:home.origin + "/",description:home.description,
+    // The source-owned primary mark already ships with this site. Let search
+    // readers disambiguate this institution by its real visual identity.
+    logo:{"@type":"ImageObject",url:home.origin + "/logo.png",width:512,height:512},
     foundingDate:String(home.established),
     sameAs:[home.group.githubOrg,home.group.actor],
     knowsAbout:home.group.knowsAbout,
