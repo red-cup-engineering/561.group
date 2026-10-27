@@ -72,6 +72,14 @@ JSON Feed into human HTML, machine JSON and negotiated Markdown.
   or successful Cloudflare upload is not substituted for public receiving.
   The semantic receipt explicitly leaves article fact-checking, signed
   federation delivery and search indexing unproved.
+  The production receiver now also independently GETs the live `/blog/`
+  representation as **HTML, TUFTE JSON and Markdown** after exact Cloudflare
+  deployment. It compares the human-visible named-company source coverage,
+  admitted/rejected and over-cap counts in all three carriers with the
+  **same** independently retrieved release input receipt and PROV-O assay.
+  A disagreement refuses the ordinary release's public receiving step.
+  A locally passing renderer or a deployed source SHA alone does not satisfy
+  this reader-facing observation.
 - **Before replacing a live release**, the same source-qualified pipeline
   reads its previous public `source-revision.json`, `feed.json`,
   `feed-input-receipt.json`, and `feed-provenance.jsonld`. It checks the
