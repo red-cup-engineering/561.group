@@ -43,6 +43,15 @@ const facts = { marketOffers, frontdoor };
 const { feeds: companyFeeds, sources: feedSources } = await readFeedsWithCoverage(home.group.companies);
 const withheldFeedItems = [];
 const items = mergeItems(companyFeeds, undefined, { onReject: reading => withheldFeedItems.push(reading) });
+// Independent release logs can report actual feed source reception without
+// mistaking a skipped source for an empty original archive.
+console.log("feed input observation", JSON.stringify({
+  sources: feedSources.map(({companyId,state,inputItems})=>({
+    companyId,state,...(inputItems===undefined?{}:{inputItems})
+  })),
+  excludedItems:withheldFeedItems.length, emittedItems:items.length
+}));
+
 const estate = { ...authored, nodes: [...authored.nodes] };
 estate.revision = createHash("sha256").update(JSON.stringify(estate)).digest("hex");
 
