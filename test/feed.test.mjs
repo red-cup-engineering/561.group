@@ -105,7 +105,8 @@ test("a foreign, malformed or duplicate entry cannot gain the company's author i
   assert.equal(receipt.emittedItems, 1);
   assert.equal(receipt.excludedItemCounts["noncanonical-or-foreign-article"], 2);
   assert.equal(receipt.excludedItemCounts["duplicate-id-or-url"], 1);
-  assert.equal(receipt.completeness, "all-sources-received");
+  assert.equal(receipt.completeness, "partial-source-coverage");
+  assert.equal(receipt.expectedSourceCount, 4);
   assert.match(receipt.scope, /not a complete archive/);
 });
 
