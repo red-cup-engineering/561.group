@@ -422,6 +422,22 @@ jobs:
           // historical slogan that would make authentic branding undeployable.
           const {readFileSync}=await import('node:fs');
           const frontdoor=JSON.parse(readFileSync('data/frontdoor.json','utf8'));
+          // Qualified original Group editorial data is the authority, not
+          // frozen search-engine copy. Test its *actual* public representation.
+          const escapeEditorialText=value=>String(value).replace(/[&<>"']/gu,
+            character=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[character]));
+          const namedQuestions=[frontdoor.discovery,frontdoor.ecologicalDiscovery];
+          if(namedQuestions.some(group=>!Array.isArray(group?.questions)||group.questions.length!==3)||
+             !frontdoor.ecologicalDiscovery?.boundary?.includes('As of October 27, 2026')||
+             !frontdoor.ecologicalDiscovery.nextSteps?.some(next=>
+               next.href==='https://services.561.group/climate-water-and-energy-exposure-worksheet/'))
+            throw Error('Original Group public ecological questions or observed worksheet release boundaries missing');
+          const exactQuestions=(text,group)=>
+            group.questions.every(question=>
+              text.includes('id="'+question.id+'"')&&
+              text.includes('href="'+escapeEditorialText(question.href)+'"')&&
+              text.includes(escapeEditorialText(question.question))&&
+              text.includes(escapeEditorialText(question.answer)));
           if(typeof frontdoor.proposition!=='string' || !frontdoor.proposition.trim() ||
              !Array.isArray(frontdoor.vision?.frontiers) || frontdoor.vision.frontiers.length!==2 ||
              frontdoor.vision.frontiers.some(f=>typeof f.title!=='string'||!f.title.trim())) {
@@ -466,6 +482,12 @@ jobs:
                !markup.includes('href="'+host+page.path+'"')) {
               throw Error('Real public visitor route is missing useful original TUFTE content: '+page.path);
             }
+            if(page.path==='/about/'&&(
+               namedQuestions.some(group=>
+                 !markup.includes(escapeEditorialText(group.headline))||
+                 !exactQuestions(markup,group))||
+               !markup.includes(escapeEditorialText(frontdoor.ecologicalDiscovery.boundary))))
+              throw Error('Original ecological and political economy research sources missing from public About HTML');
             const agentResponse=await fetch(host+page.path,{
               cache:'no-store',headers:{accept:'application/json','cache-control':'no-cache'}
             });
@@ -478,6 +500,21 @@ jobs:
                model.metadata?.canonical!==host+page.path ||
                !model.tiles?.some(tile=>tile.id===page.tile)) {
               throw Error('Visitor and agent read different or incomplete site models: '+page.path);
+            }
+            if(page.path==='/about/'){
+              const candidates=[
+                ['technology-and-power',frontdoor.discovery],
+                ['ecology-and-adaptation',frontdoor.ecologicalDiscovery]
+              ];
+              if(candidates.some(([id,group])=>{
+                const tile=model.tiles.find(item=>item.id===id);
+                return !tile||!tile.html?.includes(escapeEditorialText(group.headline)) &&
+                  !model.metadata?.description?.includes(group.summary)||
+                  !exactQuestions(tile.html??'',group);
+              })||
+              !model.metadata?.description?.includes(frontdoor.discovery.summary)||
+              !model.metadata?.description?.includes(frontdoor.ecologicalDiscovery.summary))
+                throw Error('Original TUFTE agent model lost authoritative ecological research boundaries');
             }
           }
           // Receive the same original source through the opt-in agent carrier.
@@ -496,6 +533,21 @@ jobs:
             if(['/','/work/','/for-agents/'].includes(path))
               for(const offer of frontdoor.selfService.examples)
                 if(!markdown.includes(offer.href))throw Error('Markdown lost original merchant link: '+offer.sku);
+            if(path==='/about/'){
+              const readable=normalizeMarkdownLiteralHyphens(markdown);
+              if(!readable.includes(frontdoor.discovery.headline)||
+                 !readable.includes(frontdoor.ecologicalDiscovery.headline)||
+                 !readable.includes('As of October 27, 2026')||
+                 !readable.includes('https://services.561.group/climate-water-and-energy-exposure-worksheet/')||
+                 !readable.includes('does not prove a live public edition'))
+                throw Error('Original public About Markdown lost the admitted reader evidence and publication status');
+              console.log('Independent Group ecological reader evidence received: '+JSON.stringify({
+                sourceCommit:receipt.sourceCommit,topics:namedQuestions.length,
+                sourceQuestions:frontdoor.discovery.questions.length+frontdoor.ecologicalDiscovery.questions.length,
+                receivedWorksheet:true,scienceEditionNotClaimed:true,
+                html:true,json:true,markdown:true
+              }));
+            }
             console.log('Independent public Markdown received: '+path+' '+new TextEncoder().encode(markdown).byteLength+' bytes');
           }
           const markdownHead=await fetch(host+'/',{method:'HEAD',headers:{accept:'text/markdown'}});
