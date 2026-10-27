@@ -41,6 +41,7 @@ const readOutputs=async()=>Object.fromEntries(await Promise.all(names.map(async 
 const before=await readOutputs();
 check("offline source-input receipt distinguishes missing inputs from absent original publications",()=>{
   assert.ok(before["llms.txt"].includes("https://561.group/feed-input-receipt.json"), "machine guide links to original source admission receipt");
+  assert.ok(before["llms.txt"].includes("https://561.group/feed-provenance.jsonld"), "machine guide links to typed source provenance");
   const receipt=JSON.parse(before["feed-input-receipt.json"]);
   assert.equal(receipt.schema,"561.group/feed-input-receipt/v1");
   assert.equal(receipt.origin,"https://561.group");
