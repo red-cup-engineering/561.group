@@ -13,6 +13,7 @@ const feed={
   items:[{id:"science-post-1",url:"https://science.561.group/source-bound-research/",
     title:"Source-bound research",summary:"A company-authored article.",
     date_published:"2026-10-26T11:00:00Z",
+    date_modified:"2026-10-27T13:02:03Z",
     authors:[{name:home.group.companies[0].name,url:home.group.companies[0].url}]}],
 };
 const feedReceipt={
@@ -189,6 +190,10 @@ test("native blog negotiates identical TUFTE original feed as HTML, JSON and Mar
   assert.equal(htmlResponse.status,200);
   const html=await htmlResponse.text();
   assert.ok(html.includes("Source-bound research"));
+  assert.ok(html.includes('datetime="2026-10-27T13:02:03Z"'),
+    "source-modification time, not Group release time");
+  assert.ok(html.includes("Source reports updated: "));
+  assert.ok(html.includes("A reported update is not itself an accepted correction or retraction"));
   assert.ok(html.includes('href="https://science.561.group/source-bound-research/"'));
   assert.ok(html.includes("https://science.561.group/actors/science"));
   assert.ok(html.includes('href="https://561.group/blog/"'));
@@ -200,6 +205,8 @@ test("native blog negotiates identical TUFTE original feed as HTML, JSON and Mar
   const json=await (await f.request("/blog/",{headers:{accept:"application/json"}})).json();
   assert.equal(json.kind,"tufte.projection");
   assert.equal(json.metadata.canonical,"https://561.group/blog/");
+  assert.equal(json.metadata.structuredData["@graph"][2].mainEntity.itemListElement[0].item.dateModified,
+    "2026-10-27T13:02:03Z","original Source date reaches the native structured-data reader");
   assert.ok(json.tiles.find(x=>x.id==="coverage")?.html.includes(
     "4 of 4 original company feeds received"),"machine view matches human source coverage");
   assert.ok(json.tiles.find(x=>x.id==="coverage")?.html.includes(
@@ -209,6 +216,7 @@ test("native blog negotiates identical TUFTE original feed as HTML, JSON and Mar
   const markdown=await (await f.request("/blog/",{headers:{accept:"text/markdown"}})).text();
   assert.match(markdown,/Source\\-bound research/u);
   assert.match(markdown,/science\.561\.group\/source-bound-research/u);
+  assert.match(markdown,/Source reports updated/u);
   assert.match(markdown,/original company feeds received/u,
     "Markdown reader also sees the source coverage of this release");
   assert.equal(f.reads.filter(x=>x[0]==="feed").length,3);
