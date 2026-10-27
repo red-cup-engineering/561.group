@@ -5,6 +5,7 @@ import estate from "../public/estate-records.json";
 import home from "../data/home.json";
 import frontdoor from "../data/frontdoor.json";
 import groupFeed from "../public/feed.json";
+import feedReceipt from "../public/feed-input-receipt.json";
 import { create561GroupLivingApplication, PUBLIC_ROUTES } from "./living-home.mjs";
 import { toldOf } from "./told.mjs";
 import { readSourceRevision } from "./source-revision.mjs";
@@ -18,7 +19,8 @@ const ESTATE_TTL_S = 300;
 // TUFTE is the root-page producer; the existing Worker still owns routing and federation fallback.
 const livingHome = create561GroupLivingApplication({
   readHome: () => home, readEstate: () => estate,
-  readFrontdoor: () => frontdoor, readFeed: () => groupFeed, releaseHome: home
+  readFrontdoor: () => frontdoor, readFeed: () => groupFeed,
+  readFeedReceipt: () => feedReceipt, releaseHome: home
 });
 
 const SECURITY_HEADERS = {
