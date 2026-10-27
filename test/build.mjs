@@ -40,6 +40,7 @@ const readOutputs=async()=>Object.fromEntries(await Promise.all(names.map(async 
   name,await readFile(path.join(app,"public",name),"utf8")])));
 const before=await readOutputs();
 check("offline source-input receipt distinguishes missing inputs from absent original publications",()=>{
+  assert.ok(before["llms.txt"].includes("https://561.group/feed-input-receipt.json"), "machine guide links to original source admission receipt");
   const receipt=JSON.parse(before["feed-input-receipt.json"]);
   assert.equal(receipt.schema,"561.group/feed-input-receipt/v1");
   assert.equal(receipt.origin,"https://561.group");
@@ -52,7 +53,7 @@ check("offline source-input receipt distinguishes missing inputs from absent ori
 });
 
 check("the published site guides humans and agents to every real public page",()=>{
-  for(const route of ["/work/","/projects/","/about/","/for-agents/"]){
+  for(const route of ["/work/","/projects/","/blog/","/about/","/for-agents/"]){
     assert.ok(before["sitemap.xml"].includes("<loc>https://561.group"+route+"</loc>"),
       "sitemap must list actual TUFTE page "+route);
     assert.ok(before["llms.txt"].includes("https://561.group"+route),
