@@ -175,3 +175,81 @@ import { createHash } from "node:crypto";
 function createHashOfUrl(url) {
   return createHash("sha256").update(url).digest("hex");
 }
+
+
+/** Compare two separately attested Group feed snapshots. This is NOT an
+ * article-body diff, upstream archive, editorial correction or retraction.
+ * An aggregate exit is ambiguous under the original sixty-item cap. */
+export function comparePublicFeedRevisions({home,previous,proposed,observedAt}){
+  for(const [label,snapshot] of [["previous",previous],["proposed",proposed]]){
+    if(!snapshot?.sourceRevision ||
+       snapshot.sourceRevision.repository!=="561-group/561.group" ||
+       snapshot.sourceRevision.origin!==home?.origin ||
+       !/^[a-f0-9]{40}$/u.test(snapshot.sourceRevision.sourceCommit??""))
+      fail("missing exact "+label+" release identity");
+    assayPublicFeedProjection({home,feed:snapshot.feed,
+      receipt:snapshot.receipt,graph:snapshot.graph});
+  }
+  if(typeof observedAt!=="string"||!Number.isFinite(Date.parse(observedAt)))
+    fail("transition requires an explicit observation timestamp");
+  const past=previous.feed.items,now=proposed.feed.items;
+  const nowByUrl=new Map(now.map(item=>[item.url,item]));
+  const nowById=new Map(now.map(item=>[item.id,item]));
+  const pastUrls=new Set(past.map(item=>item.url));
+  const pastIds=new Set(past.map(item=>item.id));
+  const metadataFields=["title","summary","date_published","date_modified","tags","authors"];
+  const revisions=[],identityChanges=[],aggregateExits=[],newlySelected=[];
+  let unchanged=0;
+  for(const old of past){
+    const sameUrl=nowByUrl.get(old.url),sameId=nowById.get(old.id);
+    if(sameUrl?.id===old.id){
+      const fields=metadataFields.filter(field=>
+        JSON.stringify(old[field]??null)!==JSON.stringify(sameUrl[field]??null));
+      if(fields.length)revisions.push({url:old.url,id:old.id,changedFields:fields,
+        previous:old,proposed:sameUrl});
+      else unchanged++;
+    }else if(sameUrl||sameId){
+      const candidate=sameUrl??sameId;
+      identityChanges.push({previous:{id:old.id,url:old.url},
+        proposed:{id:candidate.id,url:candidate.url},
+        classification:sameUrl?"same-url-new-id":"same-id-new-url"});
+    }else{
+      aggregateExits.push({id:old.id,url:old.url,
+        classification:"absent-from-new-sixty-item-aggregate",
+        qualification:"Not evidence of deletion, correction or retraction"});
+    }
+  }
+  for(const item of now)if(!pastUrls.has(item.url)&&!pastIds.has(item.id))
+    newlySelected.push({id:item.id,url:item.url});
+  const byUrl=(a,b)=>(a.url??a.previous.url).localeCompare(b.url??b.previous.url);
+  for(const list of [revisions,identityChanges,aggregateExits,newlySelected])
+    list.sort(byUrl);
+  const sourceChanges=previous.receipt.sources.map((source,i)=>{
+    const next=proposed.receipt.sources[i];
+    return {companyId:source.companyId,previousState:source.state,
+      proposedState:next.state,previousSha256:source.sha256??null,
+      proposedSha256:next.sha256??null,
+      snapshotChanged:source.state!==next.state||source.sha256!==next.sha256};
+  });
+  const coverageComplete=previous.receipt.completeness==="all-sources-received" &&
+    proposed.receipt.completeness==="all-sources-received";
+  const editorialReviewRequired=!coverageComplete||revisions.length>0||
+    identityChanges.length>0||aggregateExits.length>0;
+  return {
+    schema:"561.group/publication-transition-review/v1",observedAt,
+    scope:"Capped public feed metadata only; no original article text, corrections, full archives, index, signed federation or readership",
+    previousRelease:{sourceCommit:previous.sourceRevision.sourceCommit,
+      workerVersionId:previous.sourceRevision.workerVersionId??null},
+    proposedRelease:{sourceCommit:proposed.sourceRevision.sourceCommit,deployed:false},
+    coverageBefore:previous.receipt.completeness,
+    coverageProposed:proposed.receipt.completeness,
+    sourceChanges,
+    counts:{previousSelected:past.length,proposedSelected:now.length,
+      unchanged,metadataRevisions:revisions.length,
+      identityConflicts:identityChanges.length,
+      aggregateExits:aggregateExits.length,newlySelected:newlySelected.length},
+    editorialReviewRequired,editorialDecision:"not-admitted",
+    originalCorrectionPublished:false,
+    metadataRevisions:revisions,identityChanges,aggregateExits,newlySelected,
+  };
+}
