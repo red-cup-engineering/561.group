@@ -428,9 +428,13 @@ jobs:
             character=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[character]));
           const namedQuestions=[frontdoor.discovery,frontdoor.ecologicalDiscovery];
           if(namedQuestions.some(group=>!Array.isArray(group?.questions)||group.questions.length!==3)||
-             !frontdoor.ecologicalDiscovery?.boundary?.includes('As of October 27, 2026')||
+             !frontdoor.ecologicalDiscovery?.boundary?.includes('As observed on October 27, 2026')||
              !frontdoor.ecologicalDiscovery.nextSteps?.some(next=>
-               next.href==='https://services.561.group/climate-water-and-energy-exposure-worksheet/'))
+               next.href==='https://services.561.group/climate-water-and-energy-exposure-worksheet/')||
+             !frontdoor.ecologicalDiscovery.questions?.some(question=>
+               question.id==='climate-adaptation-and-moving-baselines'&&
+               question.href==='https://science.561.group/climate-breakdown-ergodicity-and-water-governance/')||
+             !frontdoor.ecologicalDiscovery.boundary.includes('Coesite climate article routes returned HTTP 404'))
             throw Error('Original Group public ecological questions or observed worksheet release boundaries missing');
           const exactQuestions=(text,group)=>
             group.questions.every(question=>
@@ -536,14 +540,15 @@ jobs:
               const readable=normalizeMarkdownLiteralHyphens(markdown);
               if(!readable.includes(frontdoor.discovery.headline)||
                  !readable.includes(frontdoor.ecologicalDiscovery.headline)||
-                 !readable.includes('As of October 27, 2026')||
+                 !readable.includes('As observed on October 27, 2026')||
                  !readable.includes('https://services.561.group/climate-water-and-energy-exposure-worksheet/')||
-                 !readable.includes('does not prove a live public edition'))
+                 !readable.includes('https://science.561.group/climate-breakdown-ergodicity-and-water-governance/')||
+                 !readable.includes('does not authenticate its current publisher source-to-provider release chain'))
                 throw Error('Original public About Markdown lost the admitted reader evidence and publication status');
               console.log('Independent Group ecological reader evidence received: '+JSON.stringify({
                 sourceCommit:receipt.sourceCommit,topics:namedQuestions.length,
                 sourceQuestions:frontdoor.discovery.questions.length+frontdoor.ecologicalDiscovery.questions.length,
-                receivedWorksheet:true,scienceEditionNotClaimed:true,
+                receivedWorksheet:true,scienceReaderPageObserved:true,scienceProviderNotAuthenticated:true,
                 html:true,json:true,markdown:true
               }));
             }
