@@ -508,8 +508,7 @@ jobs:
               ];
               if(candidates.some(([id,group])=>{
                 const tile=model.tiles.find(item=>item.id===id);
-                return !tile||!tile.html?.includes(escapeEditorialText(group.headline)) &&
-                  !model.metadata?.description?.includes(group.summary)||
+                return !tile||tile.title!==group.headline||
                   !exactQuestions(tile.html??'',group);
               })||
               !model.metadata?.description?.includes(frontdoor.discovery.summary)||
