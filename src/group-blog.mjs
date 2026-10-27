@@ -42,7 +42,7 @@ export function admitGroupBlogFeed(home, feed) {
     }
     const url = validPublicUrl(item.url, "Blog article");
     const owner = owners.get(url.origin);
-    if (!owner || url.pathname === "/" || !url.pathname.endsWith("/") ||
+    if (!owner || !url.pathname.endsWith("/") ||
         !Array.isArray(item.authors) || item.authors.length !== 1 ||
         item.authors[0]?.url !== owner.url || item.authors[0]?.name !== owner.name ||
         seen.has(url.href)) {
@@ -59,13 +59,16 @@ export function admitGroupBlogFeed(home, feed) {
       throw new TypeError("Group blog cannot invent or misstate modification dates");
     }
     seen.add(url.href);
+    // Original CAIRN site-home records legitimately enter the shared feed,
+    // but a company homepage is not an independently published blog post.
+    if (url.pathname === "/") return null;
     return Object.freeze({
       url:url.href, title:item.title.trim(), company:owner,
       ...(item.summary === undefined ? {} : {summary:item.summary}),
       ...(item.date_published === undefined ? {} : {published:item.date_published}),
       ...(item.date_modified === undefined ? {} : {modified:item.date_modified}),
     });
-  });
+  }).filter(Boolean);
   // The same source assembler already sorts; do not silently change it into
   // another purported timestamp order when a feed item lacks a date.
   return Object.freeze({
