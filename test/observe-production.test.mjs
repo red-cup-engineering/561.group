@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
 import {readFileSync} from 'node:fs';
-import { observeProduction, markdownSummary } from '../scripts/observe-production.mjs';
+import { observeProduction, markdownSummary, HOUSE_CLIMATE_ARTICLES } from '../scripts/observe-production.mjs';
 const SHA = '1234567890abcdef1234567890abcdef12345678';
 const estate = { revision: 'dated-original-archive', nodes: [{host:'node.561.group',told:'both'}] };
 const revision = { repository:'561-group/561.group', origin:'https://561.group', sourceCommit:SHA,
@@ -251,4 +251,113 @@ test('read-only public witness is executed after an accepted production release,
   assert.match(producer,/run: node scripts\/observe-production\.mjs/u);
   assert.match(producer,/name: 561-group-post-release-public-observation/u);
   assert.match(producer,/observations\/561\.group-public-delivery\.json/u);
+});
+
+
+// The original four URLs are public reader candidates. Fake responses can
+// confirm the detector semantics, not certify any real publisher deployment.
+function withHouseClimateEvidence({missing=null,missingLink=null,changedTitle=null,
+  wrongCanonical=null,transportUnknown=null}={}) {
+  const app=provider();
+  return (url,options)=>{
+    const target=new URL(url);
+    const house=HOUSE_CLIMATE_ARTICLES.find(row=>row.domain===target.hostname);
+    if(!house)return app(url,options);
+    if(house.house===transportUnknown && target.pathname!=="/")
+      throw new Error("Simulated remote publisher cannot be observed");
+    const articlePath="/"+house.slug+"/";
+    if(target.pathname===articlePath) {
+      if(house.house===missing)return new Response("not found",{status:404});
+      const canonical=house.house===wrongCanonical?"https://other.example/wrong/":url;
+      const title=house.house===changedTitle?"An unrelated publication":house.title;
+      return new Response('<!doctype html><html><head><link rel="canonical" href="'+canonical+
+        '"></head><body><main><h1>'+title+'</h1><p>Original material is a source claim, not a deployed intervention.</p></main></body></html>',{
+        headers:{'content-type':'text/html; charset=utf-8',
+          'x-content-type-options':'nosniff','strict-transport-security':'max-age=31536000'}
+      });
+    }
+    if(target.pathname==="/")return new Response(
+      '<!doctype html><html><head><link rel="canonical" href="'+url+
+      '"></head><body><main><h1>Original company</h1>'+
+      (house.house===missingLink?'':'<a href="'+articlePath+'">Read article</a>')+
+      '</main></body></html>',{
+        headers:{'content-type':'text/html; charset=utf-8',
+          'x-content-type-options':'nosniff','strict-transport-security':'max-age=31536000'}
+      });
+    throw Error("Unqualified fake house route "+url);
+  };
+}
+
+test('the existing public delivery observer records four exact external climate reader paths without inventing provider receipts',async()=>{
+  const calls=[];
+  const source=withHouseClimateEvidence();
+  const result=await observeProduction({fetchImpl:(url,options)=>{
+    calls.push(url);
+    return source(url,options);
+  },expectedSourceSha:SHA,now:()=>"2026-10-27T20:00:00.000Z"});
+  assert.equal(result.overall,'public-checks-passed');
+  assert.equal(result.houseClimateVisibility.schema,'561.group.house-climate-reader-observations/v1');
+  assert.equal(result.houseClimateVisibility.observedVisible,4);
+  assert.equal(result.houseClimateVisibility.missing,0);
+  assert.equal(result.houseClimateVisibility.incomplete,0);
+  assert.equal(result.houseClimateVisibility.pages.length,4);
+  for(const record of result.houseClimateVisibility.pages){
+    assert.equal(record.status,'public-page-and-home-link-observed');
+    assert.equal(record.article.httpStatus,200);
+    assert.equal(record.homepage.httpStatus,200);
+    assert.equal(record.article.contentSha256.length,64);
+    assert.equal(record.providerReceiptAuthenticated,false);
+    assert.equal(record.sourceByteEquivalenceVerified,false);
+    assert.equal(record.externallyIndexed,null);
+    assert.equal(record.independentHumanAcceptance,null);
+    assert.ok(record.articleUrl.startsWith('https://'+record.house+'.561.group/'));
+    assert.equal(calls.filter(url=>url===record.articleUrl).length,1);
+    assert.equal(calls.filter(url=>url===record.homepageUrl).length,1);
+  }
+  assert.match(markdownSummary(result),/Four house climate article routes/u);
+  assert.match(markdownSummary(result),/not original source\/provider-release qualification/u);
+});
+
+test('missing, altered, orphaned and inaccessible house articles remain different observations and never fail the Group release',async()=>{
+  const result=await observeProduction({
+    fetchImpl:withHouseClimateEvidence({missing:'science',wrongCanonical:'engineering',
+      transportUnknown:'operations',missingLink:'services'}),expectedSourceSha:SHA
+  });
+  assert.equal(result.overall,'public-checks-passed',
+    'independent house-source gaps are recorded but cannot revoke a verified Group Worker');
+  const byHouse=Object.fromEntries(result.houseClimateVisibility.pages.map(item=>[item.house,item]));
+  assert.equal(byHouse.science.status,'article-not-found-on-observed-origin');
+  assert.equal(byHouse.science.article.httpStatus,404);
+  assert.equal(byHouse.engineering.status,'article-unqualified');
+  assert.equal(byHouse.engineering.reason,'missing-exact-article-canonical');
+  assert.equal(byHouse.operations.status,'incomplete-public-observation');
+  assert.equal(byHouse.operations.reason,'article-unreadable');
+  assert.equal(byHouse.services.status,'homepage-unqualified');
+  assert.equal(byHouse.services.reason,'article-not-linked-from-home');
+  assert.equal(result.houseClimateVisibility.missing,1);
+  assert.equal(result.houseClimateVisibility.incomplete,1);
+  assert.equal(result.houseClimateVisibility.observedVisible,0);
+  assert.ok(result.houseClimateVisibility.pages.every(p=>
+    p.providerReceiptAuthenticated===false && p.externallyIndexed===null));
+});
+
+test('an article with an unrelated title is not accepted merely because the HTTP route is 200',async()=>{
+  const result=await observeProduction({fetchImpl:withHouseClimateEvidence({changedTitle:'science'})});
+  assert.equal(result.houseClimateVisibility.pages[0].status,'article-unqualified');
+  assert.equal(result.houseClimateVisibility.pages[0].reason,'source-title-not-observed');
+  assert.equal(result.houseClimateVisibility.observedVisible,3);
+  assert.equal(result.overall,'public-checks-passed');
+});
+
+test('external target list remains four original owner-controlled, fully qualified and distinct pages',()=>{
+  assert.deepEqual(HOUSE_CLIMATE_ARTICLES.map(x=>x.house),
+    ['science','engineering','operations','services']);
+  assert.equal(new Set(HOUSE_CLIMATE_ARTICLES.map(x=>x.domain)).size,4);
+  assert.equal(new Set(HOUSE_CLIMATE_ARTICLES.map(x=>x.slug)).size,4);
+  for(const target of HOUSE_CLIMATE_ARTICLES){
+    assert.match(target.domain,/^[a-z-]+\.561\.group$/u);
+    assert.match(target.sourceRepository,/^[a-z-]+\/[a-z-]+$/u);
+    assert.match(target.slug,/^[a-z0-9]+(?:-[a-z0-9]+)*$/u);
+    assert.ok(target.title.length>18);
+  }
 });
