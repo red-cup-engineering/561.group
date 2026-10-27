@@ -421,7 +421,9 @@ function blogPage(home, blog) {
       '<ol class="site-card-grid h-feed">' + posts + '</ol>' +
       (!blog.items.length ? para("This build received no published posts from the company feeds. It is not evidence that their archives are empty.") : "") +
       note("This is a bounded, build-time selection of up to 60 items, not a complete archive or a live count.") +
-      anchor("/projects/","Explore projects and publications"),12),
+      para("Check which original company feeds were actually received and which upstream records were withheld from this build.") +
+      anchor("/feed-input-receipt.json","Inspect this build\u2019s source admission receipt") +
+      " · " + anchor("/projects/","Explore projects and publications"),12),
     panel("follow","Follow each original publisher",
       para("Subscribe to the company feeds, or follow its genuine ActivityPub identity. A Group-wide feed does not replace individual author identities.") +
       '<ul class="site-service-grid">' + follow + '</ul>',12),
