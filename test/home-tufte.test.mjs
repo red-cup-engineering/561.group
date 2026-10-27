@@ -20,6 +20,9 @@ const originalFeed=Object.freeze({
     {id:"engineering-article",url:"https://engineering.561.group/content-addressed-evidence/",
       title:"Content-addressed evidence",date_published:"2026-10-25T12:00:00Z",
       authors:[{name:home.group.companies[1].name,url:home.group.companies[1].url}]},
+    {id:"science-home",url:home.group.companies[0].url,
+      title:"Science home is not an article",date_published:"2026-10-24T12:00:00Z",
+      authors:[{name:home.group.companies[0].name,url:home.group.companies[0].url}]},
   ],
 });
 const model=path=>project561GroupPage({home,estate,frontdoor,feed:originalFeed,path});
@@ -221,6 +224,8 @@ test("Group blog receives only exact company-authored feed articles and preserve
   assert.ok(html.includes("AI alignment and institutions &lt;draft?&gt;"));
   assert.ok(html.includes("Questions about ownership &amp; autonomy &lt;script&gt;"));
   assert.ok(!html.includes("<script>"));
+  assert.ok(!html.includes("Science home is not an article"),
+    "a source-owned homepage feed item is not a blog post");
   assert.ok(html.includes('href="https://science.561.group/ai-alignment-and-institutions/"'));
   assert.ok(!html.includes('href="https://561.group/ai-alignment-and-institutions/"'));
   assert.ok(html.includes("bounded, build-time"));
