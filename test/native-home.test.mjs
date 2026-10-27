@@ -195,7 +195,7 @@ test("native blog negotiates identical TUFTE original feed as HTML, JSON and Mar
   assert.ok(html.includes('href="/feed-input-receipt.json"'));
   assert.ok(html.includes('href="/feed-provenance.jsonld"'));
   assert.ok(html.includes("4 of 4 original company feeds received"));
-  assert.ok(html.includes("1 source items admitted, 1 selected"));
+  assert.ok(html.includes("1 source item admitted, 1 selected"));
   assert.ok(html.includes("0 source entries rejected"));
   const json=await (await f.request("/blog/",{headers:{accept:"application/json"}})).json();
   assert.equal(json.kind,"tufte.projection");
