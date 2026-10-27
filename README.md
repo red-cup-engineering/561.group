@@ -4,6 +4,35 @@ Received 2026-10-24 from 561-group/561.group@384700ec75288831b76e602071aa7744905
 
 The original public site of the **561 Group** at **https://561.group/** is served from this repository's `main` through the existing Cloudflare Worker `561-group-site`. It is one genuine TUFTE + LivingWebServer application, not a separate static marketing site.
 
+## Source-authorized research questions and cited readings
+
+The original Group front door has six public questions: three about AI,
+economic power and institutions, and three about ecological stewardship,
+adaptation and resilience. Their **actual original answers** are written in
+`561-group/561-group-frontdoor-services-section:data/frontdoor.json`,
+not in this application. The site retains one original TUFTE About page.
+
+The same deterministic public build now writes
+`/editorial-question-provenance.jsonld`, a Schema.org + PROV-O **derived
+representation**, not a second editorial database or public ClaimReview.
+It preserves each authored question and suggested answer, its exact
+`/about/#<id>` public anchor, and the original company link used as a
+citation. A content SHA-256 of the exact original front-door JSON bytes is
+carried as an immutable PROV entity. Changing an answer, URL, or source
+identity changes that digest and the generated public evidence.
+
+The live About page links that graph for human readers; its HTML head and
+`llms.txt` expose the same machine-readable resource. The original
+source/build/provider workflow compares the published graph's exact HTTP
+response bytes with the release artifact manifest and **recomputes its
+meaning** from the independently checked-out, source-bound editorial JSON.
+It refuses invented questions, changed suggestions or citations, or
+forged source digests. A semantically qualified editorial projection
+**does not** independently fact-check scientific findings, authenticate
+each cited external site's current provider, supply licensing rights,
+establish an accepted article correction, prove actual Google indexing,
+deliver a signed ActivityPub update, or demonstrate reader/customer results.
+
 ## The Group's publication hub
 
 `/blog/` is an original TUFTE + LivingWebServer page of the same Worker,
