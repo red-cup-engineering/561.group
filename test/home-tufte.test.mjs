@@ -96,7 +96,8 @@ test("different ecological readers find original evidence and explicit limits",(
   assert.equal(new Set(research.questions.map(q=>q.audience)).size,3);
   for (const q of research.questions) {
     assert.ok(html.includes('id="'+q.id+'"'),"each reader problem has its own accessible anchor");
-    assert.ok(html.includes(q.question),"each entry answers a real public question");
+    assert.ok(html.includes(q.question.replace(/&/gu,"&amp;").replace(/\x27/gu,"&#39;")),
+      "each entry answers a real public question with escaped HTML");
     assert.ok(html.includes('href="'+q.href+'"'),"each answer links an original primary source");
     assert.ok(html.includes(q.label),"each public source has a human-readable label");
   }
