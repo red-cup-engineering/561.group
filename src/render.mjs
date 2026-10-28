@@ -610,7 +610,7 @@ export function renderLlms(home, estate, facts = {}) {
 
 > ${home.description}
 
-${home.name} (${home.origin}/) is a ${home.masthead[0].toLowerCase()}, established ${home.established}. It is a parent of four companies, and The public site represents accountable offices and companies; an inquiry never grants authority.
+${home.name} (${home.origin}/) is a ${home.masthead[0].toLowerCase()}, established ${home.established}. It is a parent of four companies, and the public site represents accountable offices and companies; an inquiry never grants authority.
 
 Intended design: ${designSentence(d)}
 
