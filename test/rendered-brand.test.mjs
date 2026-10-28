@@ -77,3 +77,28 @@ test("an automated visual witness prepares a review packet but cannot approve it
   assert.match(report,/home-mobile\.png/u);
   assert.throws(()=>visualReviewPacket({cases:[]}),/multi-viewport visual witness/u);
 });
+
+test("the visual receipt exposes measured window differences without inventing brand approval",()=>{
+  const report=visualReviewPacket({
+    sourceCommit:"a".repeat(40),
+    cases:[{
+      path:"/",viewport:{width:4,height:1},passed:true,
+      errors:[],screenshot:"home.png",sha256:"b".repeat(64),
+      colorObservation:{
+        policyEvaluated:false,independentlyAccepted:false,
+        reports:[
+          {region:{id:"full-raster"},areaPixels:8,
+            colors:[{id:"alarm",matchedPixels:2,fraction:.25},
+                    {id:"witness",matchedPixels:2,fraction:.25}]},
+          {region:{id:"first-viewport"},areaPixels:4,
+            colors:[{id:"alarm",matchedPixels:2,fraction:.5},
+                    {id:"witness",matchedPixels:0,fraction:0}]}
+        ]
+      }
+    }]
+  });
+  assert.match(report,/full-raster.*25\.000%/u);
+  assert.match(report,/first-viewport.*50\.000%/u);
+  assert.match(report,/NOT a normative design/u);
+  assert.match(report,/NOT INDEPENDENTLY RECEIVED/u);
+});

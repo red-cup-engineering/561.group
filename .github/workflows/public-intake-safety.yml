@@ -118,6 +118,13 @@ jobs:
           npm run check
           npm test
           npm run build
+      - name: Select exact reusable Web Theming color-window instrument
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: red-cup-engineering/web-theming-service
+          ref: cf11977ce1c06148ea31103656efe31ee4628b5e
+          path: .visual-observer-source
+          persist-credentials: false
       - name: Install pinned minimal Chromium browser for real visual reading
         timeout-minutes: 4
         run: npx playwright install --only-shell chromium

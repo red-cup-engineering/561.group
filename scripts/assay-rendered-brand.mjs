@@ -4,6 +4,7 @@
 import {createServer} from "node:http";
 import {readFile,mkdir,writeFile} from "node:fs/promises";
 import {createHash} from "node:crypto";
+import {execFileSync} from "node:child_process";
 import {resolve,join} from "node:path";
 import {pathToFileURL} from "node:url";
 import {create561GroupLivingApplication} from "../src/living-home.mjs";
@@ -23,6 +24,7 @@ const FONT_ROUTE=new Map([
   ["/fonts/jetbrains-mono.woff2","jetbrains-mono.woff2"]
 ]);
 const rgb=(r,g,b)=>"rgb("+[r,g,b].join(", ")+")";
+const OBSERVER_ROUTE="/__source-owned-color-observation.mjs";
 
 export function qualifyRenderedBrand(value,{path="/"}={}) {
   const errors=[];
@@ -64,6 +66,11 @@ async function servedOriginalApplication() {
   const server=createServer(async(req,res)=>{
     try{
       const pathname=new URL(req.url??"/","http://127.0.0.1").pathname;
+      if(pathname===OBSERVER_ROUTE){
+        const bytes=await readFile(new URL("../.visual-observer-source/src/theming-computer/color-coverage.mjs",import.meta.url));
+        res.writeHead(200,{"content-type":"text/javascript; charset=utf-8","cache-control":"no-store"});
+        res.end(bytes);return;
+      }
       if(FONT_ROUTE.has(pathname)){
         const bytes=await readFile(new URL("../public/fonts/"+FONT_ROUTE.get(pathname),import.meta.url));
         res.writeHead(200,{"content-type":"font/woff2","cache-control":"no-store"});
@@ -221,6 +228,24 @@ export function visualReviewPacket(witness){
       c.viewport.height+" | "+(c.passed?"pass":"REFUSED: "+c.errors.join("; "))+ 
       " | ["+c.screenshot+"]("+c.screenshot+") | "+c.sha256+" |"),
     "",
+    "## Measured color use across distinct observation windows",
+    "",
+    "These are reproducible pixel-mask observations, NOT a normative design",
+    "budget verdict, a test of visual attention, or an automatic acceptance.",
+    "The original v0.3 source specifies mark bounding boxes per page/spread.",
+    "",
+    "| Route | Window | Red pixels / area | Red % | Blue pixels / area | Blue % |",
+    "| --- | --- | --- | ---: | --- | ---: |",
+    ...witness.cases.flatMap(c=>(c.colorObservation?.reports??[]).map(r=>{
+      const alarm=r.colors.find(v=>v.id==="alarm");
+      const blue=r.colors.find(v=>v.id==="witness");
+      const val=v=>v?(100*v.fraction).toFixed(3)+"%":"not measured";
+      return "| "+c.path+" "+c.viewport.width+"x"+c.viewport.height+
+        " | "+r.region.id+" | "+(alarm?.matchedPixels??"?")+"/"+r.areaPixels+
+        " | "+val(alarm)+" | "+(blue?.matchedPixels??"?")+"/"+r.areaPixels+
+        " | "+val(blue)+" |";
+    })),
+    "",
     "## Independent reader/visual-review task",
     "",
     "Inspect each image without treating implementation tickets as evidence",
@@ -245,6 +270,15 @@ export function visualReviewPacket(witness){
 
 export async function receiveBrowserVisuals({output="artifacts/brand-visual",sourceCommit=process.env.GITHUB_SHA??null}={}) {
   const {chromium}=await import("playwright");
+  const observer=await readJson("specifications/visual-observation-source.json");
+  if(observer.schema!=="561.group/visual-observation-source/v1" ||
+     observer.owner!=="red-cup-engineering/web-theming-service" ||
+     !/^[a-f0-9]{40}$/u.test(observer.commit) ||
+     observer.entry!=="src/theming-computer/color-coverage.mjs")
+    throw Error("Apex lacks qualified original visual observation source");
+  const mounted=execFileSync("git",["-C",".visual-observer-source","rev-parse","HEAD"],
+    {encoding:"utf8",timeout:10000}).trim();
+  if(mounted!==observer.commit)throw Error("Rendered color instrument differs from selected Engineering source");
   const host=await servedOriginalApplication();
   let browser;
   try{
@@ -255,7 +289,7 @@ export async function receiveBrowserVisuals({output="artifacts/brand-visual",sou
     for(const item of pages){
       const context=await browser.newContext({
         viewport:{width:item.width,height:item.height},deviceScaleFactor:1,
-        colorScheme:"light",reducedMotion:"reduce",javaScriptEnabled:false
+        colorScheme:"light",reducedMotion:"reduce",javaScriptEnabled:true
       });
       try{
         // Avoid third-party network dependencies. Local fonts are from this exact source.
@@ -305,10 +339,39 @@ export async function receiveBrowserVisuals({output="artifacts/brand-visual",sou
         // Keep keyboard-focus evidence in the JSON, but collect the visual
         // specimen without the test harness leaving a skip-link focus box.
         await page.evaluate(()=>document.activeElement?.blur());
-        await page.screenshot({path:screenshot,fullPage:true,animations:"disabled"});
-        const hash=createHash("sha256").update(await readFile(screenshot)).digest("hex");
+        const png=await page.screenshot({path:screenshot,fullPage:true,animations:"disabled"});
+        const colorObservation=await page.evaluate(async base64=>{
+          const bytes=Uint8Array.from(atob(base64),letter=>letter.charCodeAt(0));
+          const image=await createImageBitmap(new Blob([bytes],{type:"image/png"}));
+          try{
+            const canvas=new OffscreenCanvas(image.width,image.height);
+            const context=canvas.getContext("2d",{willReadFrequently:true});
+            if(!context)throw Error("Chromium cannot read rendered color pixels");
+            context.drawImage(image,0,0);
+            const rgba=context.getImageData(0,0,image.width,image.height).data;
+            const pixelBytes=new Uint8Array(rgba.buffer,rgba.byteOffset,rgba.byteLength);
+            const css=getComputedStyle(document.documentElement);
+            const colors=["alarm","witness"].map(id=>({
+              id,hex:css.getPropertyValue("--house-"+id).trim()
+            }));
+            const observer=await import("/__source-owned-color-observation.mjs");
+            return observer.measureColorCoverage({
+              pixels:pixelBytes,width:image.width,height:image.height,
+              regions:[
+                {id:"full-raster",x:0,y:0,width:image.width,height:image.height},
+                {id:"first-viewport",x:0,y:0,width:Math.min(innerWidth,image.width),
+                  height:Math.min(innerHeight,image.height)}
+              ],colors,radius:20
+            });
+          }finally{image.close();}
+        },png.toString("base64"));
+        if(colorObservation.policyEvaluated!==false ||
+           colorObservation.independentlyAccepted!==false ||
+           colorObservation.reports.length!==2)
+          throw Error("Rendered visual instrument invented authority or omitted the comparison");
+        const hash=createHash("sha256").update(png).digest("hex");
         cases.push({name:item.name,path:item.path,viewport:{width:item.width,height:item.height},
-          ...result,reading,screenshot:item.name+".png",sha256:hash});
+          ...result,reading,screenshot:item.name+".png",sha256:hash,colorObservation});
       }finally{await context.close()}
     }
     const workPreview=await receiveBrowserWorkPreview(browser,host,output);
@@ -323,6 +386,8 @@ export async function receiveBrowserVisuals({output="artifacts/brand-visual",sou
       sourceCommit,sourceRole,originalPrHead,
       kind:"actual-original-LivingWebServer-TUFTE-in-headless-Chromium",
       houseSource:"data/brand-source.json",
+      pixelInstrument:{owner:observer.owner,commit:observer.commit,entry:observer.entry},
+      empiricalScope:"full-raster versus first-viewport; no automatic color-budget policy",
       acceptance:"CANDIDATE: machine browser conformance; golden-baseline and independent human approval NOT established",
       playwrightVersion:"1.62.1",recordedAt:new Date().toISOString(),workPreview,cases
     };
