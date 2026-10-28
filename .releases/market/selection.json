@@ -4,7 +4,7 @@
   "revision": "ee620c373d62a6ba04a54942e119737459535d83",
   "directory": ".service-releases/market/20261027-operational-readings-e4c4f49",
   "manifestSha256": "56096719d0bc2b4c36b08e70dad69da9f37b8db3c80439a3773031c5ff426e16",
-  "operation": "observe",
+  "operation": "release",
   "workOrder": ".releases/market/work-order.json",
   "workOrderSha256": "f26b1ceb9901a3655a9ca5515b9eb62e5e681742af6ee3e5110825a7110c320a"
 }
