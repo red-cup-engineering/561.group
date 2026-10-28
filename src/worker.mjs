@@ -56,28 +56,43 @@ async function probe(node) {
   }
 }
 
+// One isolate shares a single remote probe fan-out for the same revision.
+// The Cloudflare edge cache remains authoritative across isolates.
+const inFlightEstate = new Map();
+
 async function estateReading(request, ctx) {
   const cache = caches.default;
   const key = new Request(new URL(`/estate.json?revision=${estate.revision}`, request.url).toString());
   const cached = await cache.match(key);
   if (cached) return cached;
 
-  // The machines are read beside the nodes, not listed among them: the page lists services, and a
-  // reader of the estate still learns whether the machines behind them answer.
-  const [nodes, machines] = await Promise.all([
-    Promise.all(estate.nodes.map((node) => probe(node))),
-    Promise.all((estate.machines ?? []).map((machine) => probe(machine))),
-  ]);
-  const body = JSON.stringify({ revision: estate.revision, derivedAt: new Date().toISOString(), ttlSeconds: ESTATE_TTL_S, ...(estate.status ? { status: estate.status } : {}), nodes, machines }, null, 2);
-  const response = new Response(body, {
-    headers: {
-      "content-type": "application/json; charset=utf-8",
-      "cache-control": `public, max-age=${ESTATE_TTL_S}`,
-      "access-control-allow-origin": "*",
-    },
-  });
-  ctx.waitUntil(cache.put(key, response.clone()));
-  return response;
+  let pending = inFlightEstate.get(key.url);
+  if (!pending) {
+    pending = (async () => {
+      // Machines are read beside the nodes, not listed among them.
+      const [nodes, machines] = await Promise.all([
+        Promise.all(estate.nodes.map((node) => probe(node))),
+        Promise.all((estate.machines ?? []).map((machine) => probe(machine))),
+      ]);
+      const body = JSON.stringify({ revision: estate.revision, derivedAt: new Date().toISOString(), ttlSeconds: ESTATE_TTL_S, ...(estate.status ? { status: estate.status } : {}), nodes, machines }, null, 2);
+      return new Response(body, {
+        headers: {
+          "content-type": "application/json; charset=utf-8",
+          "cache-control": `public, max-age=${ESTATE_TTL_S}`,
+          "access-control-allow-origin": "*",
+        },
+      });
+    })();
+    inFlightEstate.set(key.url, pending);
+    // Keep coalescing until the cache write settles, including the small
+    // gap between completion of remote probes and cache publication.
+    ctx.waitUntil(pending.then(value => cache.put(key, value.clone()))
+      .finally(() => {
+        if (inFlightEstate.get(key.url) === pending) inFlightEstate.delete(key.url);
+      }));
+  }
+  // Response bodies are single-consumer: no caller receives the shared stream.
+  return (await pending).clone();
 }
 
 /**
@@ -118,7 +133,23 @@ export default {
       url.hostname = APEX;
       return Response.redirect(url.toString(), 301);
     }
-    if (url.pathname === "/estate.json") return withHeaders(await estateReading(request, ctx));
+    if (url.pathname === "/estate.json") {
+      if (request.method !== "GET" && request.method !== "HEAD") {
+        return withHeaders(new Response(null, {
+          status: 405,
+          headers: { allow: "GET, HEAD", "cache-control": "no-store" },
+        }));
+      }
+      const reading = await estateReading(request, ctx);
+      // HEAD shares GET's representation metadata without sending the body.
+      return withHeaders(request.method === "HEAD"
+        ? new Response(null, {
+            status: reading.status,
+            statusText: reading.statusText,
+            headers: reading.headers,
+          })
+        : reading);
+    }
     if (url.pathname === "/source-revision.json" && (request.method === "GET" || request.method === "HEAD")) {
       return withHeaders(await readSourceRevision(request, env));
     }
