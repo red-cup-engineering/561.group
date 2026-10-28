@@ -106,3 +106,97 @@ export function assayEditorialQuestionProvenance({home,frontdoor,frontdoorSha256
     readerOutcomesObserved:null
   });
 }
+
+
+/** Read a previously PUBLIC, exact release-digest-bound editorial graph.
+ * Its earlier authored source bytes are not available here, so this checks
+ * internal original contract only, without pretending to re-fact-check it. */
+function readEditorialSnapshot(graph,home) {
+  const root=home?.origin+EDITORIAL_GRAPH_PATH;
+  if(!graph||graph["@id"]!==root||graph["@type"]!=="schema:Dataset"||
+     graph["@context"]?.prov!=="http://www.w3.org/ns/prov#"||
+     graph["@context"]?.schema!=="https://schema.org/"||
+     !Array.isArray(graph["@graph"])||graph["@graph"].length!==7||
+     !Array.isArray(graph["schema:hasPart"])||graph["schema:hasPart"].length!==6)
+    fail("a previous claimed public editorial graph violates original shape");
+  const source=graph["@graph"][0],digest=source?.["schema:identifier"]?.slice(7);
+  if(!SHA256.test(digest??"")||
+     source["@id"]!=="urn:sha256:"+digest||
+     source["schema:url"]!==SOURCE_PATH)
+    fail("prior editorial source content identity is not attestable");
+  const originalOwners=new Set(home.group.companies.map(x=>x.url));
+  const indexed=new Map(),ordered=[];
+  for(const node of graph["@graph"].slice(1)){
+    const id=node?.["@id"];
+    const qid=typeof id==="string" && id.startsWith(home.origin+"/about/#") ?
+      id.slice((home.origin+"/about/#").length):"";
+    const answer=node?.["schema:suggestedAnswer"];
+    const cited=node?.["schema:about"]?.["@id"];
+    if(!SLUG.test(qid)||indexed.has(qid)||node["@type"]!=="schema:Question"||
+       !["political-economy","ecology-and-adaptation"].includes(node["schema:keywords"])||
+       !node["schema:name"]?.trim()||!answer?.["schema:text"]?.trim()||
+       answer["@type"]!=="schema:Answer"||
+       answer["schema:citation"]?.["@id"]!==cited||
+       node["prov:wasDerivedFrom"]?.["@id"]!==source["@id"]||
+       node["schema:author"]?.["@id"]!==home.origin+"/#organization")
+      fail("previous public question identity, author, answer or derivation invalid");
+    let citation;
+    try{citation=new URL(cited)}catch{fail("public question citation invalid");}
+    if(citation.protocol!=="https:"||citation.search||citation.hash||
+       citation.username||citation.password||citation.href!==cited||
+       !originalOwners.has(citation.origin+"/"))
+      fail("prior public citation is not a canonical company primary-source reading");
+    indexed.set(qid,Object.freeze({
+      id:qid,question:node["schema:name"],answer:answer["schema:text"],
+      citation:cited,section:node["schema:keywords"]
+    }));
+    ordered.push(qid);
+  }
+  if(JSON.stringify(graph["schema:hasPart"].map(x=>x["@id"]))!==
+     JSON.stringify(ordered.map(id=>home.origin+"/about/#"+id)))
+    fail("original editorial graph and advertised question identifiers disagree");
+  return {sourceContentSha256:digest,indexed,ordered};
+}
+
+/** One PURE before/after reading. No article edit, auto-retraction, or claim
+ * verification. Public release caller must independently check BOTH graphs'
+ * own exact HTTP bytes against their respective original release manifests. */
+export function compareEditorialQuestionSnapshots({
+  home,previous,proposed,observedAt
+}={}){
+  if(typeof observedAt!=="string"||!Number.isFinite(Date.parse(observedAt)))
+    fail("change review requires an exact recorded timestamp");
+  const before=readEditorialSnapshot(previous,home);
+  const after=readEditorialSnapshot(proposed,home);
+  const changes=[],introduced=[],omitted=[];
+  for(const [id,old] of before.indexed){
+    const next=after.indexed.get(id);
+    if(!next){omitted.push(id);continue;}
+    const changedFields=["question","answer","citation","section"].filter(
+      field=>old[field]!==next[field]);
+    if(changedFields.length)
+      changes.push({id,changedFields,previous:old,proposed:next});
+  }
+  for(const id of after.indexed.keys())if(!before.indexed.has(id))introduced.push(id);
+  const orderChanged=JSON.stringify(before.ordered)!==JSON.stringify(after.ordered);
+  changes.sort((a,b)=>a.id.localeCompare(b.id));
+  introduced.sort();omitted.sort();
+  const editorialReviewRequired=changes.length>0||omitted.length>0||
+    introduced.length>0||orderChanged;
+  return {
+    schema:"561.group/editorial-question-transition-review/v1",
+    observedAt,
+    scope:"Six source-authored About-page explanations and cited first-party readings; no original source-company article, scientific fact-check, provider version, signed update, indexing or audience effect inferred",
+    previousSourceContentSha256:"sha256:"+before.sourceContentSha256,
+    proposedSourceContentSha256:"sha256:"+after.sourceContentSha256,
+    sourceBytesChanged:before.sourceContentSha256!==after.sourceContentSha256,
+    originalQuestionCountBefore:before.ordered.length,
+    originalQuestionCountProposed:after.ordered.length,
+    counts:{contentOrCitationChanges:changes.length,introduced:introduced.length,
+      omitted:omitted.length,orderChanged},
+    editorialReviewRequired,
+    editorialDecision:"not-admitted",
+    correctionPublished:false,
+    changes,introduced,omitted
+  };
+}
