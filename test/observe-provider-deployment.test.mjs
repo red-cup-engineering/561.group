@@ -67,12 +67,17 @@ test('malformed deployment evidence and inconsistent weights cannot self-certify
 });
 
 test('provider observation is excluded from PR jobs and separately retained',()=>{
-  // The same existing public observer checks the external provider only in its
-  // post-merge job. Neither public issue input nor PR tests receive secrets.
+  // The dedicated read-only provider token is used by an independently
+  // dispatched diagnostic. After release, the original deployer uses its
+  // already-qualified provider receipt and records public HTTP separately.
   const path=new URL('../.github/workflows/public-delivery-witness.yml',import.meta.url);
   const workflow=requireWorkflow(path);
   const job=workflow.slice(workflow.indexOf('  public-delivery-observation:'));
-  assert.match(job,/if: github.event_name != 'pull_request'/u);
+  assert.match(job,/if: github\.event_name == 'workflow_dispatch'/u);
+  assert.doesNotMatch(workflow,/^\s{2}workflow_run:\s*$/mu,
+    'manual diagnostic must not duplicate post-release automatic receiving');
+  assert.doesNotMatch(job,/github\.event_name\s*!=\s*'pull_request'/u,
+    'PR events never implicitly unlock provider read credentials');
   assert.match(job,/node scripts\/observe-provider-deployment\.mjs/u);
   assert.match(job,/secrets\.CLOUDFLARE_READ_API_TOKEN/u);
   assert.match(job,/observations\/561\.group-provider-deployment\.json/u);

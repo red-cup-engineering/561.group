@@ -1,0 +1,13 @@
+{
+  "name": "@561-group/apex-public-observation-runtime",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "The original apex release observer's isolated Node supplier closure; no Worker dependencies.",
+  "engines": {
+    "node": ">=24.2.0"
+  },
+  "dependencies": {
+    "@red-cup-engineering/website-administration-reading-service": "0.2.2-dev.21"
+  }
+}

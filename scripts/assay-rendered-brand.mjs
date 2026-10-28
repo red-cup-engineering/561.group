@@ -14,6 +14,7 @@ const pages=Object.freeze([
   {name:"home",path:"/",width:1440,height:900},
   {name:"home-mobile",path:"/",width:390,height:844},
   {name:"work-mobile",path:"/work/",width:390,height:844},
+  {name:"blog-mobile",path:"/blog/",width:390,height:844},
   {name:"about",path:"/about/",width:1440,height:900}
 ]);
 const expectedFontNames=["Space Grotesk","Roboto Slab","JetBrains Mono"];
@@ -54,12 +55,13 @@ export function qualifyRenderedBrand(value,{path="/"}={}) {
 }
 
 async function servedOriginalApplication() {
-  const [home,estate,frontdoor]=await Promise.all([
-    readJson("data/home.json"),readJson("data/estate.json"),readJson("data/frontdoor.json")
+  const [home,estate,frontdoor,feed,feedReceipt]=await Promise.all([
+    readJson("data/home.json"),readJson("data/estate.json"),readJson("data/frontdoor.json"),
+    readJson("public/feed.json"),readJson("public/feed-input-receipt.json")
   ]);
   const application=create561GroupLivingApplication({
     readHome:async()=>home,readEstate:async()=>estate,readFrontdoor:async()=>frontdoor,
-    releaseHome:home
+    readFeed:async()=>feed,readFeedReceipt:async()=>feedReceipt,releaseHome:home
   });
   const server=createServer(async(req,res)=>{
     try{
@@ -74,7 +76,13 @@ async function servedOriginalApplication() {
         res.writeHead(200,{"content-type":"font/woff2","cache-control":"no-store"});
         res.end(bytes);return;
       }
-      if(!["/","/work/","/about/"].includes(pathname)||req.method!=="GET"){
+      if(pathname==="/work/audit/preview.mjs" && req.method==="GET"){
+        const source=await readFile(new URL("../public/work/audit/preview.mjs",import.meta.url));
+        res.writeHead(200,{"content-type":"text/javascript; charset=utf-8",
+          "cache-control":"no-store","access-control-allow-origin":"*"});
+        res.end(source);return;
+      }
+      if(!["/","/work/","/work/audit/","/blog/","/about/"].includes(pathname)||req.method!=="GET"){
         res.writeHead(404);res.end();return;
       }
       // Same original application as src/worker.mjs, with canonical Request
@@ -98,6 +106,102 @@ async function servedOriginalApplication() {
   });
   return{origin:"http://127.0.0.1:"+server.address().port,
     close:()=>new Promise((resolve,reject)=>server.close(error=>error?reject(error):resolve()))};
+}
+
+/**
+ * The original actual Chromium consumer follows the real Work preview page
+ * and the source-generated JS asset. Only GitHub's public read API is mocked;
+ * Work/TUFTE rendering and the generated browser program are source-exact.
+ */
+async function receiveBrowserWorkPreview(browser, host, output) {
+  const context=await browser.newContext({
+    viewport:{width:390,height:844},javaScriptEnabled:true,acceptDownloads:true
+  });
+  await context.grantPermissions(["clipboard-read","clipboard-write"],{origin:host.origin});
+  const seen=[];
+  const target="https://api.github.com/repos/example/public-work";
+  const head="a".repeat(40),merged="b".repeat(40);
+  try{
+    await context.route("**/*",async route=>{
+      const request=route.request(),url=request.url();
+      if(url.startsWith(host.origin+"/")){
+        if(request.method()!=="GET")throw Error("Work preview attempted an unexpected first-party write");
+        return route.continue();
+      }
+      if(request.method()!=="GET" || !url.startsWith(target)){
+        return route.abort("blockedbyclient");
+      }
+      seen.push(url);
+      const value=url.includes("/issues?")?[{number:5,title:"Customer Work still needs acceptance",state:"open",state_reason:null,updated_at:"2026-10-24T13:00:00Z"}]:url.includes("/pulls?")?[{
+        number:7,title:"Concrete source-to-code delivery",state:"closed",draft:false,
+        updated_at:"2026-10-24T12:00:00Z",merged_at:"2026-10-24T12:00:00Z",
+        merge_commit_sha:merged,head:{sha:head}
+      }]:url.includes("/actions/runs?")?{
+        workflow_runs:[{id:70,head_sha:merged,status:"completed",conclusion:"success"}]
+      }:url.includes("/deployments?")?[]:{
+        full_name:"example/public-work",private:false
+      };
+      await route.fulfill({status:200,contentType:"application/json",
+        headers:{"access-control-allow-origin":"*"},
+        body:JSON.stringify(value)});
+    });
+    const page=await context.newPage();
+    const thrown=[];
+    page.on("pageerror",error=>thrown.push(error.message));
+    const response=await page.goto(host.origin+"/work/audit/",{waitUntil:"networkidle"});
+    if(response?.status()!==200)throw Error("Real original Work audit page did not render");
+    await page.locator("#work-audit-repository").fill("example/public-work");
+    await page.locator("#work-audit-form button[type=submit]").click();
+    await page.waitForFunction(()=>
+      document.getElementById("work-audit-status")?.textContent?.includes("Read completed"),null,{
+      timeout:12000
+    });
+    const displayedReport=await page.locator("#work-audit-results").innerText();
+    if(!displayedReport.includes("Concrete source-to-code delivery") ||
+       !displayedReport.includes("Customer Work still needs acceptance") ||
+       !displayedReport.includes("reported-success") ||
+       !displayedReport.includes("independent beneficiary acceptance")){
+      throw Error("Original browser Work report did not deliver the source/recipient distinction");
+    }
+    await page.locator("#work-audit-copy").click();
+    await page.waitForFunction(()=>{
+      const s=document.getElementById("work-audit-status")?.textContent??"";
+      return s.includes("Inquiry scope copied") ||
+        s.includes("Browser clipboard permission unavailable");
+    },null,{timeout:10000});
+    const copyState=await page.locator("#work-audit-status").innerText();
+    const copiedText=copyState.includes("Inquiry scope copied")
+      ? await page.evaluate(()=>navigator.clipboard.readText()).catch(()=>null)
+      : await page.locator("#work-audit-summary").inputValue();
+    if(!copiedText || !copiedText.includes("Request for a scoped Work-continuity audit") ||
+       !copiedText.includes("example/public-work") ||
+       !copiedText.includes("independent acceptance or payment")) {
+      throw Error("The original buyer could not retain a source-specific inquiry scope");
+    }
+    const overflow=await page.evaluate(()=>
+      document.documentElement.scrollWidth>window.innerWidth+1);
+    if(overflow)throw Error("Real 390px Work preview has horizontal overflow");
+    const screenshot=join(output,"work-audit-mobile.png");
+    await page.screenshot({path:screenshot,fullPage:true,animations:"disabled"});
+    const downloadPromise=page.waitForEvent("download",{timeout:10000});
+    await page.locator("#work-audit-download").click();
+    const download=await downloadPromise;
+    const saved=JSON.parse(await readFile(await download.path(),"utf8"));
+    if(saved.kind!=="561.group.work-continuity-public-preview.v1" ||
+       saved.counts.merged!==1 || saved.counts.issuesExamined!==1 ||
+       saved.counts.independentCustomerAcceptance!==null ||
+       saved.records.find(record=>record.workKind==="pull-request")?.actions.source!=="merge-commit") {
+      throw Error("The real exported Work audit is not the independently scoped source reading");
+    }
+    if(seen.length!==5 || thrown.length){
+      throw Error("Work preview failed real browser API/JS boundaries: "+
+        JSON.stringify({seen,thrown}));
+    }
+    return {qualifiedBrowserRead:true,customerReceiving:false,
+      sourceRequests:seen.length,download:download.suggestedFilename(),
+      inquiryScopeCopiedOrSelectable:true,screenshot:"work-audit-mobile.png",
+      screenshotSha256:createHash("sha256").update(await readFile(screenshot)).digest("hex")};
+  }finally{await context.close()}
 }
 
 /**
@@ -166,7 +270,7 @@ export function visualReviewPacket(witness){
 
 export async function receiveBrowserVisuals({output="artifacts/brand-visual",sourceCommit=process.env.GITHUB_SHA??null}={}) {
   const {chromium}=await import("playwright");
-  const observer=await readJson("data/visual-observation-source.json");
+  const observer=await readJson("specifications/visual-observation-source.json");
   if(observer.schema!=="561.group/visual-observation-source/v1" ||
      observer.owner!=="red-cup-engineering/web-theming-service" ||
      !/^[a-f0-9]{40}$/u.test(observer.commit) ||
@@ -270,6 +374,7 @@ export async function receiveBrowserVisuals({output="artifacts/brand-visual",sou
           ...result,reading,screenshot:item.name+".png",sha256:hash,colorObservation});
       }finally{await context.close()}
     }
+    const workPreview=await receiveBrowserWorkPreview(browser,host,output);
     const sourceRole=process.env.GITHUB_EVENT_NAME==="pull_request"?
       "pull-request-merge-evaluation":"source-commit";
     const originalPrHead=process.env.ORIGINAL_PR_HEAD_SHA??null;
@@ -282,9 +387,9 @@ export async function receiveBrowserVisuals({output="artifacts/brand-visual",sou
       kind:"actual-original-LivingWebServer-TUFTE-in-headless-Chromium",
       houseSource:"data/brand-source.json",
       pixelInstrument:{owner:observer.owner,commit:observer.commit,entry:observer.entry},
-      empiricalScope:"full-raster versus first-viewport, without a selected color-budget receiving policy",
+      empiricalScope:"full-raster versus first-viewport; no automatic color-budget policy",
       acceptance:"CANDIDATE: machine browser conformance; golden-baseline and independent human approval NOT established",
-      playwrightVersion:"1.62.1",recordedAt:new Date().toISOString(),cases
+      playwrightVersion:"1.62.1",recordedAt:new Date().toISOString(),workPreview,cases
     };
     await writeFile(join(output,"witness.json"),JSON.stringify(witness,null,2)+"\n");
     await writeFile(join(output,"REVIEW.md"),visualReviewPacket(witness));

@@ -16,3 +16,16 @@ public/feed.rss.xml
 public/.well-known/
 public/8d232583e7cba18a83bf5c0325fcc7c9.txt
 .brand-source/
+# Bound by scripts/bind-content.mjs from 561-group/561-group-frontdoor-services-section (checked out at ./content).
+/content/
+/data/
+/locales/
+/public/apple-touch-icon.png
+/public/card.png
+/public/contact/
+/public/favicon.svg
+/public/fonts/
+/public/logo.png
+public/source-revision.json
+data/logs/
+data/state/
