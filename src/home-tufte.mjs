@@ -141,6 +141,21 @@ function checkedSources(home, estate, frontdoor) {
       }
       publicHref(item.href);
     }
+    // The original Group publisher may provide a rights-governance source.
+    // A framework reference explains scope; it never certifies our services
+    // or substitutes for rights-holder consent.
+    if (offer.framework !== undefined) {
+      const reference=offer.framework;
+      if (offer.id!=="indigenous-data" || !reference ||
+          !["href","label","qualification"].every(k=>
+            typeof reference[k]==="string" && reference[k].trim())) {
+        throw new TypeError("Only the source-owned data-rights service may cite its published framework");
+      }
+      const url=new URL(publicHref(reference.href));
+      if (url.origin!=="https://www.gida-global.org" ||
+          url.pathname!=="/careprinciples" || url.search || url.hash)
+        throw new TypeError("The rights framework must retain the original CARE publication");
+    }
     if (offer.paidProposal !== undefined) {
       const proposal = offer.paidProposal;
       if (offer.provider !== "services" ||
@@ -279,6 +294,8 @@ function serviceEntries(frontdoor, providers, items = frontdoor.offers) {
       para("Possible requests: " + service.example, "site-example") +
       (service.evidence ? anchor(service.evidence.href, service.evidence.label) +
         para(service.evidence.qualification, "site-evidence-limit") : "") +
+      (service.framework ? anchor(service.framework.href,service.framework.label) +
+        para(service.framework.qualification,"site-evidence-limit") : "") +
       (service.paidProposal ? anchor(service.paidProposal.href, service.paidProposal.label) +
         para(service.paidProposal.qualification, "site-evidence-limit") : "") +
       (service.id === "agent-operations" && service.provider === "services" ?
