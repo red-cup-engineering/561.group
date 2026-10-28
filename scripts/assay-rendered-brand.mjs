@@ -251,9 +251,13 @@ async function receiveBrowserBuyerIntake(browser,host,output){
        await page.locator("#open-email").getAttribute("href"))
       throw Error("Changed reply consent retained a stale buyer draft");
     await page.locator("#affected").fill("Software engineering");
-    if(!(await page.locator("#data-stewardship-scope").isHidden()) ||
-       await page.locator("#data-stewardship-scope").isEnabled())
-      throw Error("Unrelated work retained sensitive rights-scoping fields");
+    const rights=await page.locator("#data-stewardship-scope").evaluate(fieldset=>({
+      hidden:fieldset.hidden,disabled:fieldset.disabled,
+      inputsEffectivelyDisabled:[...fieldset.querySelectorAll("input,textarea,select")]
+        .every(field=>field.matches(":disabled"))
+    }));
+    if(!rights.hidden || !rights.disabled || !rights.inputsEffectivelyDisabled)
+      throw Error("Unrelated work retained sensitive rights-scoping fields: "+JSON.stringify(rights));
     await page.locator("#private-intake button[type=submit]").click();
     const revised=await page.locator("#email-text").inputValue();
     if(!revised.includes("no-contact") || revised.includes("RIGHTS_SCOPE_MARKER_561"))
