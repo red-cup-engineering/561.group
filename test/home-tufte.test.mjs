@@ -165,7 +165,7 @@ test("services are tied to an existing accountable company, and only inquiry is 
   const root=model("/");
   const services=tile(root,"services").html;
   assert.ok(services.includes("Persistent AI systems"));
-  assert.ok(services.includes("Indigenous data governance"));
+  assert.ok(services.includes("Data rights and stewardship"));
   assert.ok(!services.includes("Website performance and resource audits"),
     "the original first four homepage service invitations remain in place");
   assert.ok(services.includes('href="/work/#green-web-pilot"'),
@@ -377,6 +377,19 @@ test("Work continuity preview is a usable original TUFTE page",()=>{
     "work-audit-download","work-audit-copy","work-audit-summary","/work/audit/preview.mjs"])
     assert.ok(html.includes(field),"missing "+field);
   assert.ok(audit.tiles.some(item=>item.id==="boundary"));
+});
+test("the source-owned CARE reference is readable but never grants rights or certification",()=>{
+  const dataRights=frontdoor.offers.find(x=>x.id==="indigenous-data");
+  assert.equal(dataRights.title,"Data rights and stewardship");
+  assert.equal(dataRights.framework.href,"https://www.gida-global.org/careprinciples");
+  const services=tile(model("/work/"),"services").html;
+  assert.ok(services.includes('href="https://www.gida-global.org/careprinciples"'));
+  assert.ok(services.includes("a label or checklist is not authorization"));
+  assert.ok(services.includes("not evidence of this Group&#39;s certification"));
+  const spoof=structuredClone(frontdoor);
+  spoof.offers.find(x=>x.id==="indigenous-data").framework.href="https://example.org/fake-care";
+  assert.throws(()=>project561GroupPage({home,estate,frontdoor:spoof}),
+    /original CARE publication/);
 });
 test("a single original TUFTE application has only exact known public routes",()=>{
   assert.deepEqual(PUBLIC_ROUTES,["/","/work/","/work/audit/","/projects/","/blog/","/about/","/for-agents/"]);
