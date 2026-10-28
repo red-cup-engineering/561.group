@@ -226,8 +226,12 @@ test("services are tied to an existing accountable company, and only inquiry is 
     assert.ok(!("offers" in x.item) && !("aggregateRating" in x.item),
       "an inquiry must not silently become a priced or independently reviewed service");
   }
-  for(const step of frontdoor.steps)
-    assert.ok(tile(work,"process").html.includes(step.detail));
+  for(const step of frontdoor.steps) {
+    const escaped=step.detail.replace(/&/gu,"&amp;").replace(/</gu,"&lt;")
+      .replace(/>/gu,"&gt;").replace(/"/gu,"&quot;").replace(/'/gu,"&#39;");
+    assert.ok(tile(work,"process").html.includes(escaped),
+      "current source-authored acceptance steps must remain visible and safely escaped");
+  }
   assert.doesNotMatch(list,/Buy now|guaranteed revenue|instant acceptance/u);
 });
 
@@ -497,19 +501,21 @@ test("original paid Work-receiving pilot exposes an honest, bounded customer inq
   const service=frontdoor.offers.find(item=>item.id==="agent-operations");
   assert.equal(service.provider,"services");
   assert.match(service.scope,/public GitHub Work\/Actions source/u);
-  assert.match(service.scope,/customer-authorized, redacted Asana\/Jira export/u);
-  assert.match(service.scope,/without account access, migration or customer-system changes/u);
+  assert.match(service.scope,/customer-authorized redacted Asana\/Jira or Odoo\/Salesforce/u);
+  assert.match(service.scope,/authorized AWS Resource Explorer View-scoped inventory export/u);
+  assert.match(service.scope,/Vendor credentials, production writes, migration, outreach and hosted remediation are excluded unless separately scoped/u);
   assert.match(service.example,/Provisional \$200 pilot estimate \(not a quote\)/u);
-  assert.match(service.example,/up to 20 source Work records/u);
+  assert.match(service.example,/up to 20 authorized, source-attributed records/u);
   assert.match(service.example,/no-purchase recommendation/u);
-  assert.match(service.example,/Do not send tokens or private records/u);
+  assert.match(service.example,/missing resources there do not prove account-wide absence/u);
+  assert.match(service.example,/do not send credentials or unredacted private records/u);
   const homepage=tile(model("/"),"services").html;
   const work=tile(model("/work/"),"services").html;
   for(const html of [homepage,work]){
     assert.ok(html.includes("Provisional $200 pilot estimate"),
       "the actual source-owned service pitch must be visible to prospective customers");
-    assert.ok(html.includes("customer-authorized, redacted Asana/Jira export"));
-    assert.ok(html.includes("up to 20 source Work records"));
+    assert.ok(html.includes("customer-authorized redacted Asana/Jira or Odoo/Salesforce"));
+    assert.ok(html.includes("up to 20 authorized, source-attributed records"));
     assert.doesNotMatch(html,/Buy now|guaranteed return|payment complete|instant checkout/u);
   }
   assert.ok(work.includes('href="/contact/?service=Persistent%20AI%20systems#work"'),
