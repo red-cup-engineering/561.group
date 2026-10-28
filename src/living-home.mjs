@@ -26,7 +26,7 @@ export function create561GroupLivingApplication({
     ]) : [undefined,undefined];
     return project561GroupPage({home,estate,frontdoor,feed,feedReceipt,path});
   };
-  const permitted = new Set(["home","work","projects","blog","about","agents"]);
+  const permitted = new Set(["home","work","audit","projects","blog","about","agents"]);
   return createLivingWebServer({
     origin:"https://561.group",
     markdown:createLivingWebMarkdownProjection(),
@@ -36,6 +36,7 @@ export function create561GroupLivingApplication({
     home:context => read(context,"/"),
     pages:[
       {match:"/work/",name:"work",read:context => read(context,"/work/")},
+      {match:"/work/audit/",name:"audit",read:context => read(context,"/work/audit/")},
       {match:"/projects/",name:"projects",read:context => read(context,"/projects/")},
       {match:"/blog/",name:"blog",read:context => read(context,"/blog/")},
       {match:"/about/",name:"about",read:context => read(context,"/about/")},

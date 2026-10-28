@@ -122,6 +122,7 @@ test("each substantive source-owned page renders different useful HTML AND JSON"
   const f=fixture();
   const cells=[
     {path:"/work/",phrase:"Areas we can scope",id:"services"},
+    {path:"/work/audit/",phrase:"Inspect a public GitHub repository",id:"audit-reader"},
     {path:"/projects/",phrase:"Shop, Bazaar and Market",id:"trade"},
     {path:"/blog/",phrase:"Recent published writing",id:"posts"},
     {path:"/about/",phrase:"The four accountable companies",id:"companies"},
@@ -171,7 +172,7 @@ test("origin, method and undeclared URL cannot acquire a public source read",asy
   const offsite=await f.app.fetch(new Request("https://other.example/"));
   assert.equal(offsite.status,421);
   assert.deepEqual(f.reads,[]);
-  for(const path of ["/","/work/","/projects/","/blog/","/about/","/for-agents/"]){
+  for(const path of ["/","/work/","/work/audit/","/projects/","/blog/","/about/","/for-agents/"]){
     const post=await f.request(path,{method:"POST"});
     assert.notEqual(post.status,200);
   }

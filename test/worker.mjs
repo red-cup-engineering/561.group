@@ -34,7 +34,7 @@ const blogFeedReceiptModule=new vm.SyntheticModule(['default'],function(){
 const homeModule=new vm.SyntheticModule(['default'],function(){this.setExport('default',homeData)},{context,identifier:'fixture-public-home'});
 const livingCalls=[];
 const livingModule=new vm.SyntheticModule(['create561GroupLivingApplication','PUBLIC_ROUTES'],function(){
-  this.setExport('PUBLIC_ROUTES',['/','/work/','/projects/','/blog/','/about/','/for-agents/']);
+  this.setExport('PUBLIC_ROUTES',['/','/work/','/work/audit/','/projects/','/blog/','/about/','/for-agents/']);
   this.setExport('create561GroupLivingApplication', ({readHome,readEstate,readFrontdoor,readFeed,readFeedReceipt}) => ({
     fetch: async request => {
       livingCalls.push({url:request.url,accept:request.headers.get('accept'),
@@ -87,7 +87,7 @@ check('a stored English choice reaches the one TUFTE Living Web site',()=>{asser
 check('root response comes from the TUFTE source, not static assets',()=>assert.equal(response.headers.get('content-type'),'text/html; charset=utf-8'));
 response=await fetchWorker(new Request('https://561.group/',{headers:{'accept':'application/json',cookie:'lang=en'}}),env,ctx);
 check('the same root preserves machine JSON negotiation',()=>{assert.equal(response.status,200);assert.equal(response.headers.get('content-language'),'en');assert.equal(livingCalls[1].accept,'application/json')});
-for(const path of ['/work/','/projects/','/blog/','/about/','/for-agents/']){
+for(const path of ['/work/','/work/audit/','/projects/','/blog/','/about/','/for-agents/']){
   response=await fetchWorker(new Request('https://561.group'+path),env,ctx);
   check('public Work/Projects/About/Agents page '+path+' is served by one original TUFTE application',()=>{
     assert.equal(response.status,200);
@@ -119,7 +119,7 @@ response=await fetchWorker(new Request('https://www.561.group/contact/?a=b'),env
 check('original alias redirects with exact path/query',()=>{assert.equal(response.status,301);assert.equal(response.headers.get('location'),'https://561.group/contact/?a=b')});
 response=await fetchWorker(new Request('https://561.group/contact/'),env,ctx);
 check('existing asset route receives unchanged request',()=>assert.equal(assetRequest.url,'https://561.group/contact/'));
-check('authored security/contact headers retained',()=>{assert.equal(response.headers.get('x-content-type-options'),'nosniff');assert.match(response.headers.get('content-security-policy'),/form-action mailto:/)});
+check('authored security/contact headers retained',()=>{assert.equal(response.headers.get('x-content-type-options'),'nosniff');assert.match(response.headers.get('content-security-policy'),/form-action 'self' mailto:/)});
 check('asset body retained',()=>assert.equal(response.status,200));assert.equal(await response.text(),'original asset body');
 response=await fetchWorker(new Request('https://561.group/estate.json?arbitrary=x'),env,ctx);await Promise.all(waits);const body=await response.json();
 check('every authored public node and machine probed',()=>assert.equal(probes.length,estate.nodes.length+estate.machines.length));

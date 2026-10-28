@@ -34,13 +34,17 @@ check("actual original build executes with authored ARB inputs and no unavailabl
 const obsolete=await readFile(path.join(app,"public/index.html"),"utf8").then(()=>true,
   error=>{if(error.code==="ENOENT")return false;throw error;});
 check("root has one TUFTE authority and stale static index is removed",()=>assert.equal(obsolete,false));
-const names=["source-revision.json","estate-records.json","zh-hans/index.html",
+const names=["source-revision.json","estate-records.json","work/audit/preview.mjs","zh-hans/index.html",
   "lkt/index.html","llms.txt","llms-full.txt","feed.json","feed.atom.xml",
   "feed.rss.xml","feed-input-receipt.json","feed-provenance.jsonld","editorial-question-provenance.jsonld",".well-known/security.txt","8d232583e7cba18a83bf5c0325fcc7c9.txt",
   "humans.txt","robots.txt","sitemap.xml"];
 const readOutputs=async()=>Object.fromEntries(await Promise.all(names.map(async name=>[
   name,await readFile(path.join(app,"public",name),"utf8")])));
 const before=await readOutputs();
+check("original Work audit module and sitemap derive from the same public build",()=>{
+  assert.ok(before["work/audit/preview.mjs"].includes("inspectPublicGitHub"));
+  assert.ok(before["sitemap.xml"].includes("<loc>https://561.group/work/audit/</loc>"));
+});
 check("offline source-input receipt distinguishes missing inputs from absent original publications",()=>{
   assert.ok(before["llms.txt"].includes("https://561.group/feed-input-receipt.json"), "machine guide links to original source admission receipt");
   assert.ok(before["llms.txt"].includes("https://561.group/feed-provenance.jsonld"), "machine guide links to typed source provenance");

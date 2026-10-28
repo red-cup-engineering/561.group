@@ -367,8 +367,19 @@ test("Group blog rejects unauthorized, forged, oversized and broken feed records
     feed:{...originalFeed,items:Array(61).fill(originalFeed.items[0])}}),/original bounded generated JSON Feed/u);
 });
 
+test("Work continuity preview is a usable original TUFTE page",()=>{
+  const work=tile(model("/work/"),"services").html;
+  assert.ok(work.includes('href="/work/audit/"'));
+  const audit=model("/work/audit/");
+  assert.equal(audit.metadata.canonical,"https://561.group/work/audit/");
+  const html=tile(audit,"audit-reader").html;
+  for(const field of ["work-audit-form","work-audit-repository","work-audit-results",
+    "work-audit-download","work-audit-copy","work-audit-summary","/work/audit/preview.mjs"])
+    assert.ok(html.includes(field),"missing "+field);
+  assert.ok(audit.tiles.some(item=>item.id==="boundary"));
+});
 test("a single original TUFTE application has only exact known public routes",()=>{
-  assert.deepEqual(PUBLIC_ROUTES,["/","/work/","/projects/","/blog/","/about/","/for-agents/"]);
+  assert.deepEqual(PUBLIC_ROUTES,["/","/work/","/work/audit/","/projects/","/blog/","/about/","/for-agents/"]);
   for(const route of PUBLIC_ROUTES) {
     const page=model(route);
     assert.equal(page.metadata.canonical,"https://561.group"+route);
