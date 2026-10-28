@@ -90,8 +90,12 @@ check("the published site guides humans and agents to every real public page",()
     assert.ok(before["llms.txt"].includes("https://561.group"+route),
       "machine guide must expose practical site entry "+route);
   }
-  for(const name of ["Persistent AI systems","Indigenous data governance","Operational reliability"])
-    assert.ok(before["llms.txt"].includes(name),"source-backed service "+name);
+  const authored=JSON.parse(readFileSync(path.join(ROOT,"data/frontdoor.json"),"utf8"));
+  for(const id of ["agent-operations","indigenous-data","reliability"]){
+    const service=authored.offers.find(x=>x.id===id);
+    assert.ok(service && before["llms.txt"].includes(service.title),
+      "machine guide must expose the currently source-authored service "+id);
+  }
 });
 const generated=JSON.parse(before["estate-records.json"]);
 const authored=JSON.parse(await readFile(path.join(ROOT,"data/estate.json"),"utf8"));

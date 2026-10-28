@@ -91,7 +91,8 @@ test("source-qualified service hints reduce buyer retyping without sending inqui
   assert.ok(JSON.stringify(events)===JSON.stringify(["submit"]) ||
     JSON.stringify(events)===JSON.stringify(["change","input","submit"]),
     "the public URL hint cannot add unsolicited actions");
-  assert.equal(actual.called[0][0],"submit");
+  assert.equal(actual.called.filter(([name])=>name==="submit").length,1,
+    "one original user-activated submit handler even with scoped visibility listeners");
   // No input in the URL becomes a sent message or asserted legitimate order.
   for(const bad of ["", "?service=%3Cscript%3E", "?service="+encodeURIComponent("x".repeat(150))]){
     const item=simulate(bad);

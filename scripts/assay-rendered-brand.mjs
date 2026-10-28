@@ -71,6 +71,13 @@ async function servedOriginalApplication() {
         res.writeHead(200,{"content-type":"text/javascript; charset=utf-8","cache-control":"no-store"});
         res.end(bytes);return;
       }
+      if(pathname==="/contact/" && req.method==="GET"){
+        // The real, source-bound original Group contact HTML: no test substitute.
+        const body=await readFile(new URL("../public/contact/index.html",import.meta.url));
+        res.writeHead(200,{"content-type":"text/html; charset=utf-8",
+          "cache-control":"no-store","x-content-type-options":"nosniff"});
+        res.end(body);return;
+      }
       if(FONT_ROUTE.has(pathname)){
         const bytes=await readFile(new URL("../public/fonts/"+FONT_ROUTE.get(pathname),import.meta.url));
         res.writeHead(200,{"content-type":"font/woff2","cache-control":"no-store"});
@@ -201,6 +208,72 @@ async function receiveBrowserWorkPreview(browser, host, output) {
       sourceRequests:seen.length,download:download.suggestedFilename(),
       inquiryScopeCopiedOrSelectable:true,screenshot:"work-audit-mobile.png",
       screenshotSha256:createHash("sha256").update(await readFile(screenshot)).digest("hex")};
+  }finally{await context.close()}
+}
+
+/** Test the ORIGINAL public contact page in the same source-owned Chromium
+ * receiving run, including buyer-scoped privacy and post-edit consent revision.
+ * No customer email or remote network request is sent. */
+async function receiveBrowserBuyerIntake(browser,host,output){
+  const context=await browser.newContext({
+    viewport:{width:390,height:844},javaScriptEnabled:true
+  });
+  const unexpected=[];const scriptErrors=[];
+  try{
+    await context.route("**/*",route=>{
+      const url=route.request().url();
+      if(url.startsWith(host.origin+"/"))return route.continue();
+      unexpected.push(url);return route.abort("blockedbyclient");
+    });
+    const page=await context.newPage();
+    page.on("pageerror",error=>scriptErrors.push(error.message));
+    const response=await page.goto(host.origin+"/contact/?service=Data%20rights%20and%20stewardship",
+      {waitUntil:"networkidle"});
+    if(response?.status()!==200)throw Error("Original buyer-contact page unavailable");
+    if(await page.locator("#affected").inputValue()!=="Data rights and stewardship" ||
+       await page.locator("#reply-permission").inputValue()!=="not-specified" ||
+       !(await page.locator("#data-stewardship-scope").isVisible()))
+      throw Error("A URL hint granted contact or lost rights-holder scoping");
+    await page.locator("#need").fill("Qualified buyer work: "+"source ".repeat(450));
+    await page.locator("#data-authority").fill("RIGHTS_SCOPE_MARKER_561: ask the original rights holder");
+    await page.locator("#reply-permission").selectOption("inquiry-only");
+    await page.locator("#private-intake button[type=submit]").click();
+    const first=await page.locator("#email-text").inputValue();
+    const link=await page.locator("#open-email").getAttribute("href");
+    if(!(await page.locator("#email-draft").isVisible()) ||
+       !first.includes("inquiry-only") || !first.includes("RIGHTS_SCOPE_MARKER_561") ||
+       !link?.startsWith("mailto:emsenn@561.group?subject=") || link.includes("&body=") ||
+       !(await page.locator("#copy-email").isVisible()))
+      throw Error("Visitor could not retain a full, unsent rights-scoped inquiry");
+    await page.locator("#reply-permission").selectOption("no-contact");
+    if(!(await page.locator("#email-draft").isHidden()) ||
+       (await page.locator("#email-text").inputValue())!=="" ||
+       await page.locator("#open-email").getAttribute("href"))
+      throw Error("Changed reply consent retained a stale buyer draft");
+    await page.locator("#affected").fill("Software engineering");
+    const rights=await page.locator("#data-stewardship-scope").evaluate(fieldset=>({
+      hidden:fieldset.hidden,disabled:fieldset.disabled,
+      inputsEffectivelyDisabled:[...fieldset.querySelectorAll("input,textarea,select")]
+        .every(field=>field.matches(":disabled"))
+    }));
+    if(!rights.hidden || !rights.disabled || !rights.inputsEffectivelyDisabled)
+      throw Error("Unrelated work retained sensitive rights-scoping fields: "+JSON.stringify(rights));
+    await page.locator("#private-intake button[type=submit]").click();
+    const revised=await page.locator("#email-text").inputValue();
+    if(!revised.includes("no-contact") || revised.includes("RIGHTS_SCOPE_MARKER_561"))
+      throw Error("New visitor draft retained obsolete rights fields or contact consent");
+    const overflow=await page.evaluate(()=>
+      document.documentElement.scrollWidth>window.innerWidth+1);
+    if(overflow || scriptErrors.length || unexpected.length)
+      throw Error("Real buyer contact page failed mobile/layout/private network admission: "+
+        JSON.stringify({overflow,scriptErrors,unexpected}));
+    const path=join(output,"contact-mobile.png");
+    await page.screenshot({path,fullPage:true,animations:"disabled"});
+    return {qualifiedBrowserRead:true,source:"original-Group-frontdoor-public-contact",
+      externalContactSent:false,rightsScopedDraftReceived:true,
+      stalePermissionRefused:true,nonRightsDraftExcludesProtectedFields:true,
+      viewport:{width:390,height:844},screenshot:"contact-mobile.png",
+      sha256:createHash("sha256").update(await readFile(path)).digest("hex")};
   }finally{await context.close()}
 }
 
@@ -375,6 +448,7 @@ export async function receiveBrowserVisuals({output="artifacts/brand-visual",sou
       }finally{await context.close()}
     }
     const workPreview=await receiveBrowserWorkPreview(browser,host,output);
+    const buyerContact=await receiveBrowserBuyerIntake(browser,host,output);
     const sourceRole=process.env.GITHUB_EVENT_NAME==="pull_request"?
       "pull-request-merge-evaluation":"source-commit";
     const originalPrHead=process.env.ORIGINAL_PR_HEAD_SHA??null;
@@ -389,7 +463,7 @@ export async function receiveBrowserVisuals({output="artifacts/brand-visual",sou
       pixelInstrument:{owner:observer.owner,commit:observer.commit,entry:observer.entry},
       empiricalScope:"full-raster versus first-viewport; no automatic color-budget policy",
       acceptance:"CANDIDATE: machine browser conformance; golden-baseline and independent human approval NOT established",
-      playwrightVersion:"1.62.1",recordedAt:new Date().toISOString(),workPreview,cases
+      playwrightVersion:"1.62.1",recordedAt:new Date().toISOString(),workPreview,buyerContact,cases
     };
     await writeFile(join(output,"witness.json"),JSON.stringify(witness,null,2)+"\n");
     await writeFile(join(output,"REVIEW.md"),visualReviewPacket(witness));
