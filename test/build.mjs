@@ -49,6 +49,10 @@ check("the published site guides humans and agents to every real public page",()
   for(const name of ["Persistent AI systems","Data rights and stewardship","Operational reliability"])
     assert.ok(before["llms.txt"].includes(name),"source-backed service "+name);
 });
+check("machine-reading prose keeps source identity and ordinary sentence boundaries",()=>{
+  assert.match(before["llms.txt"],/It is a parent of four companies, and the public site represents accountable offices and companies;/);
+  assert.doesNotMatch(before["llms.txt"],/and The public site represents/);
+});
 const generated=JSON.parse(before["estate-records.json"]);
 const authored=JSON.parse(await readFile(path.join(ROOT,"data/estate.json"),"utf8"));
 check("public estate is exactly the original curated site source",()=>{
