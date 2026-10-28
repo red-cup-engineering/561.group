@@ -115,7 +115,7 @@ async function withGzipCarrier(run, { native = false } = {}) {
   await mkdir(root);
   const artifacts = {}, original = {};
   for (const key of [...commonArtifacts, ...(native ? nativeArtifacts : [])]) {
-    const bytes = Buffer.from(`original fixture ${key}`), path = `${key}.txt`;
+    const bytes = Buffer.from(`original fixture ${key}`), path = key === "receiver" ? "receiver.cjs" : `${key}.txt`;
     original[key] = bytes;
     artifacts[key] = { path, bytes: bytes.length, sha256: sha(bytes) };
     await writeFile(join(root, path + (key === 'worker' || key === 'sourceMap' ? '.gz' : '')),
@@ -279,9 +279,22 @@ test('the actual Group CLI verifies observation without credentials and dispatch
   });
 });
 
-test('the reviewed selection binds the exact forward native fabrication work order and incumbent carrier', async () => {
-  const selectionPath = fileURLToPath(new URL('./selection.json', import.meta.url));
+test('the reviewed selection binds the exact forward native fabrication work order and incumbent carrier', async t => {
   const workOrderPath = fileURLToPath(new URL('./work-order.json', import.meta.url));
+  const bytes = await readFile(workOrderPath), order = JSON.parse(bytes);
+  const fixtureRoot = await mkdtemp(join(tmpdir(), 'market-native-order-fixture-'));
+  t.after(() => rm(fixtureRoot, { recursive: true, force: true }));
+  const selectionPath = join(fixtureRoot, 'selection.json');
+  await writeFile(join(fixtureRoot, 'work-order.json'), bytes);
+  await writeFile(selectionPath, JSON.stringify({
+    kind: '561.market-worker-carrier-selection/v1',
+    repository: order.incumbentCarrier.repository,
+    revision: order.incumbentCarrier.revision,
+    directory: order.incumbentCarrier.directory,
+    manifestSha256: order.incumbentCarrier.manifestSha256,
+    operation: 'release', workOrder: '.releases/market/work-order.json',
+    workOrderSha256: sha(bytes),
+  }));
   const selected = await selectMarketCarrier(selectionPath);
   assert.equal(selected.ready, true);
   assert.ok(['observe', 'release'].includes(selected.operation), `operation must be supported: ${selected.operation}`);
