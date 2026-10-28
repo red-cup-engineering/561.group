@@ -290,7 +290,7 @@ test('the reviewed selection binds the exact forward e4c4 native fabrication wor
   assert.equal(selected.directory, '.service-releases/market/20261027-operational-readings-e4c4f49');
   assert.equal(selected.manifestSha256, '56096719d0bc2b4c36b08e70dad69da9f37b8db3c80439a3773031c5ff426e16');
   assert.equal(selected.workOrder, '.releases/market/work-order.json');
-  assert.equal(selected.workOrderSha256, '69a8f76d23bf54b3dc7364000501633cfb261d779765fef1e2736c873eb9c8e8');
+  assert.equal(selected.workOrderSha256, '50e03cbc83efdb9151fbf9ee9e34d415a91811424c4da21c038d30ea287bd42a');
 
   const { workOrder, workOrderSha256 } = await readMarketFabricationWorkOrder(workOrderPath, selected.workOrderSha256);
   assert.equal(workOrderSha256, selected.workOrderSha256);
