@@ -1,0 +1,324 @@
+{
+  "kind": "561.market-worker-fabrication-work-order/v1",
+  "target": {
+    "accountId": "337e54ee6dc7d488933f473204a6d89e",
+    "scriptName": "market-561-group",
+    "origin": "https://market.561.group",
+    "aliases": [
+      "https://shop.561.group",
+      "https://bazaar.561.group"
+    ]
+  },
+  "source": {
+    "market": {
+      "repository": "red-cup-engineering/market.561.group",
+      "revision": "e4c4f49b8559cb96e53d132458e8b326554895d1",
+      "tree": "3a80aede8b8aa337623ebd466e3a112c0ebfb5e9"
+    },
+    "public": {
+      "repository": "causeway-services/public-market-services-section",
+      "revision": "cd0fdd91b14ec2a08b844c0794502501d36036f9",
+      "gitlink": "cd0fdd91b14ec2a08b844c0794502501d36036f9",
+      "tree": "cb559cdf232be39cb45bb042b5d4157c29985ace"
+    },
+    "cloudflare": {
+      "repository": "red-cup-engineering/cloudflare-engineering-services-section",
+      "revision": "fb54f04252796fdd29d965a714d7af6de1e86fa3"
+    },
+    "receiver": {
+      "repository": "red-cup-engineering/market.561.group",
+      "revision": "e4c4f49b8559cb96e53d132458e8b326554895d1"
+    }
+  },
+  "candidateCatalogPresentation": "scrubbed",
+  "baseline": {
+    "versionId": "30536c25-af94-4382-a1ae-4b3bac858658",
+    "deploymentId": "1d95ca44-de78-43e0-9f1c-67bba538e3af",
+    "latestVersionId": "30536c25-af94-4382-a1ae-4b3bac858658",
+    "sourceRevision": "e4c4f49b8559cb96e53d132458e8b326554895d1",
+    "catalogPresentation": "scrubbed"
+  },
+  "payment": {
+    "payTo": "0x32886F6F361C1d570255c2762967a2e41D0E9B1a",
+    "network": "eip155:8453",
+    "asset": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+    "facilitator": "https://facilitator.xpay.sh"
+  },
+  "incumbentCarrier": {
+    "repository": "561-group/561-group-frontdoor-services-section",
+    "revision": "ee620c373d62a6ba04a54942e119737459535d83",
+    "directory": ".service-releases/market/20261027-operational-readings-e4c4f49",
+    "manifestSha256": "56096719d0bc2b4c36b08e70dad69da9f37b8db3c80439a3773031c5ff426e16",
+    "incumbentDeclarationsArtifact": "candidateDeclarations"
+  },
+  "compiler": {
+    "wrangler": {
+      "name": "wrangler",
+      "version": "4.152.0"
+    },
+    "esbuild": {
+      "name": "esbuild",
+      "version": "0.28.2"
+    },
+    "workerd": {
+      "name": "workerd",
+      "version": "1.20261019.1"
+    },
+    "pnpm": {
+      "name": "pnpm",
+      "version": "11.28.5"
+    }
+  },
+  "sourceInputs": {
+    "sourceManifest": {
+      "path": "package.json",
+      "bytes": 8752,
+      "sha256": "6bf76ed97db4b87f41bff5abacde00a5261a07e0c534f81c162a8209aadbac11"
+    },
+    "lockfile": {
+      "path": "pnpm-lock.yaml",
+      "bytes": 627421,
+      "sha256": "557cbc22474b2bdd7668f9eff269ebffa9614d27f429ceb3e0414e86805068b2"
+    },
+    "workspaceManifest": {
+      "path": "pnpm-workspace.yaml",
+      "bytes": 913,
+      "sha256": "93854d6fe288062f16019162053d905dd32597d3b126af776715db1355e4eaba"
+    },
+    "npmrc": {
+      "path": ".npmrc",
+      "bytes": 727,
+      "sha256": "7e220a09039bf101b1f5e5f21ae4aab701893a29dd6d754f5cd91468ee400627"
+    },
+    "configuration": {
+      "path": "wrangler.jsonc",
+      "bytes": 3830,
+      "sha256": "0e42942f27890bc3327a7cc4139f90385466cc5bd2ae40968a2ccc3b8318f23d"
+    },
+    "parameterSourceManifest": {
+      "path": "parameters/package.json",
+      "bytes": 354,
+      "sha256": "a8746102d3184db3147811cc636fd4bf47394b3fc8ad1840eb643d9b7a1343ad"
+    },
+    "parameterCatalog": {
+      "path": "parameters/data/catalog.json",
+      "bytes": 3718116,
+      "sha256": "60710572de220f1788e13cc614d2dec7189925dd3ed0260930bc1133369abf00"
+    },
+    "workerEntry": {
+      "path": "src/worker.mjs",
+      "bytes": 6044,
+      "sha256": "5e26c36c09918f21f51e0042b9b7bc3d10d204a26020edf97bf34357e1416def"
+    },
+    "compiledOffers": {
+      "path": "src/compiled-offers.mjs",
+      "bytes": 7960829,
+      "sha256": "1eac6c34e77fbc54bfb21a6d7a0d6457de6c0e18b860d30eda2c1724cf3e1197"
+    },
+    "nativeProducer": {
+      "path": "scripts/build-native-worker.mjs",
+      "bytes": 22067,
+      "sha256": "58e4d8a1a8e70528b8f6a99e21809c6f44a8a8c18c6610e3a988ec4dd722567f"
+    },
+    "retainedProducer": {
+      "path": "scripts/replay-retained-worker.mjs",
+      "bytes": 18111,
+      "sha256": "26236cf644319f49eaaa8891ecd1db39ee671a13d833bf15d5f427a5f1d5357b"
+    },
+    "receiverBuilder": {
+      "path": "scripts/build-worker-release-receiver.mjs",
+      "bytes": 4148,
+      "sha256": "039f89b6c67974272db5b0feb688187c59e2e5cc5546f98fb9f73e65bd70aab9"
+    },
+    "nativeReceiver": {
+      "path": "ops/receive-native-worker.mjs",
+      "bytes": 63626,
+      "sha256": "9b8315ac100aa7a612bc360773eb4584dfe03670cd5dd6ab1cc3e57a9029980d"
+    },
+    "deploymentReceiver": {
+      "path": "ops/receive-deployment.mjs",
+      "bytes": 8868,
+      "sha256": "ab18c24994238eb544f2c7f4977001b61336784c20816d23b4da76dd15ccc09f"
+    },
+    "releaseOperator": {
+      "path": "ops/release-worker.mjs",
+      "bytes": 101839,
+      "sha256": "adc3a5d47177d89454caf10cd6062d002d22808f6fc7bd90df92f96a44034a98"
+    },
+    "applicationInputs": [
+      {
+        "path": "src/edge-settlement.mjs",
+        "bytes": 8081,
+        "sha256": "7254bf01599a42fc2eb23cd371cff5b05907002fb3d0573e55901c8fe39a5820"
+      },
+      {
+        "path": "src/paid-publication-store.mjs",
+        "bytes": 11864,
+        "sha256": "ccca2e09eb8419c33a137a5adae087e3b5a43d29552d5f6da9faedf29fa854e2"
+      },
+      {
+        "path": "src/issuer-evidence-store.mjs",
+        "bytes": 6852,
+        "sha256": "7e43e37b1a927b15704f22904207581d735b1098f98321f995d9a0ee03e24630"
+      },
+      {
+        "path": "src/issuer-settlement-store.mjs",
+        "bytes": 11485,
+        "sha256": "f9074a290d374d25dfba08bc357dfa8a83ef171f706acd98b4691f0e6fe496c8"
+      },
+      {
+        "path": "src/compiled-offers.mjs",
+        "bytes": 7960829,
+        "sha256": "1eac6c34e77fbc54bfb21a6d7a0d6457de6c0e18b860d30eda2c1724cf3e1197"
+      },
+      {
+        "path": "src/compiled-capability-outbox.mjs",
+        "bytes": 6453750,
+        "sha256": "ecef840812e801bb7f37a3d45f700dce0ca903ab1a8ec1c5a47bc80fcc6dcaa0"
+      },
+      {
+        "path": "src/mcp.mjs",
+        "bytes": 13673,
+        "sha256": "af79b5a4a670cd27e4f6b1ee875392fe8caf59baffe745689ad27192ab89d7e4"
+      },
+      {
+        "path": "src/microdrama.mjs",
+        "bytes": 2506,
+        "sha256": "bdc680f372dbf2986be88ef9fb069654bb2aab202a4fad99215c41ac3883ae62"
+      },
+      {
+        "path": "src/brand-assets.mjs",
+        "bytes": 101801,
+        "sha256": "e399b06dcb330a4cb300d615e44e1189f0185a3ea3010518c2f5ec8166e6bc10"
+      },
+      {
+        "path": "src/discovery-artifacts.mjs",
+        "bytes": 4835,
+        "sha256": "6af8cd143617cf5b67146747b4af84dc21eab677f06db7fa21ffa4ef658ba7b3"
+      },
+      {
+        "path": "src/seo-pages.mjs",
+        "bytes": 32792,
+        "sha256": "0816c7eb69b02a5f35c406bb39a278924c3484d0759b0f8452129d8204be08f9"
+      },
+      {
+        "path": "src/presentation.mjs",
+        "bytes": 13590,
+        "sha256": "8c6b8461d798a7569ec86889ad70b6381ca50f68b3626d5f33271327eeb4117e"
+      },
+      {
+        "path": "src/market-coordinates.mjs",
+        "bytes": 6979,
+        "sha256": "bdcc3bb0521a5e498bf989b47fa6277b92d68dbf1e35e9860234c2fcb8c40fcd"
+      },
+      {
+        "path": "src/public-scrub.mjs",
+        "bytes": 4979,
+        "sha256": "8045a49c6dbc8ff51967fcefd7050f2e7e52ea603849c6f3588b1e7661239795"
+      },
+      {
+        "path": "parameters/content/market-context.json",
+        "bytes": 1338,
+        "sha256": "b8838dcf99a6180059d5d63b95ce4d470606d46a780ae6439f3c215a04209d69"
+      },
+      {
+        "path": "src/settlement-journal.mjs",
+        "bytes": 6208,
+        "sha256": "fb14f91773bd8dbb30ecd61d65d67981c8be9ec611788e24dd73387b2d22d5b5"
+      },
+      {
+        "path": "src/market.mjs",
+        "bytes": 20297,
+        "sha256": "b0b6fefb609e1297ca67145c43918d7215e2f5b647e6d7f115224e9a9b902886"
+      },
+      {
+        "path": "src/workspace-content-graph-admission.mjs",
+        "bytes": 7229,
+        "sha256": "72f511dd1f624c16ce4f5c9853f67bd0d8bec983bee3298fe9b08130f4b9bcb7"
+      },
+      {
+        "path": "src/edge-bindings.mjs",
+        "bytes": 12275,
+        "sha256": "c2e36d1fb11ee3944d47826aafef939190b0eab78b702f02450872352e7d20f3"
+      },
+      {
+        "path": "src/demand-signals.mjs",
+        "bytes": 6630,
+        "sha256": "d62d321bbf2f99bbc7c16796b4aea760a6477b3eb1936e35e9a4e88e7b3a728c"
+      },
+      {
+        "path": "src/terms.mjs",
+        "bytes": 6543,
+        "sha256": "db83d02510bb389728cf38039ae06ab9c6d537cbd1ffaf8e070fb496b32da8a7"
+      },
+      {
+        "path": "src/worker.mjs",
+        "bytes": 6044,
+        "sha256": "5e26c36c09918f21f51e0042b9b7bc3d10d204a26020edf97bf34357e1416def"
+      }
+    ]
+  },
+  "suppliers": [
+    {
+      "name": "@red-cup-engineering/mcp-engineering-services-section",
+      "version": "0.1.9",
+      "integrity": "sha512-jbeC9siAiTmnXzs8zw8ZqUk9ZnkNrq0+AOmILhDQrjiDWk/D/lXQCncMZEQxxUMKUCKZKRMhZKOPJW7uYaq6bw==",
+      "manifest": {
+        "path": "package.json",
+        "bytes": 1998,
+        "sha256": "1a6f8fe550f10bef9da4341468368e53c82dcadc1dbc9b1b1a91b6fa0fe0e224"
+      },
+      "files": [
+        {
+          "path": "src/protocol-versions.mjs",
+          "bytes": 491,
+          "sha256": "68b5a0096eaf5e03225ba04e45ae56373233a735759c8bd0df7bfa6bc64946b2"
+        },
+        {
+          "path": "src/server.mjs",
+          "bytes": 18670,
+          "sha256": "1583d4b1a4a3ed8869532eee686650bc6883d5d21f77c90aa2bcea4c97ebf6e7"
+        },
+        {
+          "path": "src/modern.mjs",
+          "bytes": 10082,
+          "sha256": "a7eb817de5661bb5b062f42bda35768d45a4b3824c6216a29cc8355b28fb9978"
+        },
+        {
+          "path": "src/http.mjs",
+          "bytes": 12940,
+          "sha256": "8c511a1ad19b08eed93bb8a245f68969ffb12668c878e49b3a77b396a98f7a7e"
+        }
+      ]
+    }
+  ],
+  "qualificationSuites": {
+    "sourceSuite": {
+      "path": "test/exact-resource-market.test.mjs",
+      "bytes": 11127,
+      "sha256": "48e2b794556d6ab079be54436cd677e4fdbbe18c33ffd6d484060f271c6143cb"
+    },
+    "sourceCellSuite": {
+      "path": "test/source-cell-inference-market.test.mjs",
+      "bytes": 9235,
+      "sha256": "60f39ed0960e6b112211ae35c0d3826a57d2ae39e1cf12523fe096f3498bae4f"
+    },
+    "workspaceGraphSuite": {
+      "path": "test/workspace-content-graph-market.test.mjs",
+      "bytes": 8602,
+      "sha256": "6891341b1bbe94b14d040b488ebf273a4699f7c0d5949809cf634c0cdf51d92c"
+    }
+  },
+  "declarations": {
+    "candidate": {
+      "path": "candidate-declarations.json",
+      "bytes": 3520590,
+      "sha256": "ee218f81cb5a832e62c4bfdb0a0ccf79cabafa74792abb0bf00302afe921fd6d"
+    },
+    "incumbent": {
+      "path": "incumbent-declarations.json",
+      "bytes": 3520590,
+      "sha256": "ee218f81cb5a832e62c4bfdb0a0ccf79cabafa74792abb0bf00302afe921fd6d"
+    }
+  }
+}
