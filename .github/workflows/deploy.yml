@@ -173,6 +173,7 @@ jobs:
           import {createHash} from 'node:crypto';
           import {readFile,mkdir,writeFile,appendFile} from 'node:fs/promises';
           import {assayPublicFeedProjection,comparePublicFeedRevisions} from './scripts/assay-public-feed.mjs';
+          import {assayEditorialQuestionProvenance,compareEditorialQuestionSnapshots} from './src/editorial-question-provenance.mjs';
           const origin='https://561.group';
           const load=async path=>JSON.parse(await readFile(path,'utf8'));
           const home=await load('data/home.json');
@@ -182,7 +183,16 @@ jobs:
           const current={sourceRevision,feed:await load('public/feed.json'),
             receipt:await load('public/feed-input-receipt.json'),
             graph:await load('public/feed-provenance.jsonld')};
-          for(const name of ['feed.json','feed-input-receipt.json','feed-provenance.jsonld']){
+          const sourceFrontdoorBytes=await readFile('data/frontdoor.json');
+          const originalFrontdoor=JSON.parse(new TextDecoder('utf-8',{fatal:true}).decode(sourceFrontdoorBytes));
+          const originalFrontdoorSha256=createHash('sha256').update(sourceFrontdoorBytes).digest('hex');
+          const proposedEditorial=await load('public/editorial-question-provenance.jsonld');
+          assayEditorialQuestionProvenance({
+            home,frontdoor:originalFrontdoor,
+            frontdoorSha256:originalFrontdoorSha256,graph:proposedEditorial
+          });
+          for(const name of ['feed.json','feed-input-receipt.json','feed-provenance.jsonld',
+            'editorial-question-provenance.jsonld']){
             const digest='sha256:'+createHash('sha256')
               .update(await readFile('public/'+name)).digest('hex');
             if(sourceRevision.artifactDigests?.[name]!==digest)
@@ -239,6 +249,12 @@ jobs:
                 throw Error('Prior deployed artifact did not match its manifest: '+name);
               previous[key]=read.body;
             }
+            if(revision.artifactDigests?.['editorial-question-provenance.jsonld']){
+              const priorEditorial=await previousJson('editorial-question-provenance.jsonld');
+              if(priorEditorial.digest!==revision.artifactDigests['editorial-question-provenance.jsonld'])
+                throw Error('Prior source-owned editorial graph changed since its original release');
+              previous.editorialGraph=priorEditorial.body;
+            }
           }catch(error){
             if(error.code==='PRIOR_UNAVAILABLE'){reason='prior-public-source-unavailable';previous=null;}
             else throw error;
@@ -253,15 +269,31 @@ jobs:
               editorialReviewRequired:true,editorialDecision:'not-admitted',
               originalCorrectionPublished:false,reason,
               metadataRevisions:[],identityChanges:[],aggregateExits:[],newlySelected:[]};
+          const editorialReview=previous?.editorialGraph ?
+            compareEditorialQuestionSnapshots({
+              home,previous:previous.editorialGraph,proposed:proposedEditorial,observedAt
+            }) :
+            {schema:'561.group/editorial-question-transition-review/v1',
+              observedAt,previousSourceContentSha256:null,
+              proposedSourceContentSha256:'sha256:'+originalFrontdoorSha256,
+              sourceEvidenceCoverage:'prior-editorial-evidence-unavailable',
+              editorialReviewRequired:true,editorialDecision:'not-admitted',
+              correctionPublished:false,counts:null,changes:[],introduced:[],omitted:[]};
+          report.editorialQuestions=editorialReview;
+          report.editorialReviewRequired=Boolean(report.editorialReviewRequired ||
+            editorialReview.editorialReviewRequired);
           await mkdir('observations',{recursive:true});
           await writeFile('observations/561.group-publication-transition-review.json',
             JSON.stringify(report,null,2)+'\n');
           console.log('Predeploy Group editorial-change evidence: '+JSON.stringify({
             previous:report.previousRelease?.sourceCommit??null,
             proposed:sourceRevision.sourceCommit,counts:report.counts??null,
-            editorialReviewRequired:report.editorialReviewRequired,reason}));
+            editorialReviewRequired:report.editorialReviewRequired,
+            originalEditorialQuestionRevisions:editorialReview.counts,
+            priorEditorialEvidence:editorialReview.sourceEvidenceCoverage??'prior-public-graph-received',
+            reason}));
           if(report.editorialReviewRequired)
-            console.log('::warning::Group feed revisions, aggregate exits or incomplete prior coverage require subject-owned editorial review; no correction/retraction is inferred or automatically published.');
+            console.log('::warning::Original feed metadata, authored editorial explanations, cited research or incomplete prior evidence requires subject-owned review; no correction or retraction is automatically published.');
           if(process.env.GITHUB_STEP_SUMMARY)
             await appendFile(process.env.GITHUB_STEP_SUMMARY,
               '### Capped-feed change review (predeploy candidate, not publisher decision)\n'+
@@ -271,6 +303,8 @@ jobs:
               '. Changed metadata '+(report.counts?.metadataRevisions??'unknown')+
               ', identity collisions '+(report.counts?.identityConflicts??'unknown')+
               ', aggregate exits '+(report.counts?.aggregateExits??'unknown')+
+              '. Source question/citation revisions '+(editorialReview.counts?.contentOrCitationChanges??'unknown')+
+              ', question order changed '+String(editorialReview.counts?.orderChanged??'unknown')+
               '. No original article correction or withdrawal is inferred.\n\n');
           NODE
       - uses: cloudflare/wrangler-action@v3
