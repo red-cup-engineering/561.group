@@ -12,8 +12,8 @@
   "source": {
     "market": {
       "repository": "red-cup-engineering/market.561.group",
-      "revision": "e4c4f49b8559cb96e53d132458e8b326554895d1",
-      "tree": "3a80aede8b8aa337623ebd466e3a112c0ebfb5e9"
+      "revision": "8302e18be89e2ab1e96a8ca6d5aa4e61d3e03aff",
+      "tree": "22c30484f2bd2f0a4110f0e507c67fd64bf0cd30"
     },
     "public": {
       "repository": "causeway-services/public-market-services-section",
@@ -27,14 +27,14 @@
     },
     "receiver": {
       "repository": "red-cup-engineering/market.561.group",
-      "revision": "e4c4f49b8559cb96e53d132458e8b326554895d1"
+      "revision": "8302e18be89e2ab1e96a8ca6d5aa4e61d3e03aff"
     }
   },
   "candidateCatalogPresentation": "scrubbed",
   "baseline": {
     "versionId": "30536c25-af94-4382-a1ae-4b3bac858658",
     "deploymentId": "9c2258be-0b40-4687-bc79-be6aec0c36ca",
-    "latestVersionId": "105cb8ca-73c1-4c88-8c1c-42fd59293699",
+    "latestVersionId": "e609070a-cd99-4728-b57f-85492ef9164c",
     "sourceRevision": "e4c4f49b8559cb96e53d132458e8b326554895d1",
     "catalogPresentation": "scrubbed"
   },
@@ -117,8 +117,8 @@
     },
     "nativeProducer": {
       "path": "scripts/build-native-worker.mjs",
-      "bytes": 22067,
-      "sha256": "58e4d8a1a8e70528b8f6a99e21809c6f44a8a8c18c6610e3a988ec4dd722567f"
+      "bytes": 24634,
+      "sha256": "8f1ae8ef7b762706c66fbad385ab27343d2bb39e80aa914a293f82343e3cb1f8"
     },
     "retainedProducer": {
       "path": "scripts/replay-retained-worker.mjs",
@@ -213,8 +213,8 @@
       },
       {
         "path": "src/public-scrub.mjs",
-        "bytes": 4979,
-        "sha256": "8045a49c6dbc8ff51967fcefd7050f2e7e52ea603849c6f3588b1e7661239795"
+        "bytes": 5141,
+        "sha256": "8f1b8975f017ac45d28c3167f9a86a40098d48b6d93a53fc4f69ef1c61803c5d"
       },
       {
         "path": "parameters/content/market-context.json",
