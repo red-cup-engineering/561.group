@@ -78,6 +78,8 @@ const SOURCE_AUTH_ENV_KEYS = [
   'MARKET_PARAMETERS_DEPLOY_KEY',
   'SITE_CONTENT_DEPLOY_KEY',
 ];
+const PACKAGE_TEST_SCRIPT = 'node --test test/*.test.mjs';
+const PACKAGE_TEST_SUMMARY = '@red-cup-engineering/npm-workspace-publication-service';
 
 const hash = bytes => createHash('sha256').update(bytes).digest('hex');
 const equal = isDeepStrictEqual;
@@ -106,6 +108,35 @@ function checkDescriptor(descriptor, code = 'EXACT_ARTIFACT_BYTES_REQUIRED', max
     code,
   );
   return descriptor;
+}
+
+// Public selection admission mirrors the original native profile; execution and
+// result interpretation remain with the pinned original receiver and summary owner.
+function admitMarketPackageTests(selected, workOrder) {
+  requireThat(selected?.kind === '561.market-source-package-test-selection/v1' &&
+    selected.script === PACKAGE_TEST_SCRIPT, 'PACKAGE_TEST_PROFILE_REQUIRED');
+  requireThat(selected.sourceManifestSha256 === workOrder.sourceInputs.sourceManifest.sha256 &&
+    selected.lockfileSha256 === workOrder.sourceInputs.lockfile.sha256 &&
+    selected.installedSuppliersSha256 === hash(JSON.stringify(workOrder.suppliers)) &&
+    workOrder.sourceInputs.sourceManifest.path === 'package.json' &&
+    workOrder.sourceInputs.lockfile.path === 'pnpm-lock.yaml' &&
+    workOrder.compiler.pnpm?.version === '11.28.5', 'PACKAGE_TEST_SELECTION_MISMATCH');
+  requireThat(Array.isArray(selected.files) && selected.files.length > 0 && selected.files.length <= 256,
+    'PACKAGE_TEST_INVENTORY_REQUIRED');
+  const paths = [];
+  for (const file of selected.files) {
+    checkDescriptor(file, 'PACKAGE_TEST_INPUT_REQUIRED', 1024 * 1024);
+    requireThat(/^test\/[a-zA-Z0-9][a-zA-Z0-9_.-]*\.test\.mjs$/u.test(file.path) &&
+      !paths.includes(file.path), 'PACKAGE_TEST_INVENTORY_REQUIRED');
+    paths.push(file.path);
+  }
+  requireThat(equal(paths, [...paths].sort()), 'PACKAGE_TEST_INVENTORY_REQUIRED');
+  const disposition = selected.skipDisposition;
+  requireThat(disposition?.kind === 'source-declared-counts' &&
+    ['skipped', 'todo'].every(name => Number.isSafeInteger(disposition[name]) &&
+      disposition[name] >= 0 && disposition[name] <= 256) &&
+    typeof disposition.reason === 'string' && disposition.reason.trim().length > 0 &&
+    disposition.reason.length <= 1024, 'PACKAGE_TEST_SKIP_DISPOSITION_REQUIRED');
 }
 
 export function admitMarketFabricationWorkOrder(workOrder) {
@@ -202,6 +233,7 @@ export function admitMarketFabricationWorkOrder(workOrder) {
   if (qualificationSuites.workspaceGraphSuite !== undefined) {
     checkDescriptor(qualificationSuites.workspaceGraphSuite, 'QUALIFICATION_SUITE_SELECTION_REQUIRED', 1024 * 1024);
   }
+  if (workOrder.packageTests !== undefined) admitMarketPackageTests(workOrder.packageTests, workOrder);
   requireThat(declarations && typeof declarations === 'object', 'DECLARATION_SELECTION_REQUIRED');
   checkDescriptor(declarations.candidate, 'DECLARATION_SELECTION_REQUIRED');
   checkDescriptor(declarations.incumbent, 'DECLARATION_SELECTION_REQUIRED');
@@ -529,6 +561,15 @@ export async function verifyMarketFabricationInputs(sourceRoot, workOrder, {
   requireThat(!/(?:_auth|_authToken|password|username|\/\/[^\s]+=)/iu.test(npmrcText), 'NPMRC_CREDENTIAL_LEAK_REFUSED');
 
   const sourceManifest = JSON.parse(verifiedInputs.sourceManifest.bytes.toString('utf8'));
+  if (workOrder.packageTests !== undefined) {
+    requireThat(sourceManifest.scripts?.test === PACKAGE_TEST_SCRIPT &&
+      sourceManifest.scripts.pretest === undefined && sourceManifest.scripts.posttest === undefined &&
+      sourceManifest.devDependencies?.[PACKAGE_TEST_SUMMARY] === '0.14.18', 'PACKAGE_TEST_RECIPE_CHANGED');
+    const tracked = (await git(resolvedSourceRoot, 'ls-files', '-z', '--', 'test')).split('\0')
+      .filter(file => /^test\/[^/]+\.test\.mjs$/u.test(file)).sort();
+    requireThat(equal(tracked, workOrder.packageTests.files.map(file => file.path)), 'PACKAGE_TEST_INVENTORY_CHANGED');
+    for (const file of workOrder.packageTests.files) await verifyPinnedFile(file, 'PACKAGE_TEST_INPUT_CHANGED');
+  }
   const declaredWrangler = sourceManifest.devDependencies?.wrangler ?? sourceManifest.dependencies?.wrangler;
   requireThat(declaredWrangler === workOrder.compiler.wrangler.version, 'COMPILER_SELECTION_UNRECEIVED');
   if (workOrder.compiler.pnpm !== undefined) {
@@ -645,6 +686,16 @@ export async function installFrozenMarketSuppliers(sourceRoot, workOrder, {
   const received = await verifyInstalledMarketSuppliers(resolvedSourceRoot, workOrder);
   return {
     ...received,
+    frozenInstallation: {
+      kind: '561.market-frozen-installation/v1',
+      source: { repository: MARKET_REPOSITORY, revision: workOrder.source.market.revision },
+      lockfileSha256: workOrder.sourceInputs.lockfile.sha256,
+      installedSuppliersSha256: hash(JSON.stringify(workOrder.suppliers)),
+      nodeModulesRoot: join(resolvedSourceRoot, 'node_modules'),
+      packageManager: { name: 'pnpm', version: expectedVersion },
+      frozenLockfile: true,
+      ignoreScripts: true,
+    },
     compiler: {
       ...received.compiler,
       pnpm: { name: 'pnpm', version: expectedVersion, command: pnpmCommand, arguments: commandPrefix },
@@ -765,6 +816,106 @@ export async function verifyInstalledMarketSuppliers(sourceRoot, workOrder) {
   };
 }
 
+/** Receive the original owner's embedded bytes, not a public TAP interpretation.
+ * The caller binds both interpreting functions to the exact private source and
+ * locked installed supplier. No raw text or private path is returned here. */
+export function receiveMarketPackageTestEvidence(qualification, request, {
+  receiveResult, parseTestRunSummary, summaryOwner, compilerManifest,
+}) {
+  const selected = request.packageTests;
+  requireThat(selected && equal(qualification.source, request.source) &&
+    qualification.sourceRevision === request.source.revision &&
+    qualification.workerSha256 === request.artifact.sha256 && qualification.workerBytes === request.artifact.bytes &&
+    qualification.buildReceiptSha256 === request.buildReceipt.sha256 &&
+    qualification.configurationSha256 === request.configuration.sha256, 'PACKAGE_TEST_QUALIFICATION_MISMATCH');
+  const documents = qualification.evidenceDocuments;
+  requireThat(Array.isArray(documents), 'PACKAGE_TEST_EVIDENCE_REQUIRED');
+  const receiveDocument = (descriptor, expectedPath, maximum, empty = false) => {
+    requireThat(descriptor?.path === expectedPath && SHA.test(descriptor.sha256 ?? '') &&
+      Number.isSafeInteger(descriptor.bytes) && descriptor.bytes >= (empty ? 0 : 1) && descriptor.bytes <= maximum,
+      'PACKAGE_TEST_EVIDENCE_REQUIRED');
+    const matching = documents.filter(document => document?.path === expectedPath);
+    requireThat(matching.length === 1, 'PACKAGE_TEST_EVIDENCE_REQUIRED');
+    const document = matching[0];
+    requireThat(typeof document.text === 'string' && document.bytes === descriptor.bytes &&
+      document.sha256 === descriptor.sha256 && Buffer.byteLength(document.text) === descriptor.bytes &&
+      hash(document.text) === descriptor.sha256, 'PACKAGE_TEST_EVIDENCE_BYTES_CHANGED');
+    return document.text;
+  };
+  const descriptor = qualification.evidence?.packageTests;
+  let observation;
+  const text = receiveDocument(descriptor, 'package-tests-observations.json', 1024 * 1024);
+  try { observation = JSON.parse(text); }
+  catch { requireThat(false, 'PACKAGE_TEST_EVIDENCE_INVALID'); }
+  requireThat(observation?.kind === '561.market-source-package-tests/v1' &&
+    observation.scope === 'original-manifest-source-tests' && equal(observation.source, request.source) &&
+    equal(observation.selection, selected) && observation.selectionSha256 === hash(JSON.stringify(selected)) &&
+    equal(observation.frozenInstallation, request.frozenInstallation) &&
+    observation.installedRoot === join(request.sourceRoot, 'node_modules') &&
+    observation.nativeCompilerManifest === compilerManifest && equal(observation.summaryOwner, summaryOwner) &&
+    equal(observation.command, {
+      executable: process.execPath, nodeVersion: process.version,
+      argv: ['--test', '--test-reporter=tap', ...selected.files.map(file => file.path)],
+    }), 'PACKAGE_TEST_OBSERVATION_MISMATCH');
+  requireThat(equal(observation.custody, {
+    rawOutput: 'embedded-private-carrier', privateCarrierReceived: false,
+    durableRetention: 'unreceived', authorizedRecipient: null,
+  }) && observation.caseNameCompletenessIndependentlyReceived === false &&
+    observation.productionDeploymentReceived === false && observation.outsidePaymentReceived === false,
+    'PACKAGE_TEST_CUSTODY_UNRECEIVED');
+  const snapshot = observation.selectedInputSnapshot;
+  requireThat(snapshot?.kind === '561.market-native-selected-test-inputs/v1' &&
+    snapshot.scope === 'compiler-selected-physical-inputs-and-manifests-plus-enrolled-tests-and-summary-compiler-owners' &&
+    Number.isSafeInteger(snapshot.files) && snapshot.files > 0 && snapshot.files <= 16384 &&
+    typeof snapshot.sha256 === 'string' && SHA.test(snapshot.sha256) && snapshot.unchanged === true &&
+    equal(snapshot.limits, { files: 16384, bytes: 268435456 }) &&
+    snapshot.everyDevelopmentImportReceived === false && snapshot.completeInstalledByteContinuityReceived === false &&
+    snapshot.importerTopologyReceived === false && snapshot.mutationProofSandboxReceived === false,
+    'PACKAGE_TEST_SNAPSHOT_UNRECEIVED');
+  const stdout = receiveDocument(observation.stdout, 'package-tests.tap', 8 * 1024 * 1024);
+  const stderr = receiveDocument(observation.stderr, 'package-tests.stderr.txt', 8 * 1024 * 1024, true);
+  requireThat(typeof receiveResult === 'function' && typeof parseTestRunSummary === 'function',
+    'PACKAGE_TEST_ORIGINAL_RESULT_OWNER_REQUIRED');
+  const result = receiveResult({ ...observation.execution, stdout, stderr },
+    parseTestRunSummary(stdout), selected.skipDisposition);
+  for (const name of ['tests', 'suites', 'pass', 'fail', 'cancelled', 'skipped', 'todo']) {
+    requireThat(Number.isSafeInteger(result?.[name]) && result[name] >= 0 &&
+      observation[name] === result[name], 'PACKAGE_TEST_COUNTS_MISMATCH');
+  }
+  requireThat(result.tests > 0 && result.pass > 0 && result.fail === 0 && result.cancelled === 0 &&
+    result.tests === result.pass + result.skipped + result.todo &&
+    result.skipped === selected.skipDisposition.skipped && result.todo === selected.skipDisposition.todo &&
+    equal(result.skipDisposition, selected.skipDisposition) && equal(observation.skipDisposition, selected.skipDisposition) &&
+    result.outcome === (result.skipped + result.todo === 0 ? 'execution-observed' : 'execution-observed-with-declared-skips') &&
+    observation.outcome === result.outcome,
+    'PACKAGE_TEST_COUNTS_MISMATCH');
+  // Node counts include passing file wrappers, including empty modules. Receive
+  // the selected source script's execution without upgrading it to unrequested
+  // registered-case admission or requirements-coverage acceptance.
+  const executionClaims = {
+    countsScope: 'native-node-reported-outcomes-including-file-wrappers', executionObserved: true,
+    registeredCaseAdmission: 'not-requested', requirementsCoverage: 'not-claimed',
+  };
+  for (const [name, value] of Object.entries(executionClaims)) {
+    requireThat(result[name] === value && observation[name] === value, 'PACKAGE_TEST_CLAIM_SCOPE_MISMATCH');
+  }
+  for (const name of ['allCasesPassed', 'registeredCasesReceived', 'testCoverageQualified', 'acceptanceProvider']) {
+    requireThat(!Object.hasOwn(result, name) && !Object.hasOwn(observation, name), 'PACKAGE_TEST_CLAIM_SCOPE_MISMATCH');
+  }
+  // Deliberate allowlist: no raw output, source paths, case names or free text.
+  return {
+    selectionSha256: observation.selectionSha256, evidenceSha256: descriptor.sha256,
+    stdoutSha256: observation.stdout.sha256, stderrSha256: observation.stderr.sha256,
+    tests: result.tests, suites: result.suites, pass: result.pass, fail: result.fail,
+    cancelled: result.cancelled, skipped: result.skipped, todo: result.todo,
+    outcome: result.outcome, ...executionClaims,
+    selectedInputSnapshotSha256: snapshot.sha256,
+    everyDevelopmentImportReceived: false, completeInstalledByteContinuityReceived: false,
+    importerTopologyReceived: false, mutationProofSandboxReceived: false,
+    caseNameCompletenessIndependentlyReceived: false, durableRetention: 'unreceived',
+  };
+}
+
 export async function fabricateMarketCarrier(workOrder, {
   destination,
   workOrderSha256,
@@ -790,6 +941,7 @@ export async function fabricateMarketCarrier(workOrder, {
 } = {}) {
   admitMarketFabricationWorkOrder(workOrder);
   requireThat(OPERATION.has(operation), 'MARKET_OPERATION_UNSELECTED');
+  requireThat(workOrder.packageTests === undefined || installSuppliers === true, 'PACKAGE_TEST_FROZEN_INSTALLATION_REQUIRED');
   requireThat(typeof destination === 'string' && destination.trim().length > 0, 'FABRICATION_DESTINATION_REQUIRED');
   if (workOrderSha256 !== undefined) requireThat(SHA.test(workOrderSha256), 'FABRICATION_WORK_ORDER_DIGEST_REQUIRED');
 
@@ -966,6 +1118,10 @@ export async function fabricateMarketCarrier(workOrder, {
       ...(workOrder.qualificationSuites.workspaceGraphSuite
         ? { workspaceGraphSuiteSha256: workOrder.qualificationSuites.workspaceGraphSuite.sha256 }
         : {}),
+      ...(workOrder.packageTests !== undefined ? {
+        packageTests: structuredClone(workOrder.packageTests),
+        frozenInstallation: structuredClone(supplierVerification.frozenInstallation),
+      } : {}),
       timeoutMs: workOrder.timeoutMs ?? 180_000,
     };
 
@@ -974,7 +1130,9 @@ export async function fabricateMarketCarrier(workOrder, {
       const receiverModule = await import(pathToFileURL(receiverModulePath).href);
       return receiverModule.receiveNativeMarketWorker(request);
     });
-    await runReceiveWorker(receivingRequest);
+    // Keep the selected expectation independent of the invoked receiver's
+    // request object, so it cannot narrow enrollment in the receiving comparison.
+    await runReceiveWorker(structuredClone(receivingRequest));
 
     const qualificationPath = join(nativeReceivingOutputRoot, 'native-qualification.json');
     const qualificationBytes = await readFile(qualificationPath);
@@ -988,6 +1146,30 @@ export async function fabricateMarketCarrier(workOrder, {
         Object.values(parsedQualification.checks ?? {}).every(item => item?.passed === true),
       'NATIVE_WORKER_RECEIVING_REQUIRED',
     );
+
+    let packageTestReceiving;
+    if (workOrder.packageTests !== undefined) {
+      requireThat(parsedQualification.evidence?.packageTests, 'PACKAGE_TEST_EVIDENCE_REQUIRED');
+      // Re-receive the exact native result owner before importing it. The
+      // original receiver owns pre/post execution; source movement is refused.
+      await verifyMarketFabricationInputs(sourceRoot, workOrder, { exec });
+      const localRequire = createRequire(join(sourceRoot, 'package.json'));
+      const modulesRoot = join(sourceRoot, 'node_modules');
+      const summaryPath = await realpath(localRequire.resolve(`${PACKAGE_TEST_SUMMARY}/test-run-summary`));
+      const summaryManifestPath = await realpath(localRequire.resolve(`${PACKAGE_TEST_SUMMARY}/package.json`));
+      requireThat(inside(modulesRoot, summaryPath) && inside(modulesRoot, summaryManifestPath),
+        'PACKAGE_TEST_SUMMARY_OWNER_UNRECEIVED');
+      const summaryManifest = JSON.parse(await readFile(summaryManifestPath, 'utf8'));
+      requireThat(summaryManifest.name === PACKAGE_TEST_SUMMARY && summaryManifest.version === '0.14.18',
+        'PACKAGE_TEST_SUMMARY_OWNER_UNRECEIVED');
+      const summaryOwner = fileIdentity(summaryPath, await readFile(summaryPath));
+      const nativeReceiver = await import(pathToFileURL(receiverModulePath).href);
+      const { parseTestRunSummary } = await import(pathToFileURL(summaryPath).href);
+      packageTestReceiving = receiveMarketPackageTestEvidence(parsedQualification, receivingRequest, {
+        receiveResult: nativeReceiver.receiveNativeMarketPackageTestResult, parseTestRunSummary,
+        summaryOwner, compilerManifest: supplierVerification.compiler.esbuild.manifestPath,
+      });
+    }
 
     const receiverSourceRevision = (workOrder.source.receiver ?? workOrder.source.market).revision;
     const receiverBuilderModulePath = join(sourceRoot, workOrder.sourceInputs.receiverBuilder.path);
@@ -1153,6 +1335,9 @@ export async function fabricateMarketCarrier(workOrder, {
       workspaceDisposed,
       providerAccess: false,
       outsidePaymentReceived: false,
+      ...(packageTestReceiving ? { packageTests: {
+        ...packageTestReceiving, privateCarrierReceived: true,
+      } } : {}),
     };
     await writeFile(receiptFile, `${JSON.stringify(fabricationReceipt, null, 2)}\n`, { mode: 0o600 });
 
