@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {readFileSync} from "node:fs";
 import {createHash} from "node:crypto";
+import {spawnSync} from "node:child_process";
 import {renderEditorialQuestionProvenance,assayEditorialQuestionProvenance,compareEditorialQuestionSnapshots,EDITORIAL_GRAPH_PATH,EDITORIAL_GRAPH_SCHEMA} from "../src/editorial-question-provenance.mjs";
 
 const home=JSON.parse(readFileSync(new URL("../data/home.json",import.meta.url),"utf8"));
@@ -158,4 +159,31 @@ test("an inserted false prior source identity or foreign citation cannot masquer
   missing["@graph"][1]["prov:wasDerivedFrom"]["@id"]=
     "urn:sha256:"+"c".repeat(64);
   assert.throws(()=>compare(missing,project()),/identity, author, answer or derivation/u);
+});
+
+
+test("original release runs real editorial revision review before Wrangler, retaining its typed source record",()=>{
+  const workflow=readFileSync(new URL("../.github/workflows/deploy.yml",import.meta.url),"utf8");
+  const start=workflow.indexOf("      - name: Observe previous public feed before replacing it; route changes to editorial review");
+  const wrangler=workflow.indexOf("      - uses: cloudflare/wrangler-action@v3",start);
+  assert.ok(start>0&&wrangler>start);
+  const section=workflow.slice(start,wrangler);
+  const script=section.match(/          node --input-type=module <<'NODE'\n([\s\S]*?)\n          NODE\n/u);
+  assert.ok(script,"one original typed inline release program must exist");
+  const source=script[1].split("\n").map(line=>
+    line.startsWith("          ")?line.slice(10):line).join("\n");
+  const result=spawnSync(process.execPath,["--check","--input-type=module"],
+    {input:source,encoding:"utf8",timeout:10000});
+  assert.equal(result.status,0,result.stderr);
+  for(const term of [
+    "const sourceFrontdoorBytes=await readFile('data/frontdoor.json')",
+    "frontdoorSha256:originalFrontdoorSha256,graph:proposedEditorial",
+    "revision.artifactDigests?.['editorial-question-provenance.jsonld']",
+    "previous.editorialGraph=priorEditorial.body",
+    "compareEditorialQuestionSnapshots({",
+    "report.editorialQuestions=editorialReview",
+    "editorialReview.editorialReviewRequired",
+    "observations/561.group-publication-transition-review.json",
+    "correctionPublished:false",
+  ])assert.ok(section.includes(term),"exact predeploy review missing "+term);
 });
