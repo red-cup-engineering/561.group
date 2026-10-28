@@ -4,9 +4,9 @@ import assert from 'node:assert/strict';
 import path from 'node:path';
 const root=path.resolve(path.dirname(new URL(import.meta.url).pathname),"..");
 const estate=JSON.parse(await readFile(path.join(root,'data/estate.json'),'utf8'));estate.revision='local-source-fixture';
-const probes=[],puts=[],waits=[],keys=[];let cached;
+const probes=[],puts=[],waits=[],keys=[];let cached,probeGate=null;
 const statuses=[200,301,401,402,403,404,500];
-const context=vm.createContext({Request,Response,URL,AbortSignal,Date,JSON,Promise,fetch:async(url,init)=>{probes.push({url,init});if(probes.length===8)throw Error('fixture timeout');return new Response('fixture',{status:statuses[(probes.length-1)%statuses.length]})},caches:{default:{match:async key=>{keys.push(key.url);return cached},put:async(key,value)=>{puts.push({key:key.url,value})}}}});
+const context=vm.createContext({Request,Response,URL,AbortSignal,Date,JSON,Promise,fetch:async(url,init)=>{probes.push({url,init});if(probeGate)await probeGate;if(probes.length===8)throw Error('fixture timeout');return new Response('fixture',{status:statuses[(probes.length-1)%statuses.length]})},caches:{default:{match:async key=>{keys.push(key.url);return cached},put:async(key,value)=>{puts.push({key:key.url,value})}}}});
 const told=new vm.SourceTextModule(await readFile(path.join(root,'src/told.mjs'),'utf8'),{context,identifier:'authored-told'});
 const sourceRevision=new vm.SourceTextModule(await readFile(path.join(root,'src/source-revision.mjs'),'utf8'),{context,identifier:'source-revision'});
 const data=new vm.SyntheticModule(['default'],function(){this.setExport('default',estate)},{context,identifier:'fixture-estate-records'});
@@ -216,6 +216,51 @@ check('original sender, headers, origin and exact activity bytes reach one provi
   assert.equal(arrived.contentType, 'application/activity+json');
   assert.match(arrived.signature, /peer.example/);
   assert.equal(arrived.body, authoredActivity);
+});
+
+// The previous Worker launched an entire estate probe fan-out for EACH
+// simultaneous cache miss, even when another read was already in flight.
+cached=undefined;
+let releaseProbes;
+probeGate=new Promise(resolve=>{releaseProbes=resolve});
+const probeStart=probes.length,writeStart=puts.length;
+const firstRead=fetchWorker(new Request('https://561.group/estate.json?reader=one'),env,ctx);
+const secondRead=fetchWorker(new Request('https://561.group/estate.json?reader=two'),env,ctx);
+for(let spin=0;spin<8;spin++)await Promise.resolve();
+const fanout=estate.nodes.length+(estate.machines??[]).length;
+check('two cold misses produce only one outbound probe per target',()=>{
+  assert.ok(fanout>0);
+  assert.equal(probes.length-probeStart,fanout);
+});
+releaseProbes();probeGate=null;
+const [firstReport,secondReport]=await Promise.all([firstRead,secondRead]);
+const [firstBody,secondBody]=await Promise.all([firstReport.json(),secondReport.json()]);
+await Promise.all(waits);
+check('concurrent status readers retain independent complete response bodies',()=>{
+  assert.deepEqual(firstBody,secondBody);
+  assert.equal(firstBody.nodes.length,estate.nodes.length);
+  assert.equal(firstBody.machines.length,(estate.machines??[]).length);
+  assert.equal(puts.length,writeStart+1);
+});
+cached=puts.at(-1).value;
+const beforeHead=probes.length;
+const headResponse=await fetchWorker(new Request('https://561.group/estate.json',{method:'HEAD'}),env,ctx);
+check('HEAD returns matching metadata, no fresh probes, and no body',()=>{
+  assert.equal(headResponse.status,200);
+  assert.equal(headResponse.headers.get('content-type'),'application/json; charset=utf-8');
+  assert.equal(headResponse.headers.get('cache-control'),'public, max-age=300');
+  assert.equal(probes.length,beforeHead);
+});
+assert.equal(await headResponse.text(),'');
+cached=undefined;
+const beforeDenied=probes.length;
+const deniedResponse=await fetchWorker(new Request('https://561.group/estate.json',{method:'POST'}),env,ctx);
+check('unsupported methods return 405 without probing or caching',()=>{
+  assert.equal(deniedResponse.status,405);
+  assert.equal(deniedResponse.headers.get('allow'),'GET, HEAD');
+  assert.equal(deniedResponse.headers.get('cache-control'),'no-store');
+  assert.equal(probes.length,beforeDenied);
+  assert.equal(puts.length,writeStart+1);
 });
 
 console.log(JSON.stringify({passed:count,scope:'Actual authored Worker/told modules with deterministic assets and ActivityPub binding fixtures; not evidence of deployed provider.'}));
