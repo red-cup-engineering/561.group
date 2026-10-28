@@ -116,7 +116,7 @@ async function withGzipCarrier(run, { native = false } = {}) {
   await mkdir(root);
   const artifacts = {}, original = {};
   for (const key of [...commonArtifacts, ...(native ? nativeArtifacts : [])]) {
-    const bytes = Buffer.from(`original fixture ${key}`), path = `${key}.txt`;
+    const bytes = Buffer.from(`original fixture ${key}`), path = key === "receiver" ? "receiver.cjs" : `${key}.txt`;
     original[key] = bytes;
     artifacts[key] = { path, bytes: bytes.length, sha256: sha(bytes) };
     await writeFile(join(root, path + (key === 'worker' || key === 'sourceMap' ? '.gz' : '')),
@@ -280,9 +280,22 @@ test('the actual Group CLI verifies observation without credentials and dispatch
   });
 });
 
-test('the reviewed selection binds the exact forward native fabrication work order and incumbent carrier', async () => {
-  const selectionPath = fileURLToPath(new URL('./selection.json', import.meta.url));
+test('the reviewed selection binds the exact forward native fabrication work order and incumbent carrier', async t => {
   const workOrderPath = fileURLToPath(new URL('./work-order.json', import.meta.url));
+  const bytes = await readFile(workOrderPath), order = JSON.parse(bytes);
+  const fixtureRoot = await mkdtemp(join(tmpdir(), 'market-native-order-fixture-'));
+  t.after(() => rm(fixtureRoot, { recursive: true, force: true }));
+  const selectionPath = join(fixtureRoot, 'selection.json');
+  await writeFile(join(fixtureRoot, 'work-order.json'), bytes);
+  await writeFile(selectionPath, JSON.stringify({
+    kind: '561.market-worker-carrier-selection/v1',
+    repository: order.incumbentCarrier.repository,
+    revision: order.incumbentCarrier.revision,
+    directory: order.incumbentCarrier.directory,
+    manifestSha256: order.incumbentCarrier.manifestSha256,
+    operation: 'release', workOrder: '.releases/market/work-order.json',
+    workOrderSha256: sha(bytes),
+  }));
   const selected = await selectMarketCarrier(selectionPath);
   assert.equal(selected.ready, true);
   assert.ok(['observe', 'release'].includes(selected.operation), `operation must be supported: ${selected.operation}`);
@@ -1652,7 +1665,7 @@ test('selected package tests require actual frozen install and are forwarded wit
   } finally { await rm(fixture.root, { recursive: true, force: true }); }
 });
 
-function packageEvidenceFixture({ skipped = 0, todo = 0, requestOverride, summaryOwnerOverride, compilerManifestOverride } = {}) {
+function packageEvidenceFixture({ skipped = 0, todo = 0, requestOverride, summaryOwnerOverride, compilerManifestOverride, stdoutOverride } = {}) {
   const source = requestOverride?.source ?? { repository: 'red-cup-engineering/market.561.group', revision: 'a'.repeat(40) };
   const selection = requestOverride?.packageTests ?? {
     kind: '561.market-source-package-test-selection/v1', script: 'node --test test/*.test.mjs',
@@ -1672,9 +1685,11 @@ function packageEvidenceFixture({ skipped = 0, todo = 0, requestOverride, summar
     documents.push({ ...descriptor, text }); return descriptor;
   };
   const privateMarker = 'PRIVATE_PACKAGE_OUTPUT_FIXTURE_NOT_FOR_PUBLIC_SUMMARY';
-  const stdoutText = `TAP version 13\n# ${privateMarker}\n1..1\nok 1 - fixture\n# tests ${1 + skipped + todo}\n# suites 0\n# pass 1\n# fail 0\n# cancelled 0\n# skipped ${skipped}\n# todo ${todo}\n`;
+  const stdoutText = stdoutOverride ?? `TAP version 13\n# ${privateMarker}\n1..1\nok 1 - fixture\n# tests ${1 + skipped + todo}\n# suites 0\n# pass 1\n# fail 0\n# cancelled 0\n# skipped ${skipped}\n# todo ${todo}\n`;
   const result = { tests: 1 + skipped + todo, suites: 0, pass: 1, fail: 0, cancelled: 0, skipped, todo,
-    outcome: skipped + todo ? 'completed-with-declared-skips' : 'passed', allCasesPassed: skipped + todo === 0,
+    outcome: skipped + todo ? 'execution-observed-with-declared-skips' : 'execution-observed',
+    countsScope: 'native-node-reported-outcomes-including-file-wrappers', executionObserved: true,
+    registeredCaseAdmission: 'not-requested', requirementsCoverage: 'not-claimed',
     skipDisposition: selection.skipDisposition };
   const summaryOwner = summaryOwnerOverride ?? { path: '/fixture/source/node_modules/summary/test-run-summary.mjs', bytes: 50, sha256: '3'.repeat(64) };
   const compilerManifest = compilerManifestOverride ?? '/fixture/source/node_modules/esbuild/package.json';
@@ -1728,7 +1743,12 @@ test('bridge receives actual private package streams through original owners and
     const summary = receiveMarketPackageTestEvidence(fixture.qualification, fixture.request, fixture.owners);
     assert.equal(fixture.ownerCalls(), 1);
     assert.equal(summary.outcome, fixture.result.outcome);
-    assert.equal(summary.allCasesPassed, fixture.result.allCasesPassed);
+    assert.equal(summary.executionObserved, true);
+    assert.equal(summary.countsScope, 'native-node-reported-outcomes-including-file-wrappers');
+    assert.equal(summary.registeredCaseAdmission, 'not-requested');
+    assert.equal(summary.requirementsCoverage, 'not-claimed');
+    for (const name of ['allCasesPassed', 'registeredCasesReceived', 'testCoverageQualified', 'acceptanceProvider'])
+      assert.equal(Object.hasOwn(summary, name), false);
     assert.equal(summary.tests, fixture.result.tests);
     assert.equal(summary.durableRetention, 'unreceived');
     assert.equal(summary.caseNameCompletenessIndependentlyReceived, false);
@@ -1783,7 +1803,9 @@ test('selected profile completes the existing fabrication path with raw evidence
     const receiverBytes = Buffer.from(`export function receiveNativeMarketPackageTestResult(process, summary, skipDisposition) {
       if (process.exitCode !== 0 || process.stderr !== '' || summary.tests !== 1) throw Error('fixture owner refusal');
       return { tests: 1, suites: 0, pass: 1, fail: 0, cancelled: 0, skipped: 0, todo: 0,
-        outcome: 'passed', allCasesPassed: true, skipDisposition };
+        outcome: 'execution-observed', executionObserved: true,
+        countsScope: 'native-node-reported-outcomes-including-file-wrappers',
+        registeredCaseAdmission: 'not-requested', requirementsCoverage: 'not-claimed', skipDisposition };
     }\n`);
     fixture.files['ops/receive-native-worker.mjs'] = receiverBytes;
     await writeFile(join(fixture.sourceRoot, 'ops/receive-native-worker.mjs'), receiverBytes);
@@ -1840,4 +1862,68 @@ test('selected profile completes the existing fabrication path with raw evidence
       /PACKAGE_TEST_OBSERVATION_MISMATCH/u);
     assert.equal(order.packageTests.files.length, 3);
   } finally { await rm(fixture.root, { recursive: true, force: true }); }
+});
+
+test('actual Node module outcomes are received as execution facts, not registered cases or requirements coverage', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'market-node-outcome-boundary-'));
+  try {
+    for (const [name, source] of [
+      ['empty', '// Intentionally empty source module: no registered test cases.\n'],
+      ['top-level-assertion', "import assert from 'node:assert/strict'; assert.equal(2 + 2, 4);\n"],
+      ['registered-test', "import test from 'node:test'; import assert from 'node:assert/strict'; test('registered fixture', () => assert.equal(2 + 2, 4));\n"],
+    ]) {
+      const file = join(root, `${name}.test.mjs`);
+      await writeFile(file, source);
+      const actual = await defaultExec(process.execPath, ['--test', '--test-reporter=tap', file], {
+        cwd: root, timeout: 10000, maxBuffer: 1024 * 1024,
+        env: { PATH: process.env.PATH ?? '', NO_COLOR: '1' },
+      });
+      assert.equal(actual.stderr, '');
+      // These are assertions on the actual counterexample, not a replacement
+      // production parser. All three distinct module forms report the same count.
+      assert.match(actual.stdout, /^# tests 1$/mu);
+      assert.match(actual.stdout, /^# pass 1$/mu);
+      assert.match(actual.stdout, /^# fail 0$/mu);
+      const fixture = packageEvidenceFixture({ stdoutOverride: actual.stdout });
+      const summary = receiveMarketPackageTestEvidence(fixture.qualification, fixture.request, fixture.owners);
+      assert.equal(summary.outcome, 'execution-observed');
+      assert.equal(summary.executionObserved, true);
+      assert.equal(summary.registeredCaseAdmission, 'not-requested');
+      assert.equal(summary.requirementsCoverage, 'not-claimed');
+      assert.equal(Object.hasOwn(summary, 'allCasesPassed'), false);
+      for (const [claim, value] of [
+        ['allCasesPassed', true], ['registeredCasesReceived', true], ['testCoverageQualified', true],
+        ['acceptanceProvider', { state: 'received' }], ['registeredCaseAdmission', 'received'],
+        ['requirementsCoverage', 'qualified'], ['countsScope', 'registered-test-cases'],
+      ]) {
+        const changed = packageEvidenceFixture({ stdoutOverride: actual.stdout });
+        changed.observation[claim] = value; changed.refresh();
+        assert.throws(() => receiveMarketPackageTestEvidence(changed.qualification, changed.request, changed.owners),
+          /PACKAGE_TEST_CLAIM_SCOPE_MISMATCH/u);
+      }
+      // A falsely stronger result returned by an owner cannot be laundered into
+      // the safe summary even when the observation itself stays scoped.
+      const overclaim = packageEvidenceFixture({ stdoutOverride: actual.stdout });
+      overclaim.owners.receiveResult = () => ({ ...overclaim.result, allCasesPassed: true });
+      assert.throws(() => receiveMarketPackageTestEvidence(overclaim.qualification, overclaim.request, overclaim.owners),
+        /PACKAGE_TEST_CLAIM_SCOPE_MISMATCH/u);
+      const legacy = packageEvidenceFixture({ stdoutOverride: actual.stdout });
+      legacy.observation.outcome = 'passed'; legacy.observation.allCasesPassed = true; legacy.refresh();
+      assert.throws(() => receiveMarketPackageTestEvidence(legacy.qualification, legacy.request, legacy.owners),
+        /PACKAGE_TEST_COUNTS_MISMATCH/u);
+    }
+    const failing = join(root, 'failed-assertion.test.mjs');
+    await writeFile(failing, "import assert from 'node:assert/strict'; assert.equal(2 + 2, 5);\n");
+    await assert.rejects(defaultExec(process.execPath, ['--test', '--test-reporter=tap', failing], {
+      cwd: root, timeout: 10000, maxBuffer: 1024 * 1024,
+      env: { PATH: process.env.PATH ?? '', NO_COLOR: '1' },
+    }), error => {
+      assert.equal(error.code, 1);
+      const fixture = packageEvidenceFixture({ stdoutOverride: error.stdout });
+      fixture.observation.execution.exitCode = 1; fixture.observation.execution.error = true; fixture.refresh();
+      assert.throws(() => receiveMarketPackageTestEvidence(fixture.qualification, fixture.request, fixture.owners),
+        /Original owner refuses/u);
+      return true;
+    });
+  } finally { await rm(root, { recursive: true, force: true }); }
 });

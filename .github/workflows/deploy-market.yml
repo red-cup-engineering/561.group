@@ -36,6 +36,10 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           persist-credentials: false
+          sparse-checkout: |
+            /.releases/market/
+            /.github/workflows/deploy-market.yml
+          sparse-checkout-cone-mode: false
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: '24.22.1'
@@ -62,6 +66,10 @@ jobs:
         with:
           ref: ${{ github.sha }}
           persist-credentials: false
+          sparse-checkout: |
+            /.releases/market/
+            /.github/workflows/deploy-market.yml
+          sparse-checkout-cone-mode: false
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: '24.22.1'
@@ -73,6 +81,8 @@ jobs:
           path: .market-release
           ssh-key: ${{ secrets.SITE_CONTENT_DEPLOY_KEY }}
           persist-credentials: false
+          sparse-checkout: ${{ needs.source.outputs.directory }}
+          sparse-checkout-cone-mode: false
       - name: Activate pinned pnpm package manager for native fabrication
         if: needs.source.outputs.work_order_sha256 != ''
         run: |
@@ -106,3 +116,4 @@ jobs:
           path: ${{ runner.temp }}/market-release/receipt.json
           if-no-files-found: warn
           retention-days: 30
+

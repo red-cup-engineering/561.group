@@ -886,17 +886,29 @@ export function receiveMarketPackageTestEvidence(qualification, request, {
     result.tests === result.pass + result.skipped + result.todo &&
     result.skipped === selected.skipDisposition.skipped && result.todo === selected.skipDisposition.todo &&
     equal(result.skipDisposition, selected.skipDisposition) && equal(observation.skipDisposition, selected.skipDisposition) &&
-    result.outcome === (result.skipped + result.todo === 0 ? 'passed' : 'completed-with-declared-skips') &&
-    result.allCasesPassed === (result.skipped + result.todo === 0) &&
-    observation.outcome === result.outcome && observation.allCasesPassed === result.allCasesPassed,
+    result.outcome === (result.skipped + result.todo === 0 ? 'execution-observed' : 'execution-observed-with-declared-skips') &&
+    observation.outcome === result.outcome,
     'PACKAGE_TEST_COUNTS_MISMATCH');
+  // Node counts include passing file wrappers, including empty modules. Receive
+  // the selected source script's execution without upgrading it to unrequested
+  // registered-case admission or requirements-coverage acceptance.
+  const executionClaims = {
+    countsScope: 'native-node-reported-outcomes-including-file-wrappers', executionObserved: true,
+    registeredCaseAdmission: 'not-requested', requirementsCoverage: 'not-claimed',
+  };
+  for (const [name, value] of Object.entries(executionClaims)) {
+    requireThat(result[name] === value && observation[name] === value, 'PACKAGE_TEST_CLAIM_SCOPE_MISMATCH');
+  }
+  for (const name of ['allCasesPassed', 'registeredCasesReceived', 'testCoverageQualified', 'acceptanceProvider']) {
+    requireThat(!Object.hasOwn(result, name) && !Object.hasOwn(observation, name), 'PACKAGE_TEST_CLAIM_SCOPE_MISMATCH');
+  }
   // Deliberate allowlist: no raw output, source paths, case names or free text.
   return {
     selectionSha256: observation.selectionSha256, evidenceSha256: descriptor.sha256,
     stdoutSha256: observation.stdout.sha256, stderrSha256: observation.stderr.sha256,
     tests: result.tests, suites: result.suites, pass: result.pass, fail: result.fail,
     cancelled: result.cancelled, skipped: result.skipped, todo: result.todo,
-    outcome: result.outcome, allCasesPassed: result.allCasesPassed,
+    outcome: result.outcome, ...executionClaims,
     selectedInputSnapshotSha256: snapshot.sha256,
     everyDevelopmentImportReceived: false, completeInstalledByteContinuityReceived: false,
     importerTopologyReceived: false, mutationProofSandboxReceived: false,
