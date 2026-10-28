@@ -81,6 +81,25 @@ test('a live primary research pathway is checked separately without duplicate ho
   assert.equal(r.searchConformance.records.length,6);
 });
 
+test('outside HTTP witness measures complete reads without extra network requests',async()=>{
+  let tick=0;
+  const start=Date.parse('2026-10-28T12:00:00.000Z');
+  const clock=()=>new Date(start+10*tick++).toISOString();
+  const source=provider(),requests=[];
+  const result=await observeProduction({
+    fetchImpl:(url,options)=>{requests.push(url);return source(url,options)},
+    now:clock,
+  });
+  const home=result.checks.find(check=>check.name==='homepage');
+  const research=result.checks.find(check=>check.name==='research-discovery');
+  assert.ok(Number.isSafeInteger(home.readWallMs) && home.readWallMs>0);
+  assert.equal(research.readWallMs,home.readWallMs,
+    'reuse the existing homepage HTTP observation, including timing');
+  assert.equal(requests.filter(url=>url==='https://561.group/').length,1);
+  assert.match(markdownSummary(result),/\\| Read ms \\|/u);
+  assert.equal(result.providerDeploymentVerified,false);
+});
+
 test('the original observer requests identity bytes and binds public digests to that received representation',async()=>{
   const requests=[],source=provider();
   const expected=Buffer.from(await (await source('https://561.group/')).arrayBuffer());
