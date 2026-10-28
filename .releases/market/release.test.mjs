@@ -279,7 +279,7 @@ test('the actual Group CLI verifies observation without credentials and dispatch
   });
 });
 
-test('the reviewed selection binds the exact forward e4c4 native fabrication work order and incumbent carrier', async () => {
+test('the reviewed selection binds the exact forward native fabrication work order and incumbent carrier', async () => {
   const selectionPath = fileURLToPath(new URL('./selection.json', import.meta.url));
   const workOrderPath = fileURLToPath(new URL('./work-order.json', import.meta.url));
   const selected = await selectMarketCarrier(selectionPath);
@@ -290,12 +290,12 @@ test('the reviewed selection binds the exact forward e4c4 native fabrication wor
   assert.equal(selected.directory, '.service-releases/market/20261027-operational-readings-e4c4f49');
   assert.equal(selected.manifestSha256, '56096719d0bc2b4c36b08e70dad69da9f37b8db3c80439a3773031c5ff426e16');
   assert.equal(selected.workOrder, '.releases/market/work-order.json');
-  assert.equal(selected.workOrderSha256, '50e03cbc83efdb9151fbf9ee9e34d415a91811424c4da21c038d30ea287bd42a');
+  assert.equal(selected.workOrderSha256, 'f26b1ceb9901a3655a9ca5515b9eb62e5e681742af6ee3e5110825a7110c320a');
 
   const { workOrder, workOrderSha256 } = await readMarketFabricationWorkOrder(workOrderPath, selected.workOrderSha256);
   assert.equal(workOrderSha256, selected.workOrderSha256);
-  assert.equal(workOrder.source.market.revision, 'e4c4f49b8559cb96e53d132458e8b326554895d1');
-  assert.equal(workOrder.source.market.tree, '3a80aede8b8aa337623ebd466e3a112c0ebfb5e9');
+  assert.equal(workOrder.source.market.revision, '8302e18be89e2ab1e96a8ca6d5aa4e61d3e03aff');
+  assert.equal(workOrder.source.market.tree, '22c30484f2bd2f0a4110f0e507c67fd64bf0cd30');
   assert.equal(workOrder.source.public.revision, 'cd0fdd91b14ec2a08b844c0794502501d36036f9');
   assert.equal(workOrder.source.public.gitlink, 'cd0fdd91b14ec2a08b844c0794502501d36036f9');
   assert.equal(workOrder.source.public.tree, 'cb559cdf232be39cb45bb042b5d4157c29985ace');
