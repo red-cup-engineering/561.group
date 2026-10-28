@@ -13,6 +13,7 @@ const pages=Object.freeze([
   {name:"home",path:"/",width:1440,height:900},
   {name:"home-mobile",path:"/",width:390,height:844},
   {name:"work-mobile",path:"/work/",width:390,height:844},
+  {name:"blog-mobile",path:"/blog/",width:390,height:844},
   {name:"about",path:"/about/",width:1440,height:900}
 ]);
 const expectedFontNames=["Space Grotesk","Roboto Slab","JetBrains Mono"];
@@ -52,12 +53,13 @@ export function qualifyRenderedBrand(value,{path="/"}={}) {
 }
 
 async function servedOriginalApplication() {
-  const [home,estate,frontdoor]=await Promise.all([
-    readJson("data/home.json"),readJson("data/estate.json"),readJson("data/frontdoor.json")
+  const [home,estate,frontdoor,feed,feedReceipt]=await Promise.all([
+    readJson("data/home.json"),readJson("data/estate.json"),readJson("data/frontdoor.json"),
+    readJson("public/feed.json"),readJson("public/feed-input-receipt.json")
   ]);
   const application=create561GroupLivingApplication({
     readHome:async()=>home,readEstate:async()=>estate,readFrontdoor:async()=>frontdoor,
-    releaseHome:home
+    readFeed:async()=>feed,readFeedReceipt:async()=>feedReceipt,releaseHome:home
   });
   const server=createServer(async(req,res)=>{
     try{
@@ -73,7 +75,7 @@ async function servedOriginalApplication() {
           "cache-control":"no-store","access-control-allow-origin":"*"});
         res.end(source);return;
       }
-      if(!["/","/work/","/work/audit/","/about/"].includes(pathname)||req.method!=="GET"){
+      if(!["/","/work/","/work/audit/","/blog/","/about/"].includes(pathname)||req.method!=="GET"){
         res.writeHead(404);res.end();return;
       }
       // Same original application as src/worker.mjs, with canonical Request
@@ -98,7 +100,6 @@ async function servedOriginalApplication() {
   return{origin:"http://127.0.0.1:"+server.address().port,
     close:()=>new Promise((resolve,reject)=>server.close(error=>error?reject(error):resolve()))};
 }
-
 
 /**
  * The original actual Chromium consumer follows the real Work preview page

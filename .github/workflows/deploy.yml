@@ -4,6 +4,12 @@ name: Publish and receive 561.group (TUFTE + LivingWebServer)
 # original tests, builds the pinned supplier, deploys, then reads public bytes.
 on:
   workflow_dispatch:
+    inputs:
+      publish_sections:
+        description: "Republish the selected Services and Science section bundle"
+        type: boolean
+        default: false
+        required: false
   # The Leader's received alpha-site repair can ship only from an already
   # qualified ORIGINAL main CI push. Untrusted PR runs never deploy.
   workflow_run:
@@ -52,12 +58,17 @@ jobs:
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           repository: 561-group/561-group-frontdoor-services-section
-          ref: c1bde60dd07ddfd3e35cb509872cbd85f13206c0
+          ref: 2e00cffb7a029889bd20764ce32d09e5ba5feaf8
           path: content
           ssh-key: ${{ secrets.SITE_CONTENT_DEPLOY_KEY }}
           persist-credentials: false
       - name: Bind front-door content (data/, locales/, authored public/ assets) into the application
         run: node scripts/bind-content.mjs
+      - name: Verify and unpack accepted Services and Science release output
+        run: |
+          node scripts/receive-section-release.mjs \
+            content/.section-releases/black-october-20261025.json.gz \
+            e814489f534cbd595f9d970651f5c1fe8ff20f02dfc80315b527f0aa94c90db8 "$RUNNER_TEMP/section-release-$GITHUB_RUN_ID" d116b8db9eaaa24c4a270b5e91c9a0f36c365ba8eec3b10c9ec3f23c74298978
       - name: Select one source-qualified UTC publication day
         run: |
           node --input-type=module <<'NODE'
@@ -80,12 +91,26 @@ jobs:
           npm_config_fetch_retry_mintimeout: '1500'
           npm_config_fetch_retry_maxtimeout: '8000'
           npm_config_fetch_timeout: '45000'
-        run: npm ci --ignore-scripts --no-audit --no-fund
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          npm run install:observation
       - name: Qualify the actual original Worker, TUFTE and other retained routes
         run: |
           npm run check
           npm test
           npm run build
+      - name: Publish selected sections through their original publisher
+        if: github.event_name == 'workflow_dispatch' && inputs.publish_sections
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          node "$RUNNER_TEMP/section-release-$GITHUB_RUN_ID/engine/sites/release-bundle.mjs" receive \
+            --bundle "$RUNNER_TEMP/section-release-$GITHUB_RUN_ID" \
+            --manifest d116b8db9eaaa24c4a270b5e91c9a0f36c365ba8eec3b10c9ec3f23c74298978 \
+            --wrangler "$GITHUB_WORKSPACE/node_modules/.bin/wrangler"
+      - name: Refresh original apex feeds from the newly published sections
+        run: npm run build
       - name: Read pinned original Group brand authority before deploy
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
@@ -141,6 +166,147 @@ jobs:
           }
           console.log('Admitted exact TUFTE + LivingWebServer source '+receipt.sourceCommit);
           NODE
+      - name: Observe previous public feed before replacing it; route changes to editorial review
+        timeout-minutes: 2
+        run: |
+          node --input-type=module <<'NODE'
+          import {createHash} from 'node:crypto';
+          import {readFile,mkdir,writeFile,appendFile} from 'node:fs/promises';
+          import {assayPublicFeedProjection,comparePublicFeedRevisions} from './scripts/assay-public-feed.mjs';
+          import {assayEditorialQuestionProvenance,compareEditorialQuestionSnapshots} from './src/editorial-question-provenance.mjs';
+          const origin='https://561.group';
+          const load=async path=>JSON.parse(await readFile(path,'utf8'));
+          const home=await load('data/home.json');
+          const sourceRevision=await load('public/source-revision.json');
+          if(sourceRevision.sourceCommit!==process.env.GITHUB_SHA)
+            throw Error('Proposed publication revision not bound to original main');
+          const current={sourceRevision,feed:await load('public/feed.json'),
+            receipt:await load('public/feed-input-receipt.json'),
+            graph:await load('public/feed-provenance.jsonld')};
+          const sourceFrontdoorBytes=await readFile('data/frontdoor.json');
+          const originalFrontdoor=JSON.parse(new TextDecoder('utf-8',{fatal:true}).decode(sourceFrontdoorBytes));
+          const originalFrontdoorSha256=createHash('sha256').update(sourceFrontdoorBytes).digest('hex');
+          const proposedEditorial=await load('public/editorial-question-provenance.jsonld');
+          assayEditorialQuestionProvenance({
+            home,frontdoor:originalFrontdoor,
+            frontdoorSha256:originalFrontdoorSha256,graph:proposedEditorial
+          });
+          for(const name of ['feed.json','feed-input-receipt.json','feed-provenance.jsonld',
+            'editorial-question-provenance.jsonld']){
+            const digest='sha256:'+createHash('sha256')
+              .update(await readFile('public/'+name)).digest('hex');
+            if(sourceRevision.artifactDigests?.[name]!==digest)
+              throw Error('Unqualified proposed publication bytes: '+name);
+          }
+          assayPublicFeedProjection({home,feed:current.feed,
+            receipt:current.receipt,graph:current.graph});
+          const previousJson=async name=>{
+            const url=origin+'/'+name;
+            let response;
+            try{
+              response=await fetch(url,{method:'GET',redirect:'manual',
+                cache:'no-store',headers:{accept:'application/json',
+                  'accept-encoding':'identity','cache-control':'no-cache'},
+                signal:AbortSignal.timeout(10000)});
+            }catch(error){
+              const out=Error('Prior public release unreachable: '+name);
+              out.code='PRIOR_UNAVAILABLE';throw out;
+            }
+            if(response.status!==200){
+              const out=Error('Prior public release HTTP '+response.status+' at '+name);
+              out.code='PRIOR_UNAVAILABLE';throw out;
+            }
+            if(response.redirected||response.url!==url||
+               !(response.headers.get('content-type')??'').toLowerCase().includes('json'))
+              throw Error('Prior public evidence URL/media identity refused: '+name);
+            const chunks=[];let total=0;
+            for await(const chunk of response.body){
+              total+=chunk.byteLength;
+              if(total>2*1024*1024)throw Error('Prior public evidence exceeds 2MiB bound: '+name);
+              chunks.push(Buffer.from(chunk));
+            }
+            const raw=Buffer.concat(chunks,total);
+            let body;
+            try{body=JSON.parse(new TextDecoder('utf-8',{fatal:true}).decode(raw));}
+            catch{throw Error('Prior public evidence is not exact UTF-8 JSON: '+name);}
+            return {body,digest:'sha256:'+createHash('sha256').update(raw).digest('hex')};
+          };
+          let previous,reason=null;
+          try{
+            const result=await previousJson('source-revision.json');
+            const revision=result.body;
+            if(revision.repository!=='561-group/561.group'||
+               revision.origin!==origin||revision.renderer!=='TUFTE'||
+               revision.application!=='LivingWebServer'||
+               !/^[a-f0-9]{40}$/u.test(revision.sourceCommit??''))
+              throw Error('Prior source-revision is not an original Group publisher');
+            previous={sourceRevision:revision};
+            for(const [name,key] of [['feed.json','feed'],
+              ['feed-input-receipt.json','receipt'],
+              ['feed-provenance.jsonld','graph']]){
+              const read=await previousJson(name);
+              if(revision.artifactDigests?.[name]!==read.digest)
+                throw Error('Prior deployed artifact did not match its manifest: '+name);
+              previous[key]=read.body;
+            }
+            if(revision.artifactDigests?.['editorial-question-provenance.jsonld']){
+              const priorEditorial=await previousJson('editorial-question-provenance.jsonld');
+              if(priorEditorial.digest!==revision.artifactDigests['editorial-question-provenance.jsonld'])
+                throw Error('Prior source-owned editorial graph changed since its original release');
+              previous.editorialGraph=priorEditorial.body;
+            }
+          }catch(error){
+            if(error.code==='PRIOR_UNAVAILABLE'){reason='prior-public-source-unavailable';previous=null;}
+            else throw error;
+          }
+          const observedAt=new Date().toISOString();
+          const report=previous?
+            comparePublicFeedRevisions({home,previous,proposed:current,observedAt}):
+            {schema:'561.group/publication-transition-review/v1',observedAt,
+              scope:'Previous public release was not independently readable; no article withdrawal or revision inferred',
+              previousRelease:null,
+              proposedRelease:{sourceCommit:sourceRevision.sourceCommit,deployed:false},
+              editorialReviewRequired:true,editorialDecision:'not-admitted',
+              originalCorrectionPublished:false,reason,
+              metadataRevisions:[],identityChanges:[],aggregateExits:[],newlySelected:[]};
+          const editorialReview=previous?.editorialGraph ?
+            compareEditorialQuestionSnapshots({
+              home,previous:previous.editorialGraph,proposed:proposedEditorial,observedAt
+            }) :
+            {schema:'561.group/editorial-question-transition-review/v1',
+              observedAt,previousSourceContentSha256:null,
+              proposedSourceContentSha256:'sha256:'+originalFrontdoorSha256,
+              sourceEvidenceCoverage:'prior-editorial-evidence-unavailable',
+              editorialReviewRequired:true,editorialDecision:'not-admitted',
+              correctionPublished:false,counts:null,changes:[],introduced:[],omitted:[]};
+          report.editorialQuestions=editorialReview;
+          report.editorialReviewRequired=Boolean(report.editorialReviewRequired ||
+            editorialReview.editorialReviewRequired);
+          await mkdir('observations',{recursive:true});
+          await writeFile('observations/561.group-publication-transition-review.json',
+            JSON.stringify(report,null,2)+'\n');
+          console.log('Predeploy Group editorial-change evidence: '+JSON.stringify({
+            previous:report.previousRelease?.sourceCommit??null,
+            proposed:sourceRevision.sourceCommit,counts:report.counts??null,
+            editorialReviewRequired:report.editorialReviewRequired,
+            originalEditorialQuestionRevisions:editorialReview.counts,
+            priorEditorialEvidence:editorialReview.sourceEvidenceCoverage??'prior-public-graph-received',
+            reason}));
+          if(report.editorialReviewRequired)
+            console.log('::warning::Original feed metadata, authored editorial explanations, cited research or incomplete prior evidence requires subject-owned review; no correction or retraction is automatically published.');
+          if(process.env.GITHUB_STEP_SUMMARY)
+            await appendFile(process.env.GITHUB_STEP_SUMMARY,
+              '### Capped-feed change review (predeploy candidate, not publisher decision)\n'+
+              'Previous release '+(report.previousRelease?.sourceCommit??'unavailable')+
+              '; proposed '+sourceRevision.sourceCommit+
+              '; subject-owned review required '+report.editorialReviewRequired+
+              '. Changed metadata '+(report.counts?.metadataRevisions??'unknown')+
+              ', identity collisions '+(report.counts?.identityConflicts??'unknown')+
+              ', aggregate exits '+(report.counts?.aggregateExits??'unknown')+
+              '. Source question/citation revisions '+(editorialReview.counts?.contentOrCitationChanges??'unknown')+
+              ', question order changed '+String(editorialReview.counts?.orderChanged??'unknown')+
+              '. No original article correction or withdrawal is inferred.\n\n');
+          NODE
       - uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -184,24 +350,152 @@ jobs:
           // A source commit alone does not attest generated external-feed
           // snapshots. Independently compare original published bytes with
           // their release-time artifact digests at the public origin.
+          const {assayPublicFeedProjection,qualifyPublicAssetReadPath,normalizeMarkdownLiteralHyphens}=
+            await import('./scripts/assay-public-feed.mjs');
+          const publicationBodies=new Map();
+          const semanticPublicationPaths=new Set([
+            'feed.json','feed-input-receipt.json','feed-provenance.jsonld',
+            'editorial-question-provenance.jsonld'
+          ]);
           for(const path of ['llms.txt','llms-full.txt','robots.txt','sitemap.xml',
-            'feed.json','estate-records.json','zh-hans/index.html','lkt/index.html']) {
+            'feed.json','feed-input-receipt.json','feed-provenance.jsonld',
+            'editorial-question-provenance.jsonld','estate-records.json','zh-hans/index.html','lkt/index.html']) {
             const target='/'+path;
             const asset=await read(target);
             if(!asset.ok)throw Error('Original generated public artifact unavailable: '+target+' '+asset.status);
+            const route=qualifyPublicAssetReadPath({
+              origin:host,path,redirected:asset.redirected,
+              responseUrl:asset.url,contentType:asset.headers.get('content-type')
+            });
+            if(route.mode==='localized-html-redirect')
+              console.log('Canonical localized public asset read: '+target+' -> '+route.canonical);
             const raw=await asset.arrayBuffer();
+            if(semanticPublicationPaths.has(path)) {
+              if(raw.byteLength>2*1024*1024 ||
+                 !(asset.headers.get('content-type')??'').toLowerCase().includes('json'))
+                throw Error('Public syndication evidence lacks bounded JSON media type: '+target);
+              publicationBodies.set(path,new TextDecoder('utf-8',{fatal:true}).decode(raw));
+            }
             const bytes=new Uint8Array(await crypto.subtle.digest('SHA-256',raw));
             const digest='sha256:'+Array.from(bytes,b=>b.toString(16).padStart(2,'0')).join('');
             if(receipt.artifactDigests?.[path]!==digest) {
               throw Error('Deployed public bytes differ from original release receipt: '+target);
             }
           }
+          // These are the exact already-fetched public bytes, not a second
+          // crawler or a check of unpublished checkout-only representations.
+          const {readFile}=await import('node:fs/promises');
+
+          const sourceHome=JSON.parse(await readFile('data/home.json','utf8'));
+          const feedReceipt=assayPublicFeedProjection({
+            home:sourceHome,
+            feed:JSON.parse(publicationBodies.get('feed.json')),
+            receipt:JSON.parse(publicationBodies.get('feed-input-receipt.json')),
+            graph:JSON.parse(publicationBodies.get('feed-provenance.jsonld'))
+          });
+          console.log('Independent public source/metadata receiving: '+JSON.stringify(feedReceipt));
+          // One original editorial source already bound by the source-qualified
+          // checkout. This compares the EXACT public JSON-LD response bytes to
+          // six source-owned Question/Answer carriers and cited company URLs.
+          // A source match is never independently verified scientific truth.
+          const editorialSourceBytes=await readFile('data/frontdoor.json');
+          const editorialShaBytes=new Uint8Array(await crypto.subtle.digest(
+            'SHA-256',editorialSourceBytes));
+          const editorialSha=Array.from(editorialShaBytes,b=>
+            b.toString(16).padStart(2,'0')).join('');
+          const {assayEditorialQuestionProvenance}=
+            await import('./src/editorial-question-provenance.mjs');
+          const editorialReadback=assayEditorialQuestionProvenance({
+            home:sourceHome,
+            frontdoor:JSON.parse(new TextDecoder('utf-8',{fatal:true}).decode(editorialSourceBytes)),
+            frontdoorSha256:editorialSha,
+            graph:JSON.parse(publicationBodies.get('editorial-question-provenance.jsonld'))
+          });
+          console.log('Independent public editorial provenance receiving: '+JSON.stringify(editorialReadback));
+
+          // Independently read the actual reader-facing blog, not only its
+          // source feed: TUFTE HTML, machine JSON and negotiated Markdown must
+          // tell the same truth as the exact public input receipt just fetched.
+          const inputReceipt=JSON.parse(publicationBodies.get('feed-input-receipt.json'));
+          const expectedCoverage=feedReceipt.observedSourceFeeds+' of '+
+            sourceHome.group.companies.length+' original company feeds received';
+          const expectedSelection=feedReceipt.admittedItems+' source '+
+            (feedReceipt.admittedItems===1?'item':'items')+' admitted, '+
+            feedReceipt.emittedItems+' selected';
+          const expectedRejected=feedReceipt.excludedItems+' source '+
+            (feedReceipt.excludedItems===1?'entry':'entries')+' rejected';
+          const expectedOverflow=feedReceipt.omittedByAggregateLimit+
+            ' left outside its 60-item selection';
+          const expected=[expectedCoverage,expectedSelection,expectedRejected,expectedOverflow];
+          const blogHtmlResponse=await read('/blog/','text/html');
+          const blogHtml=await blogHtmlResponse.text();
+          if(!blogHtmlResponse.ok||blogHtmlResponse.redirected||
+             !(blogHtmlResponse.headers.get('content-type')??'').includes('text/html')||
+             !blogHtml.includes('href="https://561.group/blog/"')||
+             !blogHtml.includes('What this build actually received')||
+             !expected.every(term=>blogHtml.includes(term)))
+            throw Error('Independent published blog HTML disagrees with qualified source coverage');
+          const blogJsonResponse=await read('/blog/','application/json');
+          if(!blogJsonResponse.ok||blogJsonResponse.redirected||
+             !(blogJsonResponse.headers.get('content-type')??'').includes('application/json'))
+            throw Error('Published blog has no original machine-readable source model');
+          const blogModel=await blogJsonResponse.json();
+          const originalCoverageTile=blogModel?.tiles?.find(tile=>tile.id==='coverage');
+          if(blogModel.kind!=='tufte.projection'||
+             blogModel.metadata?.canonical!==host+'/blog/'||
+             !originalCoverageTile||
+             !expected.every(term=>originalCoverageTile.html?.includes(term))||
+             !sourceHome.group.companies.every(company=>
+               originalCoverageTile.html.includes(company.name) &&
+               originalCoverageTile.html.includes(company.feeds.json)))
+            throw Error('Published TUFTE blog JSON loses original company and source-receipt evidence');
+          const blogMarkdownResponse=await read('/blog/','text/markdown');
+          const blogMarkdown=await blogMarkdownResponse.text();
+          const normalizedBlogMarkdown=normalizeMarkdownLiteralHyphens(blogMarkdown);
+          if(!blogMarkdownResponse.ok||blogMarkdownResponse.redirected||
+             !(blogMarkdownResponse.headers.get('content-type')??'').startsWith('text/markdown')||
+             !/^(?:#|##) .+/mu.test(blogMarkdown)||
+             !expected.every(term=>normalizedBlogMarkdown.includes(term))||
+             !normalizedBlogMarkdown.includes('build-time feed input and selection counts'))
+            throw Error('Published accessible blog Markdown disagrees with original feed receipt');
+          if(inputReceipt.emittedItems!==feedReceipt.emittedItems)
+            throw Error('Reader-facing blog is using another source snapshot');
+          console.log('Independent published blog reader coverage: '+JSON.stringify({
+            sourceCommit:receipt.sourceCommit,
+            sources:feedReceipt.observedSourceFeeds,
+            sourceItems:feedReceipt.sourceItems,
+            selected:feedReceipt.emittedItems,
+            rejected:feedReceipt.excludedItems,
+            omittedByCap:feedReceipt.omittedByAggregateLimit,
+            html:true,json:true,markdown:true
+          }));
+
 
           // Marketing copy is owned by the public editorial source, not by
           // frozen release-workflow prose. Verify current purpose, not a
           // historical slogan that would make authentic branding undeployable.
           const {readFileSync}=await import('node:fs');
           const frontdoor=JSON.parse(readFileSync('data/frontdoor.json','utf8'));
+          // Qualified original Group editorial data is the authority, not
+          // frozen search-engine copy. Test its *actual* public representation.
+          const escapeEditorialText=value=>String(value).replace(/[&<>"']/gu,
+            character=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[character]));
+          const namedQuestions=[frontdoor.discovery,frontdoor.ecologicalDiscovery];
+          if(namedQuestions.some(group=>!Array.isArray(group?.questions)||group.questions.length!==3)||
+             !frontdoor.ecologicalDiscovery?.boundary?.includes('As observed on October 27, 2026')||
+             !frontdoor.ecologicalDiscovery.nextSteps?.some(next=>
+               next.href==='https://services.561.group/climate-water-and-energy-exposure-worksheet/')||
+             !frontdoor.ecologicalDiscovery.questions?.some(question=>
+               question.id==='climate-adaptation-and-moving-baselines'&&
+               question.href==='https://science.561.group/climate-breakdown-ergodicity-and-water-governance/')||
+             !frontdoor.ecologicalDiscovery.boundary.includes('Engineering and Operations climate article URLs returned HTTP 404'))
+            throw Error('Original Group public ecological questions or observed worksheet release boundaries missing');
+          const exactQuestions=(text,group)=>
+            group.questions.every(question=>
+              text.includes('id="'+question.id+'"')&&
+              text.includes('href="'+escapeEditorialText(question.href)+'"')&&
+              text.includes(escapeEditorialText(question.question))&&
+              text.includes(escapeEditorialText(question.answer)));
           if(typeof frontdoor.proposition!=='string' || !frontdoor.proposition.trim() ||
              !Array.isArray(frontdoor.vision?.frontiers) || frontdoor.vision.frontiers.length!==2 ||
              frontdoor.vision.frontiers.some(f=>typeof f.title!=='string'||!f.title.trim())) {
@@ -246,6 +540,12 @@ jobs:
                !markup.includes('href="'+host+page.path+'"')) {
               throw Error('Real public visitor route is missing useful original TUFTE content: '+page.path);
             }
+            if(page.path==='/about/'&&(
+               namedQuestions.some(group=>
+                 !markup.includes(escapeEditorialText(group.headline))||
+                 !exactQuestions(markup,group))||
+               !markup.includes(escapeEditorialText(frontdoor.ecologicalDiscovery.boundary))))
+              throw Error('Original ecological and political economy research sources missing from public About HTML');
             const agentResponse=await fetch(host+page.path,{
               cache:'no-store',headers:{accept:'application/json','cache-control':'no-cache'}
             });
@@ -259,7 +559,59 @@ jobs:
                !model.tiles?.some(tile=>tile.id===page.tile)) {
               throw Error('Visitor and agent read different or incomplete site models: '+page.path);
             }
+            if(page.path==='/about/'){
+              const candidates=[
+                ['technology-and-power',frontdoor.discovery],
+                ['ecology-and-adaptation',frontdoor.ecologicalDiscovery]
+              ];
+              if(candidates.some(([id,group])=>{
+                const tile=model.tiles.find(item=>item.id===id);
+                return !tile||tile.title!==group.headline||
+                  !exactQuestions(tile.html??'',group);
+              })||
+              !model.metadata?.description?.includes(frontdoor.discovery.summary)||
+              !model.metadata?.description?.includes(frontdoor.ecologicalDiscovery.summary))
+                throw Error('Original TUFTE agent model lost authoritative ecological research boundaries');
+            }
           }
+          // Receive the same original source through the opt-in agent carrier.
+          // A successful HTML release must not hide an unavailable Markdown path.
+          for(const path of ['/','/work/','/projects/','/about/','/for-agents/']) {
+            const response=await read(path,'text/markdown');
+            const markdown=await response.text();
+            if(response.status!==200 ||
+               !(response.headers.get('content-type')??'').startsWith('text/markdown') ||
+               !/(?:^|,)\s*Accept\s*(?:,|$)/iu.test(response.headers.get('vary')??'') ||
+               !/^# .+/mu.test(markdown) ||
+               !markdown.includes('https://561.group/work/') ||
+               /<script|<style/u.test(markdown)) {
+              throw Error('Original public Markdown representation was not received: '+path);
+            }
+            if(['/','/work/','/for-agents/'].includes(path))
+              for(const offer of frontdoor.selfService.examples)
+                if(!markdown.includes(offer.href))throw Error('Markdown lost original merchant link: '+offer.sku);
+            if(path==='/about/'){
+              const readable=normalizeMarkdownLiteralHyphens(markdown);
+              if(!readable.includes(frontdoor.discovery.headline)||
+                 !readable.includes(frontdoor.ecologicalDiscovery.headline)||
+                 !readable.includes('As observed on October 27, 2026')||
+                 !readable.includes('https://services.561.group/climate-water-and-energy-exposure-worksheet/')||
+                 !readable.includes('https://science.561.group/climate-breakdown-ergodicity-and-water-governance/')||
+                 !readable.includes('does not authenticate its current publisher source-to-provider release chain'))
+                throw Error('Original public About Markdown lost the admitted reader evidence and publication status');
+              console.log('Independent Group ecological reader evidence received: '+JSON.stringify({
+                sourceCommit:receipt.sourceCommit,topics:namedQuestions.length,
+                sourceQuestions:frontdoor.discovery.questions.length+frontdoor.ecologicalDiscovery.questions.length,
+                receivedWorksheet:true,scienceReaderPageObserved:true,scienceProviderNotAuthenticated:true,
+                html:true,json:true,markdown:true
+              }));
+            }
+            console.log('Independent public Markdown received: '+path+' '+new TextEncoder().encode(markdown).byteLength+' bytes');
+          }
+          const markdownHead=await fetch(host+'/',{method:'HEAD',headers:{accept:'text/markdown'}});
+          if(markdownHead.status!==200 ||
+             !(markdownHead.headers.get('content-type')??'').startsWith('text/markdown') ||
+             await markdownHead.text()!=='')throw Error('Public Markdown HEAD was not received');
           const oldRoute=await fetch(host+'/work',{redirect:'manual'});
           if(oldRoute.status!==308 || oldRoute.headers.get('location')!==host+'/work/') {
             throw Error('Human-friendly work route lacks canonical slash redirect');
@@ -291,6 +643,16 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: 561-group-post-release-public-observation
-          path: observations/561.group-public-delivery.json
+          path: |
+            observations/561.group-public-delivery.json
+            observations/561.group-publication-transition-review.json
+          if-no-files-found: warn
+          retention-days: 30
+      - name: Retain original section publication receipts
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: original-section-publication-receipts
+          path: ${{ runner.temp }}/section-release-${{ github.run_id }}/instance/data/records/section-site-releases/*.json
           if-no-files-found: warn
           retention-days: 30

@@ -4,22 +4,42 @@ import assert from 'node:assert/strict';
 import path from 'node:path';
 const root=path.resolve(path.dirname(new URL(import.meta.url).pathname),"..");
 const estate=JSON.parse(await readFile(path.join(root,'data/estate.json'),'utf8'));estate.revision='local-source-fixture';
-const probes=[],puts=[],waits=[],keys=[];let cached;
+const probes=[],puts=[],waits=[],keys=[];let cached,probeGate=null;
 const statuses=[200,301,401,402,403,404,500];
-const context=vm.createContext({Request,Response,URL,AbortSignal,Date,JSON,Promise,fetch:async(url,init)=>{probes.push({url,init});if(probes.length===8)throw Error('fixture timeout');return new Response('fixture',{status:statuses[(probes.length-1)%statuses.length]})},caches:{default:{match:async key=>{keys.push(key.url);return cached},put:async(key,value)=>{puts.push({key:key.url,value})}}}});
+const context=vm.createContext({Request,Response,URL,AbortSignal,Date,JSON,Promise,fetch:async(url,init)=>{probes.push({url,init});if(probeGate)await probeGate;if(probes.length===8)throw Error('fixture timeout');return new Response('fixture',{status:statuses[(probes.length-1)%statuses.length]})},caches:{default:{match:async key=>{keys.push(key.url);return cached},put:async(key,value)=>{puts.push({key:key.url,value})}}}});
 const told=new vm.SourceTextModule(await readFile(path.join(root,'src/told.mjs'),'utf8'),{context,identifier:'authored-told'});
 const sourceRevision=new vm.SourceTextModule(await readFile(path.join(root,'src/source-revision.mjs'),'utf8'),{context,identifier:'source-revision'});
 const data=new vm.SyntheticModule(['default'],function(){this.setExport('default',estate)},{context,identifier:'fixture-estate-records'});
 const homeData=JSON.parse(await readFile(path.join(root,'data/home.json'),'utf8'));
 const frontdoorData=JSON.parse(await readFile(path.join(root,'data/frontdoor.json'),'utf8'));
 const frontdoorModule=new vm.SyntheticModule(['default'],function(){this.setExport('default',frontdoorData)},{context,identifier:'fixture-public-frontdoor'});
+const blogFeed={version:"https://jsonfeed.org/version/1.1",home_page_url:"https://561.group/",
+  feed_url:"https://561.group/feed.json",items:[]};
+const blogFeedModule=new vm.SyntheticModule(['default'],function(){
+  this.setExport('default',blogFeed)
+},{context,identifier:'fixture-original-group-feed'});
+const blogFeedReceipt={
+  schema:"561.group/feed-input-receipt/v1",origin:"https://561.group",
+  expectedSourceCount:4,completeness:"all-sources-received",
+  sources:homeData.group.companies.map((company,i)=>({
+    companyId:company.id,feedUrl:company.feeds.json,state:"received",
+    inputItems:0,bytes:100,sha256:"sha256:"+String(i+1).repeat(64)
+  })),
+  excludedItemCounts:{},sourceItemCount:0,admittedItems:0,
+  omittedByAggregateLimit:0,emittedItems:0
+};
+const blogFeedReceiptModule=new vm.SyntheticModule(['default'],function(){
+  this.setExport('default',blogFeedReceipt)
+},{context,identifier:'fixture-original-feed-admission-receipt'});
 const homeModule=new vm.SyntheticModule(['default'],function(){this.setExport('default',homeData)},{context,identifier:'fixture-public-home'});
 const livingCalls=[];
 const livingModule=new vm.SyntheticModule(['create561GroupLivingApplication','PUBLIC_ROUTES'],function(){
-  this.setExport('PUBLIC_ROUTES',['/','/work/','/work/audit/','/projects/','/about/','/for-agents/']);
-  this.setExport('create561GroupLivingApplication', ({readHome,readEstate,readFrontdoor}) => ({
+  this.setExport('PUBLIC_ROUTES',['/','/work/','/work/audit/','/projects/','/blog/','/about/','/for-agents/']);
+  this.setExport('create561GroupLivingApplication', ({readHome,readEstate,readFrontdoor,readFeed,readFeedReceipt}) => ({
     fetch: async request => {
-      livingCalls.push({url:request.url,accept:request.headers.get('accept'),home:readHome(),estate:readEstate(),frontdoor:readFrontdoor()});
+      livingCalls.push({url:request.url,accept:request.headers.get('accept'),
+        home:readHome(),estate:readEstate(),frontdoor:readFrontdoor(),
+        ...(new URL(request.url).pathname==='/blog/' ? {feed:readFeed(),receipt:readFeedReceipt()} : {})});
       return request.headers.get('accept')==='application/json'
         ? Response.json({kind:'tufte.fixture',site:'561.group'})
         : new Response('<main data-tufte>Group living home fixture</main>',{headers:{'content-type':'text/html; charset=utf-8'}});
@@ -32,7 +52,7 @@ const { fileURLToPath, pathToFileURL } = await import('node:url');
 const loaded=new Map();
 const moduleAt=async file=>{if(!loaded.has(file))loaded.set(file,new vm.SourceTextModule(await readFile(file,'utf8'),{context,identifier:file}));return loaded.get(file)};
 const resolveFrom=(spec,referrer)=>spec.startsWith('.')?fileURLToPath(new URL(spec,pathToFileURL(referrer))):fileURLToPath(import.meta.resolve(spec));
-await worker.link(async(spec,referrer)=>{if(spec==='../public/estate-records.json')return data;if(spec==='../data/home.json')return homeModule;if(spec==='../data/frontdoor.json')return frontdoorModule;if(spec==='./living-home.mjs')return livingModule;if(spec==='./told.mjs')return told;if(spec==='./source-revision.mjs')return sourceRevision;if(spec==='./locales.mjs')return moduleAt(path.join(root,'src/locales.mjs'));if(referrer.identifier.startsWith('/'))return moduleAt(resolveFrom(spec,referrer.identifier));throw Error('unexpected dependency '+spec)});await worker.evaluate();
+await worker.link(async(spec,referrer)=>{if(spec==='../public/estate-records.json')return data;if(spec==='../data/home.json')return homeModule;if(spec==='../data/frontdoor.json')return frontdoorModule;if(spec==='../public/feed.json')return blogFeedModule;if(spec==='../public/feed-input-receipt.json')return blogFeedReceiptModule;if(spec==='./living-home.mjs')return livingModule;if(spec==='./told.mjs')return told;if(spec==='./source-revision.mjs')return sourceRevision;if(spec==='./locales.mjs')return moduleAt(path.join(root,'src/locales.mjs'));if(referrer.identifier.startsWith('/'))return moduleAt(resolveFrom(spec,referrer.identifier));throw Error('unexpected dependency '+spec)});await worker.evaluate();
 let count=0;const check=(n,f)=>{f();count++;console.log('PASS',n)};const fetchWorker=worker.namespace.default.fetch;const ctx={waitUntil:p=>waits.push(p)};let assetRequest;
 const env={ASSETS:{fetch:async request=>{assetRequest=request;return new Response('original asset body',{status:200,headers:{'content-type':'text/html'}})}}};
 const originalReceipt={repository:'561-group/561.group',origin:'https://561.group',
@@ -67,13 +87,20 @@ check('a stored English choice reaches the one TUFTE Living Web site',()=>{asser
 check('root response comes from the TUFTE source, not static assets',()=>assert.equal(response.headers.get('content-type'),'text/html; charset=utf-8'));
 response=await fetchWorker(new Request('https://561.group/',{headers:{'accept':'application/json',cookie:'lang=en'}}),env,ctx);
 check('the same root preserves machine JSON negotiation',()=>{assert.equal(response.status,200);assert.equal(response.headers.get('content-language'),'en');assert.equal(livingCalls[1].accept,'application/json')});
-for(const path of ['/work/','/work/audit/','/projects/','/about/','/for-agents/']){
+for(const path of ['/work/','/work/audit/','/projects/','/blog/','/about/','/for-agents/']){
   response=await fetchWorker(new Request('https://561.group'+path),env,ctx);
   check('public Work/Projects/About/Agents page '+path+' is served by one original TUFTE application',()=>{
     assert.equal(response.status,200);
     assert.equal(response.headers.get('content-language'),'en');
     assert.equal(livingCalls.at(-1).url,'https://561.group'+path);
     assert.equal(livingCalls.at(-1).frontdoor,frontdoorData);
+    if(path==='/blog/'){
+      assert.equal(livingCalls.at(-1).feed,blogFeed);
+      assert.equal(livingCalls.at(-1).receipt,blogFeedReceipt);
+    }else {
+      assert.equal(livingCalls.at(-1).feed,undefined);
+      assert.equal(livingCalls.at(-1).receipt,undefined);
+    }
   });
   response=await fetchWorker(new Request('https://561.group'+path.slice(0,-1)+'?src=directory'),env,ctx);
   check('extensionless route '+path+' canonicalizes without losing query',()=>{
@@ -189,6 +216,51 @@ check('original sender, headers, origin and exact activity bytes reach one provi
   assert.equal(arrived.contentType, 'application/activity+json');
   assert.match(arrived.signature, /peer.example/);
   assert.equal(arrived.body, authoredActivity);
+});
+
+// The previous Worker launched an entire estate probe fan-out for EACH
+// simultaneous cache miss, even when another read was already in flight.
+cached=undefined;
+let releaseProbes;
+probeGate=new Promise(resolve=>{releaseProbes=resolve});
+const probeStart=probes.length,writeStart=puts.length;
+const firstRead=fetchWorker(new Request('https://561.group/estate.json?reader=one'),env,ctx);
+const secondRead=fetchWorker(new Request('https://561.group/estate.json?reader=two'),env,ctx);
+for(let spin=0;spin<8;spin++)await Promise.resolve();
+const fanout=estate.nodes.length+(estate.machines??[]).length;
+check('two cold misses produce only one outbound probe per target',()=>{
+  assert.ok(fanout>0);
+  assert.equal(probes.length-probeStart,fanout);
+});
+releaseProbes();probeGate=null;
+const [firstReport,secondReport]=await Promise.all([firstRead,secondRead]);
+const [firstBody,secondBody]=await Promise.all([firstReport.json(),secondReport.json()]);
+await Promise.all(waits);
+check('concurrent status readers retain independent complete response bodies',()=>{
+  assert.deepEqual(firstBody,secondBody);
+  assert.equal(firstBody.nodes.length,estate.nodes.length);
+  assert.equal(firstBody.machines.length,(estate.machines??[]).length);
+  assert.equal(puts.length,writeStart+1);
+});
+cached=puts.at(-1).value;
+const beforeHead=probes.length;
+const headResponse=await fetchWorker(new Request('https://561.group/estate.json',{method:'HEAD'}),env,ctx);
+check('HEAD returns matching metadata, no fresh probes, and no body',()=>{
+  assert.equal(headResponse.status,200);
+  assert.equal(headResponse.headers.get('content-type'),'application/json; charset=utf-8');
+  assert.equal(headResponse.headers.get('cache-control'),'public, max-age=300');
+  assert.equal(probes.length,beforeHead);
+});
+assert.equal(await headResponse.text(),'');
+cached=undefined;
+const beforeDenied=probes.length;
+const deniedResponse=await fetchWorker(new Request('https://561.group/estate.json',{method:'POST'}),env,ctx);
+check('unsupported methods return 405 without probing or caching',()=>{
+  assert.equal(deniedResponse.status,405);
+  assert.equal(deniedResponse.headers.get('allow'),'GET, HEAD');
+  assert.equal(deniedResponse.headers.get('cache-control'),'no-store');
+  assert.equal(probes.length,beforeDenied);
+  assert.equal(puts.length,writeStart+1);
 });
 
 console.log(JSON.stringify({passed:count,scope:'Actual authored Worker/told modules with deterministic assets and ActivityPub binding fixtures; not evidence of deployed provider.'}));

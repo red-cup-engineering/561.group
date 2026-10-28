@@ -580,9 +580,18 @@ function publicGuide(home, editorial) {
     "## Start with the real service and project entry points", "",
     "- [Work with us](" + home.origin + "/work/): accountable providers, scoping and terms.",
     "- [Projects](" + home.origin + "/projects/): tools, books, games, worlds, news and commerce.",
+    "- [Blog](" + home.origin + "/blog/): source-authored writing from the four companies; original articles remain canonical.",
     "- [About](" + home.origin + "/about/): four companies and work method.",
     "- [For agents](" + home.origin + "/for-agents/): public machine interfaces and permissions.",
     "- [Contact](" + home.origin + "/contact/): human inquiries and public reports.", "",
+    "The public pages " + PUBLIC_ROUTES.map(path => home.origin + path).join(", ") +
+      " accept text/markdown, application/json and text/html through the same authorized Living Web Server. Use the Accept header to select a representation; it grants no additional source access or AI training rights.", "",
+    "## " + editorial.selfService.title, "",
+    editorial.selfService.summary, "",
+    ...editorial.selfService.examples.map(example =>
+      "- [" + example.title + "](" + example.href + "): " + example.summary +
+      " Source offer " + example.sku + "; claim cell " + example.cell + "; operation law " + example.law + "."),
+    "", editorial.selfService.terms, "",
     "## Areas the companies can scope", "",
     ...editorial.offers.map(x =>
       "- " + x.title + " (" + providers[x.provider].name + "): " + x.scope),
@@ -601,7 +610,7 @@ export function renderLlms(home, estate, facts = {}) {
 
 > ${home.description}
 
-${home.name} (${home.origin}/) is a ${home.masthead[0].toLowerCase()}, established ${home.established}. It is a parent of four companies, and The public site represents accountable offices and companies; an inquiry never grants authority.
+${home.name} (${home.origin}/) is a ${home.masthead[0].toLowerCase()}, established ${home.established}. It is a parent of four companies, and the public site represents accountable offices and companies; an inquiry never grants authority.
 
 Intended design: ${designSentence(d)}
 
@@ -617,7 +626,7 @@ ${designTerms(home).map(({ text, gloss }) => `- ${text}: ${gloss}`).join("\n")}
 
 ${companyLines(g)}
 
-What the Group is publishing, merged from the four companies: [JSON Feed](${home.origin}/feed.json), [Atom](${home.origin}/feed.atom.xml), [RSS](${home.origin}/feed.rss.xml).
+What the Group is publishing, merged from the four companies: [Read the blog](${home.origin}/blog/), [JSON Feed](${home.origin}/feed.json), [Atom](${home.origin}/feed.atom.xml), [RSS](${home.origin}/feed.rss.xml). [Build source-admission receipt](${home.origin}/feed-input-receipt.json) reports the four original company feed reads, SHA-256 of received source response bytes, and withheld-record counts. [PROV-O item provenance](${home.origin}/feed-provenance.jsonld) links each aggregated item to its observed source feed snapshot and asserted company author. These artifacts do not attest article fact-checking, indexing, federation delivery, correction histories or full archive coverage. [Editorial question and citation provenance](${home.origin}/editorial-question-provenance.jsonld) derives the six public About-page questions and suggested answers from the exact source-authored front-door JSON byte digest; its research links are not independent scientific attestations.
 
 GitHub organization of the parent: ${g.githubOrg}. Full prose, doctrine and told values: [llms-full.txt](${home.origin}/llms-full.txt).
 
@@ -657,7 +666,7 @@ export function renderLlmsFull(home, estate, facts = {}) {
 
 > ${home.description}
 
-This is the long form of [llms.txt](${home.origin}/llms.txt). Everything here is public.
+This is the long form of [llms.txt](${home.origin}/llms.txt). Everything here is public. Original [editorial question and citation provenance](${home.origin}/editorial-question-provenance.jsonld) binds each About-page question to its source bytes and related company reading, not an independently verified scientific result.
 
 ${publicGuide(home, facts.frontdoor)}
 

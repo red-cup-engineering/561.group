@@ -2,9 +2,9 @@
 // Read-only public delivery witness for the original 561.group site.
 // A successful HTTP probe is NOT an authenticated Cloudflare deployment receipt,
 // an accepted human journey, or proof that the current source was published.
-import { createHash } from 'node:crypto';
 import { appendFile, mkdir, writeFile } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
+import { observeSiteOperation, projectSiteConformance } from './site-observation/upstream.mjs';
 
 const ORIGIN = 'https://561.group';
 const MAX_BYTES = 2 * 1024 * 1024;
@@ -39,7 +39,7 @@ const RESEARCH_CHECK = Object.freeze({
 
 async function limitedBytes(response) {
   const length = Number(response.headers.get('content-length'));
-  if (Number.isFinite(length) && length > MAX_BYTES) throw new RangeError('body too large');
+  if (Number.isFinite(length) && length > MAX_BYTES) throw Object.assign(new RangeError('body too large'), { code: 'BODY_LIMIT' });
   const reader = response.body?.getReader();
   if (!reader) return new Uint8Array(0);
   const parts = [];
@@ -49,7 +49,7 @@ async function limitedBytes(response) {
       const { done, value } = await reader.read();
       if (done) break;
       size += value.byteLength;
-      if (size > MAX_BYTES) throw new RangeError('body too large');
+      if (size > MAX_BYTES) throw Object.assign(new RangeError('body too large'), { code: 'BODY_LIMIT' });
       parts.push(value);
     }
   } finally {
@@ -61,32 +61,43 @@ async function limitedBytes(response) {
   return result;
 }
 
-async function observe(url, accept, fetchImpl, timeoutMs) {
-  try {
-    const response = await fetchImpl(url, {
-      method: 'GET', redirect: 'manual', cache: 'no-store',
-      headers: { accept, 'cache-control': 'no-cache', 'user-agent': '561-group-public-delivery-witness/1' },
-      signal: AbortSignal.timeout(timeoutMs),
-    });
-    const bytes = await limitedBytes(response);
-    return {
-      status: response.status,
-      contentType: response.headers.get('content-type') ?? '',
-      location: response.headers.get('location') ?? '',
-      nosniff: response.headers.get('x-content-type-options') === 'nosniff',
-      hsts: Boolean(response.headers.get('strict-transport-security')),
-      contentSha256: createHash('sha256').update(bytes).digest('hex'),
-      bytes: bytes.byteLength,
-      body: new TextDecoder().decode(bytes),
-    };
-  } catch (error) {
-    // A probe failure is coverage uncertainty, not evidence that the site is down.
-    return { unknown: true, errorKind: error?.name === 'TimeoutError' ? 'timeout' : error instanceof RangeError ? 'body-limit' : 'transport' };
+async function observe(url, accept, fetchImpl, timeoutMs, clock) {
+  let nosniff = false, hsts = false;
+  const observation = await observeSiteOperation({
+    endpoint: '561-group-public-delivery', url, method: 'GET', redirect: 'manual',
+    responseType: 'text', timeoutMs, maxBodyBytes: MAX_BYTES,
+  }, {
+    clock, safeErrors: true, readResponseBody: limitedBytes, identityContentCoding: true,
+    userAgent: '561-group-public-delivery-witness/1',
+    fetchImpl: async (target, options) => {
+      const headers = new Headers(options.headers);
+      headers.set('accept', accept);
+      headers.set('cache-control', 'no-cache');
+      const response = await fetchImpl(target, { ...options, cache: 'no-store', headers });
+      nosniff = response.headers.get('x-content-type-options') === 'nosniff';
+      hsts = Boolean(response.headers.get('strict-transport-security'));
+      return response;
+    },
+  });
+  // Full read wall time from original observation timestamps; not TTFB/LCP.
+  const startMs = Date.parse(observation.observedAt ?? '');
+  const finishMs = Date.parse(observation.completedAt ?? '');
+  const readWallMs = Number.isFinite(startMs) && Number.isFinite(finishMs) && finishMs >= startMs
+    ? finishMs - startMs : null;
+  if (observation.status === 'obstruction' && !/^HTTP \d{3}$/u.test(observation.reason ?? '')) {
+    return { observation, readWallMs, unknown: true, errorKind: observation.reason === 'operation-timeout' ? 'timeout'
+      : observation.reason === 'response-body-limit' ? 'body-limit' : 'transport' };
   }
+  return { observation, readWallMs, status: observation.httpStatus,
+    contentType: observation.headers['content-type'] ?? '',
+    location: observation.headers.location ?? '', nosniff, hsts,
+    contentSha256: observation.bodyDigest?.value, bytes: observation.bodyBytes ?? 0,
+    body: observation.body ?? '' };
 }
 
 function evaluateSimple(def, sample) {
-  const common = { name: def.name, url: `${ORIGIN}${def.path}`, required: def.required };
+  const common = { name: def.name, url: `${ORIGIN}${def.path}`, required: def.required,
+    readWallMs: sample.readWallMs ?? null };
   if (sample.unknown) return { ...common, outcome: 'unknown', reason: sample.errorKind };
   const result = { ...common, httpStatus: sample.status, bytes: sample.bytes,
     contentSha256: sample.contentSha256, contentType: sample.contentType };
@@ -151,6 +162,100 @@ function evaluateRevision(sample, expectedSourceSha) {
   return resultClaim;
 }
 
+// The original Public Web issue #23 already owns these source-accepted
+// articles. This samples external reader visibility ONLY: it does not create
+// a site, source license, provider receipt, indexing record, or correction.
+export const HOUSE_CLIMATE_ARTICLES = Object.freeze([
+  Object.freeze({house:'science',domain:'science.561.group',
+    sourceRepository:'lenticule-science/science-services-section',
+    slug:'climate-breakdown-ergodicity-and-water-governance',
+    title:'Climate breakdown changes the baseline'}),
+  Object.freeze({house:'engineering',domain:'engineering.561.group',
+    sourceRepository:'red-cup-engineering/engineering-services-section',
+    slug:'engineering-nonstationary-water-decisions',
+    title:'From watershed observations to warranted decisions'}),
+  Object.freeze({house:'operations',domain:'operations.561.group',
+    sourceRepository:'coesite-operations/operations-services-section',
+    slug:'operating-with-changing-baselines',
+    title:'Operating with changing baselines'}),
+  Object.freeze({house:'services',domain:'services.561.group',
+    sourceRepository:'causeway-services/public-services-section',
+    slug:'climate-water-and-energy-exposure-worksheet',
+    title:'Free worksheet: where changing water and energy conditions affect your work'}),
+]);
+
+function canonicalLinkInBody(body,url) {
+  if(typeof body!=='string')return false;
+  return [...body.matchAll(/<link\b[^>]*>/giu)].some(([tag]) =>
+    /\brel\s*=\s*["']canonical["']/iu.test(tag) &&
+    (tag.includes('href="'+url+'"') || tag.includes("href='"+url+"'")));
+}
+function publicHouseSample(sample,url) {
+  if(sample.unknown)return {url,state:'unknown',reason:sample.errorKind};
+  return {url,state:'observed',httpStatus:sample.status,
+    bytes:sample.bytes,contentSha256:sample.contentSha256,
+    mediaType:sample.contentType,
+    // These security headers are observed, not a conformance certificate.
+    nosniff:sample.nosniff,hsts:sample.hsts};
+}
+/** One bounded, read-only outside reader traversal per original company.
+ * 200 with an expected title and canonical address remains an HTTP
+ * observation, NEVER a source->build->provider custody or readership proof.
+ * Unreachable, missing and changed content are preserved distinctly. */
+export function qualifyHouseClimateVisibility(def,article,homepage) {
+  const origin='https://'+def.domain;
+  const articleUrl=origin+'/'+def.slug+'/';
+  const homeUrl=origin+'/';
+  const articleResult=publicHouseSample(article,articleUrl);
+  const homeResult=publicHouseSample(homepage,homeUrl);
+  const base={house:def.house,sourceRepository:def.sourceRepository,
+    articleUrl,homepageUrl:homeUrl,article:articleResult,homepage:homeResult,
+    providerReceiptAuthenticated:false,sourceByteEquivalenceVerified:false,
+    externallyIndexed:null,independentHumanAcceptance:null};
+  if(article.unknown || homepage.unknown)
+    return {...base,status:'incomplete-public-observation',
+      reason:article.unknown?'article-unreadable':'homepage-unreadable'};
+  if(article.status===404)
+    return {...base,status:'article-not-found-on-observed-origin',reason:'http-404'};
+  if(article.status!==200)
+    return {...base,status:'article-not-served-as-200',reason:'http-'+article.status};
+  if(!article.contentType.toLowerCase().includes('text/html') || !article.body)
+    return {...base,status:'article-unqualified',reason:'invalid-article-media'};
+  if(!canonicalLinkInBody(article.body,articleUrl))
+    return {...base,status:'article-unqualified',reason:'missing-exact-article-canonical'};
+  if(!article.body.includes(def.title))
+    return {...base,status:'article-unqualified',reason:'source-title-not-observed'};
+  if(homepage.status!==200 || !homepage.contentType.toLowerCase().includes('text/html'))
+    return {...base,status:'homepage-unqualified',reason:'home-http-or-media'};
+  const escaped='/'+def.slug+'/';
+  const linked=homepage.body?.includes('href="'+escaped+'"') ||
+    homepage.body?.includes('href="'+articleUrl+'"') ||
+    homepage.body?.includes("href='"+escaped+"'") ||
+    homepage.body?.includes("href='"+articleUrl+"'");
+  if(!linked)
+    return {...base,status:'homepage-unqualified',reason:'article-not-linked-from-home'};
+  return {...base,status:'public-page-and-home-link-observed',
+    qualification:'independent HTTP title/canonical/navigation only; original publisher source, provider release, exact article bytes and human receiving still require separate evidence'};
+}
+export async function observeHouseClimateVisibility({fetchImpl,timeoutMs,clock}) {
+  const pages=await Promise.all(HOUSE_CLIMATE_ARTICLES.map(async def=>{
+    const origin='https://'+def.domain;
+    const [article,homepage]=await Promise.all([
+      observe(origin+'/'+def.slug+'/', 'text/html',fetchImpl,timeoutMs,clock),
+      observe(origin+'/', 'text/html',fetchImpl,timeoutMs,clock),
+    ]);
+    return qualifyHouseClimateVisibility(def,article,homepage);
+  }));
+  return {
+    schema:'561.group.house-climate-reader-observations/v1',
+    scope:'Four source-authorized climate article routes: independent bounded public GET only; does not establish exact source build, Cloudflare version, published claims, search inclusion, remote federation or human results',
+    observedVisible:pages.filter(p=>p.status==='public-page-and-home-link-observed').length,
+    missing:pages.filter(p=>p.status==='article-not-found-on-observed-origin').length,
+    incomplete:pages.filter(p=>p.status==='incomplete-public-observation').length,
+    pages,
+  };
+}
+
 /**
  * Public, non-privileged evidence. Does not assert active Cloudflare version,
  * correctness of self-reported revision, acceptance, or satisfaction of Work.
@@ -158,33 +263,55 @@ function evaluateRevision(sample, expectedSourceSha) {
  * from the current repository's default branch.
  */
 export async function observeProduction({ fetchImpl = fetch, expectedSourceSha = null,
-  timeoutMs = 10000, now = () => new Date().toISOString() } = {}) {
+  timeoutMs = 10000, now = () => new Date().toISOString(), searchConsole = null } = {}) {
   if (expectedSourceSha !== null && !EXACT_SHA.test(expectedSourceSha))
     throw new TypeError('expected source must be a 40-character hexadecimal commit');
   if (!Number.isSafeInteger(timeoutMs) || timeoutMs < 500 || timeoutMs > 60000)
     throw new RangeError('timeout must be between 500 and 60000ms');
-  const [simpleSamples, alias, revision] = await Promise.all([
+  const [simpleSamples, alias, revision, houseClimateVisibility] = await Promise.all([
     Promise.all(SIMPLE_CHECKS.map(def =>
-      observe(`${ORIGIN}${def.path}`, def.accept, fetchImpl, timeoutMs))),
-    observe('https://www.561.group/contact/?witness=1', 'text/html', fetchImpl, timeoutMs),
-    observe(`${ORIGIN}/source-revision.json`, 'application/json', fetchImpl, timeoutMs),
+      observe(`${ORIGIN}${def.path}`, def.accept, fetchImpl, timeoutMs, now))),
+    observe('https://www.561.group/contact/?witness=1', 'text/html', fetchImpl, timeoutMs, now),
+    observe(`${ORIGIN}/source-revision.json`, 'application/json', fetchImpl, timeoutMs, now),
+    observeHouseClimateVisibility({fetchImpl,timeoutMs,clock:now}),
   ]);
+  const observedAt = now();
+  // The same exact HTTP responses feed the original conformance engine. This
+  // owner declares six public entrypoints indexable and self-canonical; the
+  // engine owns Googlebot, noindex and canonical semantics, including unknowns.
+  const searchConformance = projectSiteConformance({
+    site: ORIGIN + '/', owner: '561-group/561-group-frontdoor-services-section',
+    sourceContext: { policyRevision: '561.group/public-indexable-entrypoints.v1' },
+    evaluatedAt: observedAt, maxAgeMs: 600000, robotsUserAgent: 'Googlebot',
+    routes: SIMPLE_CHECKS.filter(def => def.type === 'html').map(def => ({
+      url: ORIGIN + def.path, method: 'GET', intent: 'index', canonicalUrl: ORIGIN + def.path,
+    })),
+    observations: simpleSamples.map(sample => sample.observation),
+    ...(searchConsole === null ? {} : { searchConsole }),
+  });
+  const searchChecks = searchConformance.records.map(record => ({
+    name: 'search-indexability:' + new URL(record.url).pathname, url: record.url, required: true,
+    outcome: record.status === 'conformant' ? 'pass' : record.status === 'nonconformant' ? 'fail' : 'unknown',
+    observationId: record.observation?.id,
+    reason: record.checks.filter(check => check.status !== 'conformant').map(check => check.code).join(', ') || undefined,
+  }));
   const simple = SIMPLE_CHECKS.map((def, i) => evaluateSimple(def, simpleSamples[i]));
   const researchRaw = evaluateSimple(RESEARCH_CHECK, simpleSamples[0]);
   const research = researchRaw.reason === 'missing-useful-visitor-page'
     ? { ...researchRaw, reason: 'missing-research-discovery-link' } : researchRaw;
-  const checks = [simple[0], research, ...simple.slice(1),
+  const checks = [simple[0], research, ...simple.slice(1), ...searchChecks,
     evaluateAlias(alias), evaluateRevision(revision, expectedSourceSha)];
   const requiredChecks = checks.filter(check => check.required);
-  const passed = requiredChecks.every(check => check.outcome === 'pass') && !checks.some(check => check.outcome === 'fail');
-  const uncertain = requiredChecks.some(check => check.outcome === 'unknown');
+  const failed = checks.some(check => check.outcome === 'fail');
+  const passed = requiredChecks.every(check => check.outcome === 'pass');
   return {
     schema: '561.group.public-delivery-observation/v1',
-    observedAt: now(), origin: ORIGIN, observerKind: 'read-only-external-http',
+    observedAt, origin: ORIGIN, observerKind: 'read-only-external-http',
     selectedReleaseSource: expectedSourceSha, sourceSelection: expectedSourceSha ? 'operator-supplied' : 'not-selected',
-    overall: passed ? 'public-checks-passed' : uncertain ? 'receiving-incomplete' : 'public-checks-failed',
+    overall: failed ? 'public-checks-failed' : passed ? 'public-checks-passed' : 'receiving-incomplete',
     providerDeploymentVerified: false, independentHumanAcceptance: false,
-    checks,
+    checks, searchConformance, houseClimateVisibility,
+    providerNoticeCoverage: searchConsole === null ? 'not-supplied' : 'source-selected-notices',
   };
 }
 
@@ -194,8 +321,20 @@ export function markdownSummary(result) {
     `### 561.group public delivery observation: ${result.overall}`,
     '', `Observed: ${result.observedAt}; selected release source: ${result.selectedReleaseSource ?? 'none'}.`,
     'Provider-native deployment and independent human acceptance are **not** established by these HTTP checks.',
-    '', '| Check | Outcome | HTTP | Notes |', '|---|---|---:|---|',
-    ...result.checks.map(c => `| ${escape(c.name)} | ${escape(c.outcome)} | ${c.httpStatus ?? '—'} | ${escape(c.reason ?? (c.claimedSourceCommit ?? ''))} |`),
+    `Search evidence: ${result.searchConformance.summary.routes} declared entrypoints; ${result.searchConformance.summary.findings} findings; provider notices ${result.providerNoticeCoverage}. Google indexing and unresolved provider notices remain separate from current HTTP checks.`,
+    '',
+    '**Four house climate article routes — independent public HTTP visibility, not original source/provider-release qualification:** ' +
+      result.houseClimateVisibility.observedVisible + '/4 article-and-home paths sampled as recognizable; ' +
+      result.houseClimateVisibility.missing + ' observed HTTP 404; ' +
+      result.houseClimateVisibility.incomplete + ' transport/reader observations incomplete.',
+    '', '| House | Public route observation | Article HTTP | Qualification |',
+    '|---|---|---:|---|',
+    ...result.houseClimateVisibility.pages.map(p =>
+      '| ' + escape(p.house) + ' | ' + escape(p.status) + ' | ' +
+      (p.article.httpStatus ?? '—') + ' | ' + escape(p.reason ??
+        'No provider/source-byte, indexing, corrected-claim or reader-acceptance receipt') + ' |'),
+    '', '| Check | Outcome | HTTP | Read ms | Notes |', '|---|---|---:|---:|---|',
+    ...result.checks.map(c => `| ${escape(c.name)} | ${escape(c.outcome)} | ${c.httpStatus ?? '—'} | ${c.readWallMs ?? '—'} | ${escape(c.reason ?? (c.claimedSourceCommit ?? ''))} |`),
   ].join('\n') + '\n';
 }
 

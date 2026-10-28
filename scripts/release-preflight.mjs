@@ -18,6 +18,41 @@ const required=[
   "public/lkt/index.html"
 ];
 
+/** Receive one immutable published supplier selection from the original npm lock.
+ * Native npm ci still fetches and verifies these archives; this pure check
+ * does not claim installation or substitute a Git source for a publication.
+ */
+export function qualifySuppliers({manifest,lock,registry}) {
+  if(registry!=="https://registry.561.group/") throw new Error("Original house registry is required");
+  const version=/^\d+\.\d+\.\d+(?:-[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*)?$/u;
+  const integrity=/^sha512-[A-Za-z0-9+/]+={0,2}$/u;
+  const name=leaf=>"@red-cup-engineering/"+leaf;
+  const selected=leaf=>manifest.dependencies?.[name(leaf)];
+  const locked=leaf=>lock.packages?.["node_modules/"+name(leaf)];
+  const living=locked("living-web-server"),tufte=locked("web-page-tiling-engine"),markdown=locked("markdown-engineering-services-section");
+  const choices=[
+    ["living-web-server",selected("living-web-server"),living],
+    ["web-page-tiling-engine",living?.dependencies?.[name("web-page-tiling-engine")],tufte],
+    ["markdown-engineering-services-section",selected("markdown-engineering-services-section"),markdown],
+  ];
+  if(manifest.dependencies?.[name("l-space")] || manifest.dependencies?.[name("computer-web-server")])
+    throw new Error("The original Worker must select its shared Fetch application");
+  for(const [leaf,choice,entry] of choices) {
+    if(!version.test(choice??"") || entry?.version!==choice || !integrity.test(entry?.integrity??""))
+      throw new Error("Missing immutable published supplier: "+leaf);
+    const url=new URL(entry.resolved);
+    if(url.origin!==new URL(registry).origin || url.username || url.password || url.search || url.hash)
+      throw new Error("Supplier archive is outside the original registry: "+leaf);
+  }
+  for(const leaf of ["living-web-server","markdown-engineering-services-section"])
+    if(lock.packages?.[""]?.dependencies?.[name(leaf)]!==selected(leaf))
+      throw new Error("Manifest and lock choose different suppliers: "+leaf);
+  if(living.peerDependencies?.[name("markdown-engineering-services-section")]!==markdown.version ||
+     tufte.peerDependencies?.[name("markdown-engineering-services-section")]!==markdown.version)
+    throw new Error("The original application and renderer must share the selected Markdown supplier");
+  return Object.freeze({living:living.version,tufte:tufte.version,markdown:markdown.version});
+}
+
 export function qualifyRelease({mainBranch,sourceSha,checkoutSha,receipt,
   lockPresent,dependenciesInstalled,requiredAssets,duplicateIndex}){
   if(mainBranch!=="main")throw new Error("Only the original main branch may be released");
@@ -89,6 +124,8 @@ async function main(){
   const sourceSha=process.env.GITHUB_SHA;
   const receipt=JSON.parse(await readFile("public/source-revision.json","utf8"));
   const lockPresent=!(await missing("package-lock.json"));
+  qualifySuppliers({manifest:JSON.parse(await readFile("package.json","utf8")),
+    lock:JSON.parse(await readFile("package-lock.json","utf8")),registry:"https://registry.561.group/"});
   let dependenciesInstalled=false;
   try{
     const installed=JSON.parse(await readFile("node_modules/@red-cup-engineering/living-web-server/package.json","utf8"));

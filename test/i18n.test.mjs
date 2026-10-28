@@ -39,7 +39,7 @@ test("the English page keeps its words, and announces its languages", () => {
   assert.match(html, /<link rel="alternate" hreflang="zh-Hans" href="https:\/\/561\.group\/zh-hans\/">/u);
   assert.match(html, /<link rel="alternate" hreflang="x-default" href="https:\/\/561\.group\/">/u);
   assert.match(html, /<span class="term">type-theoretic<\/span><sup class="ref"><a id="r1" href="#n1" aria-label="Note 1">1<\/a><\/sup> distributed operating system/u);
-  assert.match(html, /<span class="count">12<\/span> public nodes\./u);
+  assert.ok(html.includes(`<span class="count">${estate.nodes.length}</span> public nodes.`));
   assert.match(html, /<span lang="zh-Hans">灰度管理<\/span>/u, "Han runs in English notes are marked Simplified Chinese");
   assert.match(html, /<a href="\/zh-hans\/" hreflang="zh-Hans" lang="zh-Hans">简体中文<\/a>/u);
   assert.doesNotMatch(html, /class="mt-note"/u);
@@ -55,7 +55,7 @@ test("the Mandarin page speaks Mandarin, keeps every gloss, and discloses machin
   assert.match(html, /一个<span class="term">类型论<\/span><sup class="ref"><a id="r1" href="#n1" aria-label="注释 1">1<\/a><\/sup>的分布式操作系统/u);
   for (const n of Object.keys(home.design.notes)) assert.match(html, new RegExp(`id="r${n}" href="#n${n}"`, "u"), `gloss ${n} kept`);
   assert.match(html, /<p class="mt-note" role="note">本页部分内容由机器翻译，尚未经过人工审校。/u);
-  assert.match(html, /<span class="count">12<\/span> 个公开节点。/u);
+  assert.ok(html.includes(`<span class="count">${estate.nodes.length}</span> 个公开节点。`));
   assert.match(html, /<b>告知为真<\/b>：已应答/u);
   assert.match(html, /"phases":\[\["M","监控"\]/u);
   assert.doesNotMatch(html, /<span lang="zh-Hans">/u, "Chinese inside a Chinese page needs no marking");
@@ -65,7 +65,9 @@ test("the Lakota page serves its Lakota and marks every English fallback", () =>
   const html = page("lkt");
   assert.match(html, /<html lang="lkt" dir="ltr">/u);
   assert.match(html, /<nav class="langs" aria-label="Iyápi">/u);
-  assert.ok(html.includes('<p class="lede"><span lang="en">'+home.description+'</span>'), "the English fallback retains the current source-owned corporate description");
+  assert.notEqual(speaker(space, "lkt", { origin: home.origin }).text("home.description"), home.description);
+  assert.ok(speaker(space, "lkt", { origin: home.origin }).text("home.description").length > 0);
+  assert.doesNotMatch(html, /<span lang="en">/u);
   assert.match(html, /:lang\(lkt\)\{--serif:"Charis SIL"/u);
 });
 
@@ -111,6 +113,18 @@ test("llms.txt maps the whole Group and takes the market's offer count from the 
   for (const quote of home.doctrine) assert.ok(full.includes(quote.text));
   for (const note of Object.values(home.design.notes)) assert.ok(full.includes(note));
   for (const told of home.told) assert.ok(full.includes(told.label));
+});
+
+test("both agent guides preserve the same unattended purchase examples and source claims as the public journey", () => {
+  const frontdoor=JSON.parse(read("data/frontdoor.json"));
+  for (const guide of [renderLlms(home,estate,{frontdoor}),renderLlmsFull(home,estate,{frontdoor})]) {
+    assert.ok(guide.includes(frontdoor.selfService.summary));
+    for (const example of frontdoor.selfService.examples) {
+      assert.ok(guide.includes(`[${example.title}](${example.href})`));
+      for (const identity of [example.sku,example.cell,example.law]) assert.ok(guide.includes(identity));
+    }
+    assert.ok(guide.includes(frontdoor.selfService.terms));
+  }
 });
 
 test("robots names every AI crawler and keeps the sitemap; the sitemap lists the llms files", () => {
