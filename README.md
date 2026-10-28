@@ -27,7 +27,23 @@ source/build/provider workflow compares the published graph's exact HTTP
 response bytes with the release artifact manifest and **recomputes its
 meaning** from the independently checked-out, source-bound editorial JSON.
 It refuses invented questions, changed suggestions or citations, or
-forged source digests. A semantically qualified editorial projection
+forged source digests.
+
+The original **predeploy public-edition comparison** also reads the *previous*
+live JSON-LD graph, verifies its exact HTTP bytes against the previous
+release's original artifact manifest, and compares those six source-owned
+questions with the newly source-qualified graph. It retains the result as
+`editorialQuestions` **inside the existing**
+`observations/561.group-publication-transition-review.json` Action artifact.
+A changed question, explanation, cited original reading or item order flags
+`editorialReviewRequired`; a changed source JSON digest by itself does
+not invent a question-level correction when the six actual answers are
+unchanged. Missing old source evidence is an explicit unknown/review case,
+not an empty prior publication. A report never edits the article, signs an
+ActivityPub Update, declares a retraction or grants another company's
+editorial consent. This review artifact follows the original 30-day
+retention, while the source-owned Git history retains its own revisions.
+ A semantically qualified editorial projection
 **does not** independently fact-check scientific findings, authenticate
 each cited external site's current provider, supply licensing rights,
 establish an accepted article correction, prove actual Google indexing,
