@@ -79,11 +79,16 @@ async function observe(url, accept, fetchImpl, timeoutMs, clock) {
       return response;
     },
   });
+  // Full read wall time from original observation timestamps; not TTFB/LCP.
+  const startMs = Date.parse(observation.observedAt ?? '');
+  const finishMs = Date.parse(observation.completedAt ?? '');
+  const readWallMs = Number.isFinite(startMs) && Number.isFinite(finishMs) && finishMs >= startMs
+    ? finishMs - startMs : null;
   if (observation.status === 'obstruction' && !/^HTTP \d{3}$/u.test(observation.reason ?? '')) {
-    return { observation, unknown: true, errorKind: observation.reason === 'operation-timeout' ? 'timeout'
+    return { observation, readWallMs, unknown: true, errorKind: observation.reason === 'operation-timeout' ? 'timeout'
       : observation.reason === 'response-body-limit' ? 'body-limit' : 'transport' };
   }
-  return { observation, status: observation.httpStatus,
+  return { observation, readWallMs, status: observation.httpStatus,
     contentType: observation.headers['content-type'] ?? '',
     location: observation.headers.location ?? '', nosniff, hsts,
     contentSha256: observation.bodyDigest?.value, bytes: observation.bodyBytes ?? 0,
@@ -91,7 +96,8 @@ async function observe(url, accept, fetchImpl, timeoutMs, clock) {
 }
 
 function evaluateSimple(def, sample) {
-  const common = { name: def.name, url: `${ORIGIN}${def.path}`, required: def.required };
+  const common = { name: def.name, url: `${ORIGIN}${def.path}`, required: def.required,
+    readWallMs: sample.readWallMs ?? null };
   if (sample.unknown) return { ...common, outcome: 'unknown', reason: sample.errorKind };
   const result = { ...common, httpStatus: sample.status, bytes: sample.bytes,
     contentSha256: sample.contentSha256, contentType: sample.contentType };
@@ -327,8 +333,8 @@ export function markdownSummary(result) {
       '| ' + escape(p.house) + ' | ' + escape(p.status) + ' | ' +
       (p.article.httpStatus ?? '—') + ' | ' + escape(p.reason ??
         'No provider/source-byte, indexing, corrected-claim or reader-acceptance receipt') + ' |'),
-    '', '| Check | Outcome | HTTP | Notes |', '|---|---|---:|---|',
-    ...result.checks.map(c => `| ${escape(c.name)} | ${escape(c.outcome)} | ${c.httpStatus ?? '—'} | ${escape(c.reason ?? (c.claimedSourceCommit ?? ''))} |`),
+    '', '| Check | Outcome | HTTP | Read ms | Notes |', '|---|---|---:|---:|---|',
+    ...result.checks.map(c => `| ${escape(c.name)} | ${escape(c.outcome)} | ${c.httpStatus ?? '—'} | ${c.readWallMs ?? '—'} | ${escape(c.reason ?? (c.claimedSourceCommit ?? ''))} |`),
   ].join('\n') + '\n';
 }
 
