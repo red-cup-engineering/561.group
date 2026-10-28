@@ -12,14 +12,14 @@
   "source": {
     "market": {
       "repository": "red-cup-engineering/market.561.group",
-      "revision": "e8350176f604f4592918d870718747a12a878379",
-      "tree": "eaeee8b43297f3fd56748d0f256cb2eb3b8d779c"
+      "revision": "e4c4f49b8559cb96e53d132458e8b326554895d1",
+      "tree": "3a80aede8b8aa337623ebd466e3a112c0ebfb5e9"
     },
     "public": {
       "repository": "causeway-services/public-market-services-section",
-      "revision": "dd763c1356e9aea3a5688090efebeef8ecaf7eed",
-      "gitlink": "dd763c1356e9aea3a5688090efebeef8ecaf7eed",
-      "tree": "debc7dd359bafc77825a47065065c77a9d9befd2"
+      "revision": "cd0fdd91b14ec2a08b844c0794502501d36036f9",
+      "gitlink": "cd0fdd91b14ec2a08b844c0794502501d36036f9",
+      "tree": "cb559cdf232be39cb45bb042b5d4157c29985ace"
     },
     "cloudflare": {
       "repository": "red-cup-engineering/cloudflare-engineering-services-section",
@@ -27,15 +27,15 @@
     },
     "receiver": {
       "repository": "red-cup-engineering/market.561.group",
-      "revision": "e8350176f604f4592918d870718747a12a878379"
+      "revision": "e4c4f49b8559cb96e53d132458e8b326554895d1"
     }
   },
   "candidateCatalogPresentation": "scrubbed",
   "baseline": {
-    "versionId": "21c53a1e-8001-49c4-a186-fa1b0ea0ae5c",
-    "deploymentId": "f3841d23-aece-4997-88fa-2eb4a152d56c",
-    "latestVersionId": "21c53a1e-8001-49c4-a186-fa1b0ea0ae5c",
-    "sourceRevision": "a1ddfe2151b40292deb756f3c465f9d39ddab007",
+    "versionId": "30536c25-af94-4382-a1ae-4b3bac858658",
+    "deploymentId": "1d95ca44-de78-43e0-9f1c-67bba538e3af",
+    "latestVersionId": "30536c25-af94-4382-a1ae-4b3bac858658",
+    "sourceRevision": "e4c4f49b8559cb96e53d132458e8b326554895d1",
     "catalogPresentation": "scrubbed"
   },
   "payment": {
@@ -46,9 +46,9 @@
   },
   "incumbentCarrier": {
     "repository": "561-group/561-group-frontdoor-services-section",
-    "revision": "4d9c747aa6d5f039417671d1b26e2d44ef1ea23c",
-    "directory": ".service-releases/market/20261027-lakota-memory-a1ddfe2",
-    "manifestSha256": "681af6e8c67065e51d4bb47e9fb9e6727c546fa539872f5ca533bcddcdd23a5e",
+    "revision": "ee620c373d62a6ba04a54942e119737459535d83",
+    "directory": ".service-releases/market/20261027-operational-readings-e4c4f49",
+    "manifestSha256": "56096719d0bc2b4c36b08e70dad69da9f37b8db3c80439a3773031c5ff426e16",
     "incumbentDeclarationsArtifact": "candidateDeclarations"
   },
   "compiler": {
@@ -73,12 +73,12 @@
     "sourceManifest": {
       "path": "package.json",
       "bytes": 8752,
-      "sha256": "25618f89a3dbff689b18bda6cd9af67e059cb30b5bca75a2490b99e9ea56578b"
+      "sha256": "6bf76ed97db4b87f41bff5abacde00a5261a07e0c534f81c162a8209aadbac11"
     },
     "lockfile": {
       "path": "pnpm-lock.yaml",
-      "bytes": 626569,
-      "sha256": "967bb3a2b205b82c6a4a774a82590891805dd145f74391e48c4271cc00bccebd"
+      "bytes": 627421,
+      "sha256": "557cbc22474b2bdd7668f9eff269ebffa9614d27f429ceb3e0414e86805068b2"
     },
     "workspaceManifest": {
       "path": "pnpm-workspace.yaml",
@@ -102,8 +102,8 @@
     },
     "parameterCatalog": {
       "path": "parameters/data/catalog.json",
-      "bytes": 2881793,
-      "sha256": "de65df592ad22ac6ec8862aecd9cd67adef907fc70786bbaf41ee58f7065e2dc"
+      "bytes": 3718116,
+      "sha256": "60710572de220f1788e13cc614d2dec7189925dd3ed0260930bc1133369abf00"
     },
     "workerEntry": {
       "path": "src/worker.mjs",
@@ -112,8 +112,8 @@
     },
     "compiledOffers": {
       "path": "src/compiled-offers.mjs",
-      "bytes": 7119977,
-      "sha256": "f1826fada76d38660baf3248eae4c7ccefed6d69f85a97f843a1ba1e42f9ce05"
+      "bytes": 7960829,
+      "sha256": "1eac6c34e77fbc54bfb21a6d7a0d6457de6c0e18b860d30eda2c1724cf3e1197"
     },
     "nativeProducer": {
       "path": "scripts/build-native-worker.mjs",
@@ -168,13 +168,13 @@
       },
       {
         "path": "src/compiled-offers.mjs",
-        "bytes": 7119977,
-        "sha256": "f1826fada76d38660baf3248eae4c7ccefed6d69f85a97f843a1ba1e42f9ce05"
+        "bytes": 7960829,
+        "sha256": "1eac6c34e77fbc54bfb21a6d7a0d6457de6c0e18b860d30eda2c1724cf3e1197"
       },
       {
         "path": "src/compiled-capability-outbox.mjs",
-        "bytes": 6437542,
-        "sha256": "34dacd24d9f5e26ee3ac352749397c5f7d7391d79bff7a5fd1f6a265bc2f1d0c"
+        "bytes": 6453750,
+        "sha256": "ecef840812e801bb7f37a3d45f700dce0ca903ab1a8ec1c5a47bc80fcc6dcaa0"
       },
       {
         "path": "src/mcp.mjs",
@@ -312,13 +312,13 @@
   "declarations": {
     "candidate": {
       "path": "candidate-declarations.json",
-      "bytes": 2684267,
-      "sha256": "f43bd61c589ba8ce3adf114c45eb7ee01811d777fd7a80f9adbd549728e947cb"
+      "bytes": 3520590,
+      "sha256": "ee218f81cb5a832e62c4bfdb0a0ccf79cabafa74792abb0bf00302afe921fd6d"
     },
     "incumbent": {
       "path": "incumbent-declarations.json",
-      "bytes": 2684267,
-      "sha256": "f43bd61c589ba8ce3adf114c45eb7ee01811d777fd7a80f9adbd549728e947cb"
+      "bytes": 3520590,
+      "sha256": "ee218f81cb5a832e62c4bfdb0a0ccf79cabafa74792abb0bf00302afe921fd6d"
     }
   }
 }

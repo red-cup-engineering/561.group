@@ -10,9 +10,9 @@ export { PUBLIC_ROUTES } from "./home-tufte.mjs";
  * caller's Worker owns HTTP routing and ActivityPub remains its own provider.
  */
 export function create561GroupLivingApplication({
-  readHome, readEstate, readFrontdoor, readFeed, releaseHome
+  readHome, readEstate, readFrontdoor, readFeed, readFeedReceipt, releaseHome
 } = {}) {
-  for (const [name, reader] of Object.entries({readHome,readEstate,readFrontdoor,readFeed})) {
+  for (const [name, reader] of Object.entries({readHome,readEstate,readFrontdoor,readFeed,readFeedReceipt})) {
     if (typeof reader !== "function")
       throw new TypeError("Original " + name + " source reader is required");
   }
@@ -21,8 +21,10 @@ export function create561GroupLivingApplication({
       readHome(context),readEstate(context),readFrontdoor(context)
     ]);
     // Only a declared blog read sees the bounded original generated feed.
-    const feed = path === "/blog/" ? await readFeed(context) : undefined;
-    return project561GroupPage({home,estate,frontdoor,feed,path});
+    const [feed,feedReceipt] = path === "/blog/" ? await Promise.all([
+      readFeed(context),readFeedReceipt(context)
+    ]) : [undefined,undefined];
+    return project561GroupPage({home,estate,frontdoor,feed,feedReceipt,path});
   };
   const permitted = new Set(["home","work","projects","blog","about","agents"]);
   return createLivingWebServer({

@@ -1,10 +1,10 @@
 {
   "kind": "561.market-worker-carrier-selection/v1",
   "repository": "561-group/561-group-frontdoor-services-section",
-  "revision": "4d9c747aa6d5f039417671d1b26e2d44ef1ea23c",
-  "directory": ".service-releases/market/20261027-lakota-memory-a1ddfe2",
-  "manifestSha256": "681af6e8c67065e51d4bb47e9fb9e6727c546fa539872f5ca533bcddcdd23a5e",
+  "revision": "ee620c373d62a6ba04a54942e119737459535d83",
+  "directory": ".service-releases/market/20261027-operational-readings-e4c4f49",
+  "manifestSha256": "56096719d0bc2b4c36b08e70dad69da9f37b8db3c80439a3773031c5ff426e16",
   "operation": "observe",
   "workOrder": ".releases/market/work-order.json",
-  "workOrderSha256": "f0dc660870b660789cf4d8266d3ad850bbb18dbff7335df94f51dc858a39bbf1"
+  "workOrderSha256": "69a8f76d23bf54b3dc7364000501633cfb261d779765fef1e2736c873eb9c8e8"
 }

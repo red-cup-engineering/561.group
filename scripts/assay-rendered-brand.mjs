@@ -53,12 +53,13 @@ export function qualifyRenderedBrand(value,{path="/"}={}) {
 }
 
 async function servedOriginalApplication() {
-  const [home,estate,frontdoor,feed]=await Promise.all([
-    readJson("data/home.json"),readJson("data/estate.json"),readJson("data/frontdoor.json"),readJson("public/feed.json")
+  const [home,estate,frontdoor,feed,feedReceipt]=await Promise.all([
+    readJson("data/home.json"),readJson("data/estate.json"),readJson("data/frontdoor.json"),
+    readJson("public/feed.json"),readJson("public/feed-input-receipt.json")
   ]);
   const application=create561GroupLivingApplication({
     readHome:async()=>home,readEstate:async()=>estate,readFrontdoor:async()=>frontdoor,
-    readFeed:async()=>feed,releaseHome:home
+    readFeed:async()=>feed,readFeedReceipt:async()=>feedReceipt,releaseHome:home
   });
   const server=createServer(async(req,res)=>{
     try{

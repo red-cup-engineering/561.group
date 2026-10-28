@@ -279,28 +279,28 @@ test('the actual Group CLI verifies observation without credentials and dispatch
   });
 });
 
-test('the reviewed selection binds the exact merged e835 native fabrication work order and incumbent carrier', async () => {
+test('the reviewed selection binds the exact forward e4c4 native fabrication work order and incumbent carrier', async () => {
   const selectionPath = fileURLToPath(new URL('./selection.json', import.meta.url));
   const workOrderPath = fileURLToPath(new URL('./work-order.json', import.meta.url));
   const selected = await selectMarketCarrier(selectionPath);
   assert.equal(selected.ready, true);
   assert.equal(selected.operation, 'observe');
   assert.equal(selected.repository, '561-group/561-group-frontdoor-services-section');
-  assert.equal(selected.revision, '4d9c747aa6d5f039417671d1b26e2d44ef1ea23c');
-  assert.equal(selected.directory, '.service-releases/market/20261027-lakota-memory-a1ddfe2');
-  assert.equal(selected.manifestSha256, '681af6e8c67065e51d4bb47e9fb9e6727c546fa539872f5ca533bcddcdd23a5e');
+  assert.equal(selected.revision, 'ee620c373d62a6ba04a54942e119737459535d83');
+  assert.equal(selected.directory, '.service-releases/market/20261027-operational-readings-e4c4f49');
+  assert.equal(selected.manifestSha256, '56096719d0bc2b4c36b08e70dad69da9f37b8db3c80439a3773031c5ff426e16');
   assert.equal(selected.workOrder, '.releases/market/work-order.json');
-  assert.equal(selected.workOrderSha256, 'f0dc660870b660789cf4d8266d3ad850bbb18dbff7335df94f51dc858a39bbf1');
+  assert.equal(selected.workOrderSha256, '69a8f76d23bf54b3dc7364000501633cfb261d779765fef1e2736c873eb9c8e8');
 
   const { workOrder, workOrderSha256 } = await readMarketFabricationWorkOrder(workOrderPath, selected.workOrderSha256);
   assert.equal(workOrderSha256, selected.workOrderSha256);
-  assert.equal(workOrder.source.market.revision, 'e8350176f604f4592918d870718747a12a878379');
-  assert.equal(workOrder.source.market.tree, 'eaeee8b43297f3fd56748d0f256cb2eb3b8d779c');
-  assert.equal(workOrder.source.public.revision, 'dd763c1356e9aea3a5688090efebeef8ecaf7eed');
-  assert.equal(workOrder.source.public.gitlink, 'dd763c1356e9aea3a5688090efebeef8ecaf7eed');
-  assert.equal(workOrder.source.public.tree, 'debc7dd359bafc77825a47065065c77a9d9befd2');
-  assert.equal(workOrder.baseline.versionId, '21c53a1e-8001-49c4-a186-fa1b0ea0ae5c');
-  assert.equal(workOrder.baseline.sourceRevision, 'a1ddfe2151b40292deb756f3c465f9d39ddab007');
+  assert.equal(workOrder.source.market.revision, 'e4c4f49b8559cb96e53d132458e8b326554895d1');
+  assert.equal(workOrder.source.market.tree, '3a80aede8b8aa337623ebd466e3a112c0ebfb5e9');
+  assert.equal(workOrder.source.public.revision, 'cd0fdd91b14ec2a08b844c0794502501d36036f9');
+  assert.equal(workOrder.source.public.gitlink, 'cd0fdd91b14ec2a08b844c0794502501d36036f9');
+  assert.equal(workOrder.source.public.tree, 'cb559cdf232be39cb45bb042b5d4157c29985ace');
+  assert.equal(workOrder.baseline.versionId, '30536c25-af94-4382-a1ae-4b3bac858658');
+  assert.equal(workOrder.baseline.sourceRevision, 'e4c4f49b8559cb96e53d132458e8b326554895d1');
   assert.equal(workOrder.suppliers.length, 1);
   assert.equal(workOrder.suppliers[0].name, '@red-cup-engineering/mcp-engineering-services-section');
   assert.equal(workOrder.suppliers[0].version, '0.1.9');

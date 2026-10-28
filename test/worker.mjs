@@ -18,15 +18,28 @@ const blogFeed={version:"https://jsonfeed.org/version/1.1",home_page_url:"https:
 const blogFeedModule=new vm.SyntheticModule(['default'],function(){
   this.setExport('default',blogFeed)
 },{context,identifier:'fixture-original-group-feed'});
+const blogFeedReceipt={
+  schema:"561.group/feed-input-receipt/v1",origin:"https://561.group",
+  expectedSourceCount:4,completeness:"all-sources-received",
+  sources:homeData.group.companies.map((company,i)=>({
+    companyId:company.id,feedUrl:company.feeds.json,state:"received",
+    inputItems:0,bytes:100,sha256:"sha256:"+String(i+1).repeat(64)
+  })),
+  excludedItemCounts:{},sourceItemCount:0,admittedItems:0,
+  omittedByAggregateLimit:0,emittedItems:0
+};
+const blogFeedReceiptModule=new vm.SyntheticModule(['default'],function(){
+  this.setExport('default',blogFeedReceipt)
+},{context,identifier:'fixture-original-feed-admission-receipt'});
 const homeModule=new vm.SyntheticModule(['default'],function(){this.setExport('default',homeData)},{context,identifier:'fixture-public-home'});
 const livingCalls=[];
 const livingModule=new vm.SyntheticModule(['create561GroupLivingApplication','PUBLIC_ROUTES'],function(){
   this.setExport('PUBLIC_ROUTES',['/','/work/','/projects/','/blog/','/about/','/for-agents/']);
-  this.setExport('create561GroupLivingApplication', ({readHome,readEstate,readFrontdoor,readFeed}) => ({
+  this.setExport('create561GroupLivingApplication', ({readHome,readEstate,readFrontdoor,readFeed,readFeedReceipt}) => ({
     fetch: async request => {
       livingCalls.push({url:request.url,accept:request.headers.get('accept'),
         home:readHome(),estate:readEstate(),frontdoor:readFrontdoor(),
-        ...(new URL(request.url).pathname==='/blog/' ? {feed:readFeed()} : {})});
+        ...(new URL(request.url).pathname==='/blog/' ? {feed:readFeed(),receipt:readFeedReceipt()} : {})});
       return request.headers.get('accept')==='application/json'
         ? Response.json({kind:'tufte.fixture',site:'561.group'})
         : new Response('<main data-tufte>Group living home fixture</main>',{headers:{'content-type':'text/html; charset=utf-8'}});
@@ -39,7 +52,7 @@ const { fileURLToPath, pathToFileURL } = await import('node:url');
 const loaded=new Map();
 const moduleAt=async file=>{if(!loaded.has(file))loaded.set(file,new vm.SourceTextModule(await readFile(file,'utf8'),{context,identifier:file}));return loaded.get(file)};
 const resolveFrom=(spec,referrer)=>spec.startsWith('.')?fileURLToPath(new URL(spec,pathToFileURL(referrer))):fileURLToPath(import.meta.resolve(spec));
-await worker.link(async(spec,referrer)=>{if(spec==='../public/estate-records.json')return data;if(spec==='../data/home.json')return homeModule;if(spec==='../data/frontdoor.json')return frontdoorModule;if(spec==='../public/feed.json')return blogFeedModule;if(spec==='./living-home.mjs')return livingModule;if(spec==='./told.mjs')return told;if(spec==='./source-revision.mjs')return sourceRevision;if(spec==='./locales.mjs')return moduleAt(path.join(root,'src/locales.mjs'));if(referrer.identifier.startsWith('/'))return moduleAt(resolveFrom(spec,referrer.identifier));throw Error('unexpected dependency '+spec)});await worker.evaluate();
+await worker.link(async(spec,referrer)=>{if(spec==='../public/estate-records.json')return data;if(spec==='../data/home.json')return homeModule;if(spec==='../data/frontdoor.json')return frontdoorModule;if(spec==='../public/feed.json')return blogFeedModule;if(spec==='../public/feed-input-receipt.json')return blogFeedReceiptModule;if(spec==='./living-home.mjs')return livingModule;if(spec==='./told.mjs')return told;if(spec==='./source-revision.mjs')return sourceRevision;if(spec==='./locales.mjs')return moduleAt(path.join(root,'src/locales.mjs'));if(referrer.identifier.startsWith('/'))return moduleAt(resolveFrom(spec,referrer.identifier));throw Error('unexpected dependency '+spec)});await worker.evaluate();
 let count=0;const check=(n,f)=>{f();count++;console.log('PASS',n)};const fetchWorker=worker.namespace.default.fetch;const ctx={waitUntil:p=>waits.push(p)};let assetRequest;
 const env={ASSETS:{fetch:async request=>{assetRequest=request;return new Response('original asset body',{status:200,headers:{'content-type':'text/html'}})}}};
 const originalReceipt={repository:'561-group/561.group',origin:'https://561.group',
@@ -81,8 +94,13 @@ for(const path of ['/work/','/projects/','/blog/','/about/','/for-agents/']){
     assert.equal(response.headers.get('content-language'),'en');
     assert.equal(livingCalls.at(-1).url,'https://561.group'+path);
     assert.equal(livingCalls.at(-1).frontdoor,frontdoorData);
-    if(path==='/blog/')assert.equal(livingCalls.at(-1).feed,blogFeed);
-    else assert.equal(livingCalls.at(-1).feed,undefined);
+    if(path==='/blog/'){
+      assert.equal(livingCalls.at(-1).feed,blogFeed);
+      assert.equal(livingCalls.at(-1).receipt,blogFeedReceipt);
+    }else {
+      assert.equal(livingCalls.at(-1).feed,undefined);
+      assert.equal(livingCalls.at(-1).receipt,undefined);
+    }
   });
   response=await fetchWorker(new Request('https://561.group'+path.slice(0,-1)+'?src=directory'),env,ctx);
   check('extensionless route '+path+' canonicalizes without losing query',()=>{

@@ -13,7 +13,19 @@ const feed={
   items:[{id:"science-post-1",url:"https://science.561.group/source-bound-research/",
     title:"Source-bound research",summary:"A company-authored article.",
     date_published:"2026-10-26T11:00:00Z",
+    date_modified:"2026-10-27T13:02:03Z",
     authors:[{name:home.group.companies[0].name,url:home.group.companies[0].url}]}],
+};
+const feedReceipt={
+  schema:"561.group/feed-input-receipt/v1",origin:home.origin,
+  expectedSourceCount:4,completeness:"all-sources-received",
+  sources:home.group.companies.map((company,i)=>({
+    companyId:company.id,feedUrl:company.feeds.json,state:"received",
+    inputItems:i===0?1:0,bytes:100,
+    sha256:"sha256:"+String(i+1).repeat(64)
+  })),
+  excludedItemCounts:{},sourceItemCount:1,admittedItems:1,
+  omittedByAggregateLimit:0,emittedItems:1,
 };
 const htmlText=value=>String(value).replaceAll("&","&amp;").replaceAll("'","&#39;");
 function fixture(){
@@ -23,7 +35,8 @@ function fixture(){
     readHome:async context=>{reads.push(["home",context.request.method]);return home;},
     readEstate:async context=>{reads.push(["estate",context.request.method]);return estate;},
     readFrontdoor:async context=>{reads.push(["frontdoor",context.request.method]);return frontdoor;},
-    readFeed:async context=>{reads.push(["feed",context.request.method]);return feed;}
+    readFeed:async context=>{reads.push(["feed",context.request.method]);return feed;},
+    readFeedReceipt:async context=>{reads.push(["receipt",context.request.method]);return feedReceipt;}
   });
   const request=(path="/",options={})=>app.fetch(new Request("https://561.group"+path,options));
   return {app,reads,request};
@@ -53,6 +66,8 @@ test("real installed TUFTE/LWS gives a useful homepage in HTML, not a pipeline r
   assert.match(html,/rel="canonical" href="https:\/\/561\.group\/"/u);
   assert.match(html,/name="fediverse:creator"/u);
   assert.match(html,/type="application\/ld\+json"/u);
+  assert.ok(html.includes(frontdoor.discovery.questions[0].question),
+    "the original accessible TUFTE HTML contains the actual alignment question");
   assert.ok(html.includes(":focus-visible"));
   assert.ok(html.includes("max-width:430px"));
   assert.doesNotMatch(html,/conurbanized ecosystem|default Theme/i);
@@ -72,10 +87,12 @@ test("the SAME real source yields useful machine-readable TUFTE JSON",async()=>{
     "machine-readable TUFTE readers must receive the same research path");
 
   assert.deepEqual(model.tiles.map(t=>t.id),
-    ["introduction","self-service","frontiers","paths","services","method","physical-world","explore","trade","companies","agents","support"]);
+    ["introduction","self-service","frontiers","technology-and-power","paths","services","method","physical-world","explore","trade","companies","agents","support"]);
   assert.equal(model.metadata.structuredData["@graph"][0].subOrganization.length,4);
   assert.ok(model.metadata.structuredData["@graph"][0].knowsAbout.includes("Artificial Abiogenesis and Smartgoo"));
   assert.ok(model.tiles.some(t=>t.id==="frontiers" && t.html.includes("silica")));
+  assert.ok(model.tiles.some(t=>t.id==="technology-and-power" && t.html.includes(frontdoor.discovery.questions[0].question)),
+    "machine-readable readers receive the source-authored alignment inquiry");
   assert.deepEqual(f.reads.map(x=>x[0]),["home","estate","frontdoor"]);
 });
 test("the original five public pages serve the same source and actionable links as Markdown",async()=>{
@@ -96,10 +113,10 @@ test("the original five public pages serve the same source and actionable links 
     const head=await f.request(path,{method:"HEAD",headers:{accept:"text/markdown"}});
     assert.equal(head.status,200);assert.equal(await head.text(),"");
   }
-  assert.equal(f.reads.length,PUBLIC_ROUTES.length*2*3+2);
+  assert.equal(f.reads.length,PUBLIC_ROUTES.length*2*3+4);
   const offsite=await f.app.fetch(new Request("https://other.example/",{headers:{accept:"text/markdown"}}));
   assert.equal(offsite.status,421);
-  assert.equal(f.reads.length,PUBLIC_ROUTES.length*2*3+2);
+  assert.equal(f.reads.length,PUBLIC_ROUTES.length*2*3+4);
 });
 test("each substantive source-owned page renders different useful HTML AND JSON",async()=>{
   const f=fixture();
@@ -147,7 +164,7 @@ test("each substantive source-owned page renders different useful HTML AND JSON"
         !("offers" in x.item)),"no unauthorized checkout terms");
     }
   }
-  assert.equal(f.reads.length,3*cells.length*2+2);
+  assert.equal(f.reads.length,3*cells.length*2+4);
 });
 test("origin, method and undeclared URL cannot acquire a public source read",async()=>{
   const f=fixture();
@@ -177,18 +194,37 @@ test("native blog negotiates identical TUFTE original feed as HTML, JSON and Mar
   assert.equal(htmlResponse.status,200);
   const html=await htmlResponse.text();
   assert.ok(html.includes("Source-bound research"));
+  assert.ok(html.includes('datetime="2026-10-27T13:02:03Z"'),
+    "source-modification time, not Group release time");
+  assert.ok(html.includes("Source reports updated: "));
+  assert.ok(html.includes("A reported update is not itself an accepted correction or retraction"));
   assert.ok(html.includes('href="https://science.561.group/source-bound-research/"'));
   assert.ok(html.includes("https://science.561.group/actors/science"));
   assert.ok(html.includes('href="https://561.group/blog/"'));
+  assert.ok(html.includes('href="/feed-input-receipt.json"'));
+  assert.ok(html.includes('href="/feed-provenance.jsonld"'));
+  assert.ok(html.includes("4 of 4 original company feeds received"));
+  assert.ok(html.includes("1 source item admitted, 1 selected"));
+  assert.ok(html.includes("0 source entries rejected"));
   const json=await (await f.request("/blog/",{headers:{accept:"application/json"}})).json();
   assert.equal(json.kind,"tufte.projection");
   assert.equal(json.metadata.canonical,"https://561.group/blog/");
+  assert.equal(json.metadata.structuredData["@graph"][2].mainEntity.itemListElement[0].item.dateModified,
+    "2026-10-27T13:02:03Z","original Source date reaches the native structured-data reader");
+  assert.ok(json.tiles.find(x=>x.id==="coverage")?.html.includes(
+    "4 of 4 original company feeds received"),"machine view matches human source coverage");
+  assert.ok(json.tiles.find(x=>x.id==="coverage")?.html.includes(
+    "not current live publication totals"),"machine view preserves temporal scope");
   assert.deepEqual(json.metadata.structuredData["@graph"][2].mainEntity.itemListElement
     .map(x=>x.item.author.name),[home.group.companies[0].name]);
   const markdown=await (await f.request("/blog/",{headers:{accept:"text/markdown"}})).text();
   assert.match(markdown,/Source\\-bound research/u);
   assert.match(markdown,/science\.561\.group\/source-bound-research/u);
+  assert.match(markdown,/Source reports updated/u);
+  assert.match(markdown,/original company feeds received/u,
+    "Markdown reader also sees the source coverage of this release");
   assert.equal(f.reads.filter(x=>x[0]==="feed").length,3);
+  assert.equal(f.reads.filter(x=>x[0]==="receipt").length,3);
   assert.equal(f.reads.filter(x=>x[0]==="home").length,3);
   assert.equal(f.reads.filter(x=>x[0]==="frontdoor").length,3);
 });
@@ -200,6 +236,10 @@ test("new front-door reader is required; missing source cannot yield a vague bla
   assert.throws(()=>create561GroupLivingApplication({
     readHome:()=>home,readEstate:()=>estate,readFrontdoor:()=>frontdoor,releaseHome:home
   }),/readFeed/);
+  assert.throws(()=>create561GroupLivingApplication({
+    readHome:()=>home,readEstate:()=>estate,readFrontdoor:()=>frontdoor,
+    readFeed:()=>feed,releaseHome:home
+  }),/readFeedReceipt/);
 });
 
 
@@ -216,4 +256,48 @@ test("public about page makes the two long-horizon programs inspectable",async()
     assert.ok(frontier.html.includes(htmlText(program.boundary)),
       "the source-owned account of each program reaches the native page: "+program.id);
   assert.ok(frontier.html.includes("https://science.561.group/"));
+});
+
+
+test("original ecological reader routes match independent article visibility across three carriers",async()=>{
+  const {request}=fixture();
+  const expected="https://science.561.group/climate-breakdown-ergodicity-and-water-governance/";
+  const institution="https://science.561.group/rendanheyi-living-union-organizational-science/";
+  const page=await request("/about/",{headers:{accept:"text/html"}});
+  assert.equal(page.status,200);
+  const html=await page.text();
+  assert.ok(html.includes('href="'+expected+'"'));
+  assert.ok(html.includes('href="'+institution+'"'));
+  assert.ok(html.includes("As observed on October 27, 2026"));
+  assert.ok(html.includes("Engineering and Operations climate article URLs returned HTTP 404"));
+  assert.ok(html.includes("current source-to-provider revision is not explained by its older release record"));
+  const machine=await (await request("/about/",{headers:{accept:"application/json"}})).json();
+  assert.equal(machine.metadata.canonical,"https://561.group/about/");
+  const ecology=machine.tiles.find(x=>x.id==="ecology-and-adaptation");
+  assert.ok(ecology);
+  assert.ok(ecology.html.includes('href="'+expected+'"'));
+  assert.ok(ecology.html.includes('href="'+institution+'"'));
+  assert.ok(ecology.html.includes("As observed on October 27, 2026"));
+  const markdown=await (await request("/about/",{headers:{accept:"text/markdown"}})).text();
+  assert.ok(markdown.includes(expected));
+  assert.ok(markdown.includes(institution));
+  assert.ok(markdown.includes("As observed on October 27, 2026"));
+  assert.ok(markdown.includes("HTTP 404"));
+});
+
+test("original installed About reader discovers editorial provenance in HTML, JSON and Markdown",async()=>{
+  const {request}=fixture();
+  const htmlResponse=await request("/about/",{headers:{accept:"text/html"}});
+  assert.equal(htmlResponse.status,200);
+  const html=await htmlResponse.text();
+  assert.ok(html.includes('href="/editorial-question-provenance.jsonld"'));
+  assert.ok(html.includes('type="application/ld+json"'));
+  assert.ok(html.includes("does not independently verify their scientific claims"));
+  const model=await (await request("/about/",{headers:{accept:"application/json"}})).json();
+  const source=model.tiles.find(tile=>tile.id==="source");
+  assert.ok(source?.html.includes('href="/editorial-question-provenance.jsonld"'));
+  assert.equal(model.metadata.canonical,"https://561.group/about/");
+  const markdown=await (await request("/about/",{headers:{accept:"text/markdown"}})).text();
+  assert.ok(markdown.includes("/editorial-question-provenance.jsonld"));
+  assert.match(markdown,/source|citation/i);
 });

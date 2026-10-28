@@ -4,7 +4,7 @@
 // selected links and page-specific models, never another renderer or router.
 import { HOUSE_STYLES } from "./apex-house-style.mjs";
 import { SITE_STYLES } from "./public-home-style.mjs";
-import { admitGroupBlogFeed } from "./group-blog.mjs";
+import { admitGroupBlogFeed, admitGroupBlogCoverage } from "./group-blog.mjs";
 
 const ORIGIN = "https://561.group";
 export const PUBLIC_ROUTES = Object.freeze(["/", "/work/", "/projects/", "/blog/", "/about/", "/for-agents/"]);
@@ -59,6 +59,34 @@ function checkedSources(home, estate, frontdoor) {
         !["title","thesis","present","boundary"].every(
           field => typeof f[field] === "string" && f[field].trim())))
     throw new TypeError("Two complete, distinct, source-authored civilizational frontiers are required");
+  const discovery = frontdoor.discovery;
+  if (!discovery || !["headline","summary","intro","boundary"].every(
+      key => typeof discovery[key] === "string" && discovery[key].trim()) ||
+      !Array.isArray(discovery.questions) || discovery.questions.length !== 3 ||
+      new Set(discovery.questions.map(q => q.id)).size !== 3 ||
+      discovery.questions.some(q => !q || !slug.test(q.id) ||
+        !["question","answer","href","label"].every(
+          key => typeof q[key] === "string" && q[key].trim())) ||
+      !Array.isArray(discovery.nextSteps) || discovery.nextSteps.length !== 3 ||
+      discovery.nextSteps.some(x => !x || !["href","label"].every(
+        key => typeof x[key] === "string" && x[key].trim())))
+    throw new TypeError("Evidence-linked public AI and political economy questions are required");
+  for (const question of discovery.questions) publicHref(question.href);
+  for (const next of discovery.nextSteps) publicHref(next.href);
+  const ecological = frontdoor.ecologicalDiscovery;
+  if (!ecological || !["headline","summary","intro","boundary"].every(
+      key => typeof ecological[key] === "string" && ecological[key].trim()) ||
+      !Array.isArray(ecological.questions) || ecological.questions.length !== 3 ||
+      new Set(ecological.questions.map(q => q.id)).size !== 3 ||
+      ecological.questions.some(q => !q || !slug.test(q.id) ||
+        !["audience","question","answer","href","label"].every(
+          key => typeof q[key] === "string" && q[key].trim())) ||
+      !Array.isArray(ecological.nextSteps) || ecological.nextSteps.length !== 3 ||
+      ecological.nextSteps.some(x => !x ||
+        !["href","label"].every(key => typeof x[key] === "string" && x[key].trim())))
+    throw new TypeError("Three separate source-qualified ecological reader paths are required");
+  for (const question of ecological.questions) publicHref(question.href);
+  for (const next of ecological.nextSteps) publicHref(next.href);
   if (frontdoor.schema !== "561.group/public-frontdoor/v1")
     throw new TypeError("Public editorial record has an unrecognized schema");
   if (typeof home.public?.headline !== "string" ||
@@ -145,6 +173,9 @@ function structure(home, pathname, frontdoor, blog = null) {
   const org = {
     "@type":"Organization","@id":home.origin + "/#organization",
     name:home.name,url:home.origin + "/",description:home.description,
+    // The source-owned primary mark already ships with this site. Let search
+    // readers disambiguate this institution by its real visual identity.
+    logo:{"@type":"ImageObject",url:home.origin + "/logo.png",width:512,height:512},
     foundingDate:String(home.established),
     sameAs:[home.group.githubOrg,home.group.actor],
     knowsAbout:home.group.knowsAbout,
@@ -272,6 +303,31 @@ function lead(kicker, headline, description, calls = []) {
     '<h3 class="site-display">' + esc(headline) + "</h3>" +
     para(description,"site-intro") + (calls.length ? actions(calls) : "");
 }
+function technologyAndPower(frontdoor, concise = false) {
+  const discovery = frontdoor.discovery;
+  const questions = concise ? discovery.questions.slice(0, 1) : discovery.questions;
+  return para(discovery.intro,"site-section-lead") +
+    '<ul class="site-card-grid">' + questions.map(q =>
+      '<li class="site-card" id="' + esc(q.id) + '"><h3>' + esc(q.question) +
+      '</h3>' + para(q.answer) + '<p>' + anchor(q.href,q.label) + '</p></li>'
+    ).join("") + "</ul>" +
+    (concise
+      ? actions([{href:"/about/#technology-and-power",label:"Read all three questions and sources"}])
+      : para(discovery.boundary) + actions(discovery.nextSteps));
+}
+
+function ecologicalReaders(frontdoor) {
+  const ecological = frontdoor.ecologicalDiscovery;
+  return para(ecological.intro,"site-section-lead") +
+    '<ul class="site-card-grid">' + ecological.questions.map(q =>
+      '<li class="site-card" id="' + esc(q.id) +
+      '"><span class="site-category">' + esc(q.audience) +
+      '</span><h3>' + esc(q.question) + '</h3>' +
+      para(q.answer) + '<p>' + anchor(q.href,q.label) + '</p></li>'
+    ).join("") + "</ul>" +
+    para(ecological.boundary) + actions(ecological.nextSteps);
+}
+
 function frontiers(frontdoor, concise = false) {
   const vision = frontdoor.vision;
   return para(vision.intro,"site-section-lead") +
@@ -319,6 +375,8 @@ function homepage(home, estate, frontdoor, source) {
       para(home.public.intro,"site-hero-note"),12,"rail"),
     selfService(home,frontdoor),
     panel("frontiers",frontdoor.vision.headline,frontiers(frontdoor,true),12),
+    panel("technology-and-power",frontdoor.discovery.headline,
+      technologyAndPower(frontdoor,true),12),
     panel("paths","What brings you here?",pathways(frontdoor),12),
     panel("services","Work you can ask us to do",
       para("We can scope actual research, technical and public-service work with an accountable company.","site-section-lead") +
@@ -333,7 +391,7 @@ function homepage(home, estate, frontdoor, source) {
     panel("physical-world",home.public.materialApproach.headline,
       para(home.public.materialApproach.body,"site-quote") +
       para(home.public.materialApproach.scope) +
-      anchor("/about/", "How material constraints shape our work"),12),
+      anchor("/about/#ecology-and-adaptation", "Explore ecological justice, adaptation and resilience"),12),
     panel("explore","Places, publications and tools",
       para("These are public entry points, not a blanket promise that every project is production-ready.","site-section-lead") +
       projects(home,estate,source.nodes) +
@@ -394,11 +452,21 @@ function projectsPage(home, estate, frontdoor, source) {
   ];
 }
 function blogPage(home, blog) {
+  const coverage=blog.coverage;
+  const originalSources=coverage.sources.map(({company,state,inputItems})=>
+    '<li><strong>'+esc(company.name)+'</strong> · '+
+    (state==='received' ? esc(String(inputItems))+' source entries received' :
+     state==='refused' ? 'Feed refused by input admission' :
+     'Feed unavailable to this build')+
+    ' · '+anchor(company.feeds.json,'Original company feed')+'</li>'
+  ).join('');
   const posts = blog.items.map(item =>
     '<li class="site-card h-entry"><span class="site-category">' + esc(item.company.name) +
     '</span><h3>' + anchor(item.url,item.title,"p-name u-url") + '</h3>' +
-    (item.published ? '<p class="site-muted"><time class="dt-published" datetime="' +
+    (item.published ? '<p class="site-muted">Published by source: <time class="dt-published" datetime="' +
        esc(item.published) + '">' + esc(item.published.slice(0,10)) + '</time></p>' : "") +
+    (item.modified ? '<p class="site-muted">Source reports updated: <time class="dt-updated" datetime="' +
+       esc(item.modified) + '">' + esc(item.modified.slice(0,10)) + '</time></p>' : "") +
     (item.summary ? para(item.summary,"p-summary") : "") +
     '</li>').join("");
   const follow = blog.companies.map(company =>
@@ -421,7 +489,21 @@ function blogPage(home, blog) {
       '<ol class="site-card-grid h-feed">' + posts + '</ol>' +
       (!blog.items.length ? para("This build received no published posts from the company feeds. It is not evidence that their archives are empty.") : "") +
       note("This is a bounded, build-time selection of up to 60 items, not a complete archive or a live count.") +
-      anchor("/projects/","Explore projects and publications"),12),
+      note("Publication and modification dates come from original company feeds. A reported update is not itself an accepted correction or retraction; follow the original article for its publisher's revision history.") +
+      para("Check which original company feeds were actually received and which upstream records were withheld from this build.") +
+      anchor("/feed-input-receipt.json","Inspect this build\u2019s source admission receipt") +
+      " · " + anchor("/feed-provenance.jsonld","Trace syndicated items to original feed snapshots") +
+      " · " + anchor("/projects/","Explore projects and publications"),12),
+    panel("coverage","What this build actually received",
+      para(coverage.received+" of "+coverage.expected+" original company feeds received; "+
+        coverage.admitted+" source "+(coverage.admitted===1?"item":"items")+" admitted, "+coverage.selected+
+        " selected for the capped Group feed, and "+coverage.omittedByLimit+
+        " left outside its 60-item selection.") +
+      para(coverage.rejected+" source "+(coverage.rejected===1?"entry":"entries")+" rejected during this build. "+
+        (coverage.complete ? "All four company feed endpoints were received." :
+         "This was a partial input snapshot: missing company feeds are not empty archives.")) +
+      '<ul class="site-service-grid">'+originalSources+'</ul>'+
+      note("These are build-time feed input and selection counts, not current live publication totals, reader statistics, independently verified article claims or proof of any correction or withdrawal."),12),
     panel("follow","Follow each original publisher",
       para("Subscribe to the company feeds, or follow its genuine ActivityPub identity. A Group-wide feed does not replace individual author identities.") +
       '<ul class="site-service-grid">' + follow + '</ul>',12),
@@ -435,6 +517,10 @@ function aboutPage(home, frontdoor) {
         "The 561 Group brings research, engineering, operations and public services together without pretending that a proposal is a finished product.",
         [{href:"/work/",label:"Work with the Group"},{href:"/projects/",label:"Explore the public estate"}]),12),
     panel("frontiers","What we are trying to make real",frontiers(frontdoor,false),12),
+    panel("technology-and-power",frontdoor.discovery.headline,
+      technologyAndPower(frontdoor),12),
+    panel("ecology-and-adaptation",frontdoor.ecologicalDiscovery.headline,
+      ecologicalReaders(frontdoor),12),
     panel("companies","The four accountable companies",houses(home),12),
     panel("process","How work moves",processSteps(frontdoor) +
       note("An accepted outcome is checked independently of supplier activity."),12),
@@ -448,6 +534,8 @@ function aboutPage(home, frontdoor) {
       para("The original public websites, company repositories, feeds and machine descriptions are linked from this site.") +
       anchor(home.group.githubOrg,"Group source on GitHub") +
       '<p>' + anchor("/llms.txt","Plain-text site guide") + "</p>" +
+      '<p>' + anchor("/editorial-question-provenance.jsonld","Source-bound public questions and citations (JSON-LD)") + "</p>" +
+      note("This graph preserves the Group\'s editorial words and linked original readings; it does not independently verify their scientific claims or article revisions.") +
       anchor(home.group.actor,"Federated Group actor"),4)
   ];
 }
@@ -470,16 +558,19 @@ function agentPage(home, estate, frontdoor) {
       actions([{href:home.group.marketGuide,label:"Current merchant guide"},{href:"/work/",label:"Human scoping and contact"}]),12)
   ];
 }
-export function project561GroupPage({home,estate,frontdoor,feed,path = "/"}) {
+export function project561GroupPage({home,estate,frontdoor,feed,feedReceipt,path = "/"}) {
   if (!PUBLIC_ROUTES.includes(path)) throw new RangeError("Unadmitted Group public route");
   const source = checkedSources(home,estate,frontdoor);
-  const blog = path === "/blog/" ? admitGroupBlogFeed(home,feed) : null;
+  const blog = path === "/blog/" ? Object.freeze({
+    ...admitGroupBlogFeed(home,feed),
+    coverage:admitGroupBlogCoverage(home,feed,feedReceipt)
+  }) : null;
   const page = {
     "/": {title:home.name,subtitle:"Indigenous-grounded governance · Artificial abiogenesis · Practical services"},
     "/work/": {title:"Work with the 561 Group",subtitle:"Capabilities, scoping, providers and actual terms"},
     "/projects/": {title:"Explore the 561 Group",subtitle:"Public projects, commerce, worlds and publications"},
     "/blog/": {title:"Blog · 561 Group",subtitle:"Recent source-published writing from the four 561 Group companies"},
-    "/about/": {title:"About the 561 Group",subtitle:"Four companies, one accountable source of work"},
+    "/about/": {title:"About the 561 Group",subtitle:frontdoor.discovery.summary + " " + frontdoor.ecologicalDiscovery.summary},
     "/for-agents/": {title:"For agents · 561 Group",subtitle:"Public machine endpoints and authorization boundaries"}
   }[path];
   const tiles = path === "/" ? homepage(home,estate,frontdoor,source) :
@@ -529,6 +620,7 @@ export function project561GroupHead(home) {
     alternate("text/plain","For language models, in full","/llms-full.txt"),
     alternate("application/json","Live public estate","/estate.json"),
     alternate("application/feed+json","Group public writing","/feed.json"),
+    alternate("application/ld+json","Source-backed public questions and citations","/editorial-question-provenance.jsonld"),
     alternate("application/atom+xml","Group publications (Atom)","/feed.atom.xml"),
     alternate("application/rss+xml","Group publications (RSS)","/feed.rss.xml"),
     ...[["en","/"],["zh-Hans","/zh-hans/"],["lkt","/lkt/"]].map(([tag,href]) =>

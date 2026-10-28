@@ -4,6 +4,51 @@ Received 2026-10-24 from 561-group/561.group@384700ec75288831b76e602071aa7744905
 
 The original public site of the **561 Group** at **https://561.group/** is served from this repository's `main` through the existing Cloudflare Worker `561-group-site`. It is one genuine TUFTE + LivingWebServer application, not a separate static marketing site.
 
+## Source-authorized research questions and cited readings
+
+The original Group front door has six public questions: three about AI,
+economic power and institutions, and three about ecological stewardship,
+adaptation and resilience. Their **actual original answers** are written in
+`561-group/561-group-frontdoor-services-section:data/frontdoor.json`,
+not in this application. The site retains one original TUFTE About page.
+
+The same deterministic public build now writes
+`/editorial-question-provenance.jsonld`, a Schema.org + PROV-O **derived
+representation**, not a second editorial database or public ClaimReview.
+It preserves each authored question and suggested answer, its exact
+`/about/#<id>` public anchor, and the original company link used as a
+citation. A content SHA-256 of the exact original front-door JSON bytes is
+carried as an immutable PROV entity. Changing an answer, URL, or source
+identity changes that digest and the generated public evidence.
+
+The live About page links that graph for human readers; its HTML head and
+`llms.txt` expose the same machine-readable resource. The original
+source/build/provider workflow compares the published graph's exact HTTP
+response bytes with the release artifact manifest and **recomputes its
+meaning** from the independently checked-out, source-bound editorial JSON.
+It refuses invented questions, changed suggestions or citations, or
+forged source digests.
+
+The original **predeploy public-edition comparison** also reads the *previous*
+live JSON-LD graph, verifies its exact HTTP bytes against the previous
+release's original artifact manifest, and compares those six source-owned
+questions with the newly source-qualified graph. It retains the result as
+`editorialQuestions` **inside the existing**
+`observations/561.group-publication-transition-review.json` Action artifact.
+A changed question, explanation, cited original reading or item order flags
+`editorialReviewRequired`; a changed source JSON digest by itself does
+not invent a question-level correction when the six actual answers are
+unchanged. Missing old source evidence is an explicit unknown/review case,
+not an empty prior publication. A report never edits the article, signs an
+ActivityPub Update, declares a retraction or grants another company's
+editorial consent. This review artifact follows the original 30-day
+retention, while the source-owned Git history retains its own revisions.
+ A semantically qualified editorial projection
+**does not** independently fact-check scientific findings, authenticate
+each cited external site's current provider, supply licensing rights,
+establish an accepted article correction, prove actual Google indexing,
+deliver a signed ActivityPub update, or demonstrate reader/customer results.
+
 ## The Group's publication hub
 
 `/blog/` is an original TUFTE + LivingWebServer page of the same Worker,
@@ -18,9 +63,108 @@ JSON Feed into human HTML, machine JSON and negotiated Markdown.
   source company's behalf. The blog links to the original company Actors and
   RSS, Atom and JSON subscription surfaces.
 - A required `readFeed` reader is called **only** for authorized `/blog/`
-  GET/HEAD; other original pages keep their three source reads. A malformed,
-  cross-origin, oversized or falsely attributed feed refuses rather than
-  converting arbitrary input into apparent official Group writing.
+  GET/HEAD; other original pages keep their three source reads. The build now
+  admits upstream JSON Feed 1.1 identity against the exact original company
+  source URL and checks each article's canonical company origin, identifiers,
+  dates and bounded fields **before** generating any RSS/Atom/JSON feeds. A
+  refused feed or item is withheld, not given another company's authorship.
+  A single invalid upstream item no longer brings down the entire blog.
+- The same original `/blog/` TUFTE/LivingWebServer page **shows the
+  source receipt to a human**: four named companies and each one's
+  received/unavailable/refused status, the count of admitted and rejected
+  source items, the number actually syndicated and the number outside the
+  60-item cap. The application imports the same generated JSON Feed and
+  input receipt that the existing publisher already produces; only authorized
+  Blog GET/HEAD reads access them. HTML, Markdown and machine JSON project
+  the same admitted state. A partly available feed is explicitly shown as
+  partial, not converted into a claim that an unreachable publisher has no
+  work. Source input is **one release-time snapshot**, not a current live
+  inventory, independent article fact check or correction/withdrawal event.
+- Blog article cards project **only source-supplied** `date_published` and
+  `date_modified` (if present), with separate human-readable labels, HTML
+  `dt-published` / `dt-updated` timestamps, and the existing original
+  Schema.org `datePublished` / `dateModified`. They do not turn an upstream
+  `date_modified` timestamp into a claimed verified correction, independent
+  fact-check, retraction or an editor-signed disclosure. The source company
+  retains that original editorial authority.
+- `/feed-input-receipt.json` is a public build artifact with one source
+  observation per original company (received, unavailable or refused), source
+  item counts where known, SHA-256 of the **decoded original HTTP response
+  bytes** for received feeds, aggregated item-exclusion reasons, and separately
+  the number of valid articles omitted only by the 60-item aggregate limit.
+  A source reception count, accepted item count and published aggregate count
+  are different observations. Streaming
+  intake is capped at 2 MiB per original source. The build rejects source
+  items whose declared byline differs from the declared corporate author,
+  rather than quietly replacing one author's identity with another's.
+- `/feed-provenance.jsonld` is a pure, deterministic PROV-O/Schema.org
+  projection over that **same** bounded source admission and resulting
+  syndication items. Each generated `schema:DataFeedItem` links its canonical
+  original article URL, unchanged source identifier, specific source-feed
+  snapshot (`urn:sha256:` of received bytes) and attributed publisher. The
+  snapshot entity is itself derived from the original company feed URL.
+  Identifiers are stable under input ordering and no agent invents author,
+  revision, article verification, quote, correction or research attestation.
+- Both artifacts are linked from the actual TUFTE blog and `llms.txt`,
+  included in the original exact output digest manifest and exercised in
+  deterministic build and public-read tests. They are **not** claims of
+  original-archive completeness, claim-level research provenance, site
+  indexation, ActivityPub delivery, rights clearance or a transparent
+  correction log. Upstream post revisions and correction decisions remain
+  source-owned.
+- The **original main release** separately fetches the public JSON Feed,
+  source-input receipt and PROV-O graph, refuses missing/redirected or
+  non-JSON media responses, checks each delivered byte stream against the
+  exact source-qualified artifact manifest and calls the pure
+  `assayPublicFeedProjection` on those same HTTP response bodies. It verifies
+  company identities, bounded snapshots, admission/omission arithmetic,
+  original article and publisher references, every graph relation and absent
+  forged entries. This check fails the release receiving step when public
+  bytes differ or linked-data meaning was corrupted; a green branch test
+  or successful Cloudflare upload is not substituted for public receiving.
+  The semantic receipt explicitly leaves article fact-checking, signed
+  federation delivery and search indexing unproved.
+  The production receiver now also independently GETs the live `/blog/`
+  representation as **HTML, TUFTE JSON and Markdown** after exact Cloudflare
+  deployment. It compares the human-visible named-company source coverage,
+  admitted/rejected and over-cap counts in all three carriers with the
+  **same** independently retrieved release input receipt and PROV-O assay.
+  A disagreement refuses the ordinary release's public receiving step.
+  A locally passing renderer or a deployed source SHA alone does not satisfy
+  this reader-facing observation.
+- The original **post-release public-delivery observer** also samples the
+  four explicitly accepted climate–water–energy article URLs and their
+  source-company homepages: Science, Engineering, Operations and Causeway
+  Services. It makes exactly one bounded public GET per page/home URL, checks
+  the HTML media type, page canonical, visible source-title phrase and
+  homepage article link, and preserves response status, observed decoded-byte
+  digest, and distinct **404 / transport unknown / unqualified / visible**
+  classifications in the existing `561.group-public-delivery.json`
+  observation. A source owner/route label is not an authenticated immutable
+  source revision: this read-only sampling **does not** replace the Causeway
+  article release ledger, original Worker provider version, full artifact
+  digest comparison, Google/Bing inclusion or a human reader outcome.
+  Observations about the other company sites remain distinct from the
+  Group's own qualified deployment and do not falsely fail its release.
+- **Before replacing a live release**, the same source-qualified pipeline
+  reads its previous public `source-revision.json`, `feed.json`,
+  `feed-input-receipt.json`, and `feed-provenance.jsonld`. It checks the
+  original SHA-256 response manifest and both semantic snapshots, then
+  records changed titles, summaries, dates, tags, stable identities,
+  newly selected records and departures from the capped Group aggregate.
+  Source-feed byte changes alone are observations, **not** evidence that any
+  particular article changed. Missing old public evidence is recorded as
+  unknown, never interpreted as an empty source archive.
+- The original public-delivery GitHub Actions artifact additionally retains
+  `observations/561.group-publication-transition-review.json` for 30 days.
+  The workflow warns and marks `editorialReviewRequired` for disputed
+  identities, changed represented metadata, aggregate departures or partial
+  source coverage. These are **proposed review obligations**, not automatic
+  editorial judgments: a sixty-item selection change is not an original
+  withdrawal, and only subject owners may issue an actual correction or
+  retraction. The record contains old and proposed metadata for comparison,
+  but it is not a complete or perpetual correction ledger. The source Git
+  history and upstream published editions retain their separate identities.
 - The hub reflects *up to 60 articles received during the last accepted site
   build*. It is **not** a complete archive, a live crawl, or an observed
   ActivityPub delivery receipt. An empty build-time feed does not mean the

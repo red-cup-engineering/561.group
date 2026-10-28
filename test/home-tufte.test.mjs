@@ -16,6 +16,7 @@ const originalFeed=Object.freeze({
       title:"AI alignment and institutions <draft?>",
       summary:"Questions about ownership & autonomy <script>untrusted</script>",
       date_published:"2026-10-26T12:00:00Z",
+      date_modified:"2026-10-27T13:02:03Z",
       authors:[{name:home.group.companies[0].name,url:home.group.companies[0].url}]},
     {id:"engineering-article",url:"https://engineering.561.group/content-addressed-evidence/",
       title:"Content-addressed evidence",date_published:"2026-10-25T12:00:00Z",
@@ -25,7 +26,19 @@ const originalFeed=Object.freeze({
       authors:[{name:home.group.companies[0].name,url:home.group.companies[0].url}]},
   ],
 });
-const model=path=>project561GroupPage({home,estate,frontdoor,feed:originalFeed,path});
+const originalReceipt=Object.freeze({
+  schema:"561.group/feed-input-receipt/v1",origin:home.origin,
+  expectedSourceCount:4,completeness:"all-sources-received",
+  sources:home.group.companies.map((company,i)=>({
+    companyId:company.id,feedUrl:company.feeds.json,state:"received",
+    inputItems:[2,1,0,0][i],bytes:180,
+    sha256:"sha256:"+String(i+1).repeat(64)
+  })),
+  excludedItemCounts:{},sourceItemCount:3,admittedItems:3,
+  omittedByAggregateLimit:0,emittedItems:3,
+});
+const model=path=>project561GroupPage({home,estate,frontdoor,
+  feed:originalFeed,feedReceipt:originalReceipt,path});
 const tile=(page,id)=>page.tiles.find(t=>t.id===id);
 
 test("a visitor can tell what the Group is, what they can hire, and where to go immediately",()=>{
@@ -33,11 +46,17 @@ test("a visitor can tell what the Group is, what they can hire, and where to go 
   assert.equal(root.title,home.name);
   assert.equal(root.metadata.description,home.description);
   assert.equal(root.metadata.canonical,"https://561.group/");
-  assert.equal(root.metadata.structuredData["@graph"][0].subOrganization.length,4);
+  const organization=root.metadata.structuredData["@graph"][0];
+  assert.equal(organization.subOrganization.length,4);
+  assert.deepEqual(organization.logo,{
+    "@type":"ImageObject",url:home.origin+"/logo.png",width:512,height:512
+  }, "the original Group mark identifies the canonical organization");
+  assert.deepEqual(organization.sameAs,[home.group.githubOrg,home.group.actor],
+    "only source-owned Group identities belong on the canonical organization");
   assert.deepEqual(root.navigation.map(x=>x.href),
     ["/","/work/","/projects/","/blog/","/about/","/for-agents/","/contact/"]);
   assert.deepEqual(root.tiles.map(x=>x.id),
-    ["introduction","self-service","frontiers","paths","services","method","physical-world","explore","trade","companies","agents","support"]);
+    ["introduction","self-service","frontiers","technology-and-power","paths","services","method","physical-world","explore","trade","companies","agents","support"]);
   const hero=tile(root,"introduction").html;
   assert.ok(hero.includes(frontdoor.proposition));
   assert.ok(hero.includes(frontdoor.promise.replace(/&/gu,"&amp;").replace(/'/gu,"&#39;")));
@@ -72,6 +91,75 @@ test("a visitor can tell what the Group is, what they can hire, and where to go 
   assert.ok(root.tiles.findIndex(t=>t.id==="services")<root.tiles.findIndex(t=>t.id==="support"),
     "public sales and use are not hidden behind a donation pitch");
 });
+
+test("political-economy readers can find evidence rather than technology hype",()=>{
+  const homePage=model("/"), about=model("/about/");
+  const invitation=tile(homePage,"technology-and-power").html;
+  assert.equal(about.metadata.description,frontdoor.discovery.summary + " " + frontdoor.ecologicalDiscovery.summary);
+  assert.ok(invitation.includes(frontdoor.discovery.intro.replace(/&/gu,"&amp;").replace(/'/gu,"&#39;")));
+  assert.ok(invitation.includes("Can AI alignment be anti-capitalist?"));
+  assert.ok(invitation.includes('href="/about/#technology-and-power"'));
+  const full=tile(about,"technology-and-power").html;
+  for(const q of frontdoor.discovery.questions){
+    assert.ok(full.includes('id="'+q.id+'"'),"question needs an actual fragment identity");
+    assert.ok(full.includes(q.question));
+    assert.ok(full.includes('href="'+q.href+'"'),"readers can inspect a source");
+  }
+  assert.ok(full.includes(frontdoor.discovery.boundary.replace(/&/gu,"&amp;").replace(/\x27/gu,"&#39;")),
+    "the source-qualified commercial disclosure is preserved in escaped TUFTE HTML");
+  for(const x of frontdoor.discovery.nextSteps) assert.ok(full.includes('href="'+x.href+'"'));
+  assert.match(full,/does not by itself|not one political program/u);
+  const known=homePage.metadata.structuredData["@graph"][0].knowsAbout;
+  assert.ok(known.includes("AI alignment and political economy"));
+  assert.ok(known.includes("post-capitalist institutional alternatives"));
+});
+
+
+test("different ecological readers find original evidence and explicit limits",()=>{
+  const homePage=model("/"), about=model("/about/");
+  const homepageMaterial=tile(homePage,"physical-world").html;
+  assert.ok(homepageMaterial.includes('href="/about/#ecology-and-adaptation"'),
+    "one existing material-world entrance leads to three distinct questions without a new homepage billboard");
+  const eco=tile(about,"ecology-and-adaptation");
+  assert.equal(eco.title,frontdoor.ecologicalDiscovery.headline);
+  const html=eco.html;
+  const research=frontdoor.ecologicalDiscovery;
+  assert.ok(about.metadata.description.includes(research.summary),
+    "About's public metadata should expose the ecological topics to readers and crawlers");
+  assert.ok(html.includes(research.intro.replace(/&/gu,"&amp;").replace(/'/gu,"&#39;")));
+  assert.equal((html.match(/class="site-card" id="/gu)||[]).length,3);
+  assert.equal(new Set(research.questions.map(q=>q.audience)).size,3);
+  for (const q of research.questions) {
+    assert.ok(html.includes('id="'+q.id+'"'),"each reader problem has its own accessible anchor");
+    assert.ok(html.includes(q.question.replace(/&/gu,"&amp;").replace(/\x27/gu,"&#39;")),
+      "each entry answers a real public question with escaped HTML");
+    assert.ok(html.includes('href="'+q.href+'"'),"each answer links an original primary source");
+    assert.ok(html.includes(q.label),"each public source has a human-readable label");
+  }
+  assert.ok(html.includes("no independently received successful partition test"),
+    "a research design must not be misrepresented as a verified disconnected operation");
+  assert.ok(html.includes("does not authenticate its current publisher source-to-provider release chain"),
+    "an outside public 200 must not counterfeit the original Science provider/source chain");
+  assert.ok(html.includes("does not establish a community"),
+    "ecological work cannot silently assert someone else's consent");
+  for (const next of research.nextSteps)
+    assert.ok(html.includes('href="'+next.href+'"'),"voluntary original reader path");
+  assert.ok(html.includes("As observed on October 27, 2026"),
+    "publication-state qualifier is sourced and dated");
+  assert.ok(html.includes("Use the released free climate exposure worksheet"),
+    "one real already published climate resource is actionable");
+  assert.ok(html.includes('href="https://science.561.group/climate-breakdown-ergodicity-and-water-governance/"'),
+    "a real publicly observed research article should not be hidden behind the generic Science entrance");
+  assert.ok(html.includes('href="https://science.561.group/rendanheyi-living-union-organizational-science/"'),
+    "the original institutional research should have a direct qualified reading path");
+  assert.ok(html.includes("Engineering and Operations climate article URLs returned HTTP 404"),
+    "source must distinguish actually observed missing articles from unavailable house sites");
+  assert.ok(!html.includes("Our published climate analysis"),
+    "publicly observed Science must still not claim an audited provider/source release");
+  assert.ok(!homePage.tiles.some(t=>t.id==="ecology-and-adaptation"),
+    "keep the public homepage focused on institution and jobs, not thematic campaigns");
+});
+
 
 test("services are tied to an existing accountable company, and only inquiry is offered",()=>{
   const root=model("/");
@@ -220,8 +308,17 @@ test("Group blog receives only exact company-authored feed articles and preserve
   assert.equal(entries.length,2);
   assert.equal(entries[0].item.url,originalFeed.items[0].url);
   assert.equal(entries[0].item.author.name,home.group.companies[0].name);
+  assert.equal(entries[0].item.datePublished,"2026-10-26T12:00:00Z");
+  assert.equal(entries[0].item.dateModified,"2026-10-27T13:02:03Z");
+  assert.equal(entries[1].item.dateModified,undefined,
+    "modification timestamp cannot be invented for a source which omitted it");
   const html=tile(blog,"posts").html;
   assert.ok(html.includes("AI alignment and institutions &lt;draft?&gt;"));
+  assert.ok(html.includes('class="dt-published" datetime="2026-10-26T12:00:00Z"'));
+  assert.ok(html.includes('class="dt-updated" datetime="2026-10-27T13:02:03Z"'));
+  assert.ok(html.includes("Published by source: "));
+  assert.ok(html.includes("Source reports updated: "));
+  assert.ok(!html.includes("Corrected by 561 Group") && !html.includes("retracted"));
   assert.ok(html.includes("Questions about ownership &amp; autonomy &lt;script&gt;"));
   assert.ok(!html.includes("<script>"));
   assert.ok(!html.includes("Science home is not an article"),
@@ -229,6 +326,8 @@ test("Group blog receives only exact company-authored feed articles and preserve
   assert.ok(html.includes('href="https://science.561.group/ai-alignment-and-institutions/"'));
   assert.ok(!html.includes('href="https://561.group/ai-alignment-and-institutions/"'));
   assert.ok(html.includes("bounded, build-time"));
+  assert.match(tile(blog,"posts").html,/original company feeds/);
+  assert.ok(tile(blog,"posts").html.includes("A reported update is not itself an accepted correction or retraction"));
   const follow=tile(blog,"follow").html;
   for(const company of home.group.companies){
     assert.ok(follow.includes(company.actor));
@@ -236,8 +335,20 @@ test("Group blog receives only exact company-authored feed articles and preserve
     assert.ok(follow.includes(company.feeds.json));
   }
   assert.ok(tile(blog,"lead").html.includes("/feed.rss.xml"));
+  const coverage=tile(blog,"coverage").html;
+  assert.ok(coverage.includes("4 of 4 original company feeds received"));
+  assert.ok(coverage.includes("3 source items admitted, 3 selected"));
+  assert.ok(coverage.includes("0 source entries rejected"));
+  assert.ok(coverage.includes("not current live publication totals"));
+  for(const company of home.group.companies){
+    assert.ok(coverage.includes(company.name),"source identity: "+company.id);
+    assert.ok(coverage.includes(company.feeds.json),"original source feed: "+company.id);
+  }
   const empty=project561GroupPage({home,estate,frontdoor,path:"/blog/",
-    feed:{...originalFeed,items:[]}});
+    feed:{...originalFeed,items:[]},
+    feedReceipt:{...originalReceipt,
+      sources:originalReceipt.sources.map(source=>({...source,inputItems:0})),
+      sourceItemCount:0,admittedItems:0,emittedItems:0}});
   assert.match(tile(empty,"posts").html,/not evidence that their archives are empty/u);
 });
 
@@ -413,4 +524,59 @@ test("the original GitHub Work study gives a prospect a concrete example and sou
  noEvidence.offers.find(s=>s.id==="agent-operations").evidence.href="javascript:alert(1)";
  assert.throws(()=>project561GroupPage({home,estate,frontdoor:noEvidence,path:"/work/"}),
    /Only public HTTPS resources/u);
+});
+
+
+test("source-bound blog exposes partial company coverage and refuses fabricated completeness",()=>{
+  const receipt=structuredClone(originalReceipt);
+  const last=receipt.sources[3];
+  receipt.sources[3]={companyId:last.companyId,feedUrl:last.feedUrl,state:"unavailable"};
+  receipt.completeness="partial-source-coverage";
+  const page=project561GroupPage({home,estate,frontdoor,path:"/blog/",
+    feed:originalFeed,feedReceipt:receipt});
+  const coverage=tile(page,"coverage").html;
+  assert.ok(coverage.includes("3 of 4 original company feeds received"));
+  assert.ok(coverage.includes("Feed unavailable to this build"));
+  assert.ok(coverage.includes("not empty archives"));
+  assert.ok(coverage.includes("Causeway Services"));
+  assert.throws(()=>project561GroupPage({home,estate,frontdoor,path:"/blog/",
+    feed:originalFeed,feedReceipt:{...receipt,completeness:"all-sources-received"}}),
+    /unwitnessed completeness/u);
+  const spoofed=structuredClone(receipt);
+  spoofed.sources[3].inputItems=500;
+  assert.throws(()=>project561GroupPage({home,estate,frontdoor,path:"/blog/",
+    feed:originalFeed,feedReceipt:spoofed}),/Unread company feeds/u);
+});
+test("the same blog source receipt refuses false author, count and cap claims",()=>{
+  const broken=[
+    {...originalReceipt,expectedSourceCount:3},
+    {...originalReceipt,sourceItemCount:6},
+    {...originalReceipt,omittedByAggregateLimit:1},
+    {...originalReceipt,emittedItems:2},
+    {...originalReceipt,sources:originalReceipt.sources.map((s,i)=>
+      i===1?{...s,feedUrl:"https://another.example/feed.json"}:s)},
+    {...originalReceipt,sources:originalReceipt.sources.map((s,i)=>
+      i===2?{...s,sha256:"not-a-hash"}:s)},
+    {...originalReceipt,excludedItemCounts:{"invalid-article":4}},
+  ];
+  for(const receipt of broken)
+    assert.throws(()=>project561GroupPage({home,estate,frontdoor,path:"/blog/",
+      feed:originalFeed,feedReceipt:receipt}),
+      /source|coverage|counts|receipt|incomplete|disagree|original/u);
+  assert.throws(()=>project561GroupPage({home,estate,frontdoor,path:"/blog/",
+    feed:originalFeed}),/four-company build receipt/u);
+});
+
+test("source-owned six questions have one explicitly qualified machine-readable source graph",()=>{
+  const about=model("/about/");
+  const cited=tile(about,"source").html;
+  assert.ok(cited.includes('href="/editorial-question-provenance.jsonld"'));
+  assert.ok(cited.includes("Source-bound public questions and citations (JSON-LD)"));
+  assert.ok(cited.includes("does not independently verify their scientific claims"));
+  const head=project561GroupHead(home);
+  assert.ok(head.includes('type="application/ld+json"'));
+  assert.ok(head.includes('href="/editorial-question-provenance.jsonld"'));
+  assert.equal(about.metadata.structuredData["@graph"][2]["@id"],
+    "https://561.group/about/#webpage",
+    "existing About schema remains one source, not a substitute CMS");
 });
