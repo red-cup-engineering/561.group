@@ -15,6 +15,7 @@ import {
   fabricateMarketCarrier,
   installFrozenMarketSuppliers,
   readMarketFabricationWorkOrder,
+  receiveMarketPackageTestEvidence,
   receiveMarketCarrier,
   selectMarketCarrier,
   verifyInstalledMarketSuppliers,
@@ -1538,4 +1539,305 @@ test('source auth isolates full five-name credentials during callbacks and resto
   } finally {
     await rm(fixture.root, { recursive: true, force: true });
   }
+});
+
+// The package profile is an opt-in protocol, not a new test command runner.
+async function selectFixturePackageTests(fixture) {
+  const manifest = JSON.parse(fixture.files['package.json']);
+  manifest.packageManager = 'pnpm@11.28.5';
+  manifest.scripts = { test: 'node --test test/*.test.mjs' };
+  manifest.devDependencies['@red-cup-engineering/npm-workspace-publication-service'] = '0.14.18';
+  fixture.files['package.json'] = Buffer.from(`${JSON.stringify(manifest, null, 2)}\n`);
+  await writeFile(join(fixture.sourceRoot, 'package.json'), fixture.files['package.json']);
+  fixture.git(fixture.sourceRoot, 'add', 'package.json');
+  fixture.git(fixture.sourceRoot, '-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.invalid', 'commit', '--quiet', '-m', 'Select original package test profile');
+  const order = fixture.workOrder;
+  order.source.market.revision = fixture.git(fixture.sourceRoot, 'rev-parse', 'HEAD');
+  order.source.market.tree = fixture.git(fixture.sourceRoot, 'rev-parse', 'HEAD^{tree}');
+  order.source.receiver.revision = order.source.market.revision;
+  order.compiler.pnpm.version = '11.28.5';
+  order.sourceInputs.sourceManifest = { path: 'package.json', bytes: fixture.files['package.json'].length, sha256: sha(fixture.files['package.json']) };
+  order.packageTests = {
+    kind: '561.market-source-package-test-selection/v1', script: manifest.scripts.test,
+    sourceManifestSha256: order.sourceInputs.sourceManifest.sha256,
+    lockfileSha256: order.sourceInputs.lockfile.sha256,
+    installedSuppliersSha256: sha(JSON.stringify(order.suppliers)),
+    files: Object.keys(fixture.files).filter(file => /^test\/[^/]+\.test\.mjs$/u.test(file)).sort()
+      .map(path => ({ path, bytes: fixture.files[path].length, sha256: sha(fixture.files[path]) })),
+    skipDisposition: { kind: 'source-declared-counts', skipped: 0, todo: 0, reason: 'Fixture declares no skips or todo.' },
+  };
+  return order;
+}
+
+test('package test admission binds one fixed original recipe, complete inventory and frozen selection', async () => {
+  const fixture = await createCanonicalMarketFabricationFixture();
+  try {
+    const order = await selectFixturePackageTests(fixture);
+    assert.equal(admitMarketFabricationWorkOrder(order), order);
+    await verifyMarketFabricationInputs(fixture.sourceRoot, order);
+    for (const change of [
+      o => { o.packageTests = null; },
+      o => { o.packageTests.script = 'npm test'; },
+      o => { o.packageTests.sourceManifestSha256 = '0'.repeat(64); },
+      o => { o.packageTests.lockfileSha256 = '0'.repeat(64); },
+      o => { o.packageTests.installedSuppliersSha256 = '0'.repeat(64); },
+      o => { o.packageTests.files = []; },
+      o => { o.packageTests.files.reverse(); },
+      o => { o.packageTests.files.push(o.packageTests.files[0]); },
+      o => { o.packageTests.files[0].path = 'test/nested/case.test.mjs'; },
+      o => { o.packageTests.files[0].bytes = 0; },
+      o => { o.packageTests.skipDisposition.skipped = -1; },
+      o => { o.packageTests.skipDisposition.reason = ''; },
+      o => { o.compiler.pnpm.version = '10.0.0'; },
+    ]) {
+      const altered = structuredClone(order); change(altered);
+      assert.throws(() => admitMarketFabricationWorkOrder(altered), /PACKAGE_TEST_/u);
+    }
+    const incomplete = structuredClone(order); incomplete.packageTests.files.pop();
+    await assert.rejects(verifyMarketFabricationInputs(fixture.sourceRoot, incomplete), /PACKAGE_TEST_INVENTORY/u);
+    const changed = structuredClone(order); changed.packageTests.files[0].sha256 = '0'.repeat(64);
+    await assert.rejects(verifyMarketFabricationInputs(fixture.sourceRoot, changed), /PACKAGE_TEST_INPUT/u);
+    const manifest = JSON.parse(fixture.files['package.json']); manifest.scripts.pretest = 'node private-hook.mjs';
+    const bytes = Buffer.from(`${JSON.stringify(manifest)}\n`);
+    await writeFile(join(fixture.sourceRoot, 'package.json'), bytes);
+    fixture.git(fixture.sourceRoot, 'add', 'package.json');
+    fixture.git(fixture.sourceRoot, '-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.invalid', 'commit', '--quiet', '-m', 'Undesired hook fixture');
+    const hookOrder = structuredClone(order);
+    hookOrder.source.market.revision = fixture.git(fixture.sourceRoot, 'rev-parse', 'HEAD');
+    hookOrder.source.market.tree = fixture.git(fixture.sourceRoot, 'rev-parse', 'HEAD^{tree}');
+    hookOrder.sourceInputs.sourceManifest = { path: 'package.json', bytes: bytes.length, sha256: sha(bytes) };
+    hookOrder.packageTests.sourceManifestSha256 = sha(bytes);
+    await assert.rejects(verifyMarketFabricationInputs(fixture.sourceRoot, hookOrder), /PACKAGE_TEST_RECIPE/u);
+  } finally { await rm(fixture.root, { recursive: true, force: true }); }
+});
+
+test('selected package tests require actual frozen install and are forwarded without changing legacy selection', async () => {
+  const fixture = await createCanonicalMarketFabricationFixture();
+  try {
+    const order = await selectFixturePackageTests(fixture);
+    let built = false, received = false;
+    await assert.rejects(fabricateMarketCarrier(order, {
+      destination: join(fixture.root, 'no-install'), sourceRoot: fixture.sourceRoot, installSuppliers: false,
+      buildWorker: async () => { built = true; },
+    }), /PACKAGE_TEST_FROZEN_INSTALLATION_REQUIRED/u);
+    assert.equal(built, false);
+    const commands = [];
+    await assert.rejects(fabricateMarketCarrier(order, {
+      destination: join(fixture.root, 'selected-profile'), sourceRoot: fixture.sourceRoot, installSuppliers: true,
+      incumbentCarrierDirectory: fixture.incumbentCarrierRoot,
+      exec: async (command, argv, options) => {
+        if (command !== 'corepack') return defaultExec(command, argv, options);
+        commands.push(argv); return { stdout: argv.includes('--version') ? '11.28.5\n' : '' };
+      },
+      buildWorker: ({ outputRoot, sourceRoot }) => writeMockBuildOutputs(outputRoot, sourceRoot, fixture),
+      receiveWorker: async request => {
+        received = true;
+        assert.deepEqual(request.packageTests, order.packageTests);
+        assert.deepEqual(request.frozenInstallation, {
+          kind: '561.market-frozen-installation/v1', source: request.source,
+          lockfileSha256: order.sourceInputs.lockfile.sha256,
+          installedSuppliersSha256: sha(JSON.stringify(order.suppliers)),
+          nodeModulesRoot: join(fixture.sourceRoot, 'node_modules'),
+          packageManager: { name: 'pnpm', version: '11.28.5' }, frozenLockfile: true, ignoreScripts: true,
+        });
+        await mockReceiveWorker(request); // An old native result cannot silently satisfy this selection.
+      },
+      buildReceiver: async () => { assert.fail('Missing package evidence must refuse before receiver build'); },
+    }), /PACKAGE_TEST_EVIDENCE/u);
+    assert.equal(received, true);
+    assert.deepEqual(commands.map(args => args.slice(0, 4)), [
+      ['pnpm@11.28.5', '--version'], ['pnpm@11.28.5', 'install', '--frozen-lockfile', '--ignore-scripts'],
+    ]);
+    await assert.rejects(lstat(join(fixture.root, 'selected-profile/workspace')), { code: 'ENOENT' });
+  } finally { await rm(fixture.root, { recursive: true, force: true }); }
+});
+
+function packageEvidenceFixture({ skipped = 0, todo = 0, requestOverride, summaryOwnerOverride, compilerManifestOverride } = {}) {
+  const source = requestOverride?.source ?? { repository: 'red-cup-engineering/market.561.group', revision: 'a'.repeat(40) };
+  const selection = requestOverride?.packageTests ?? {
+    kind: '561.market-source-package-test-selection/v1', script: 'node --test test/*.test.mjs',
+    sourceManifestSha256: 'b'.repeat(64), lockfileSha256: 'c'.repeat(64), installedSuppliersSha256: 'd'.repeat(64),
+    files: [{ path: 'test/fixture.test.mjs', bytes: 20, sha256: 'e'.repeat(64) }],
+    skipDisposition: { kind: 'source-declared-counts', skipped, todo, reason: 'Explicit fixture disposition.' },
+  };
+  const request = requestOverride ?? { source, sourceRoot: '/fixture/source', packageTests: selection,
+    artifact: { bytes: 100, sha256: 'f'.repeat(64) }, buildReceipt: { sha256: '1'.repeat(64) }, configuration: { sha256: '2'.repeat(64) },
+    frozenInstallation: { kind: '561.market-frozen-installation/v1', source, lockfileSha256: selection.lockfileSha256,
+      installedSuppliersSha256: selection.installedSuppliersSha256, nodeModulesRoot: '/fixture/source/node_modules',
+      packageManager: { name: 'pnpm', version: '11.28.5' }, frozenLockfile: true, ignoreScripts: true },
+  };
+  const documents = [];
+  const issue = (path, text) => {
+    const descriptor = { path, bytes: Buffer.byteLength(text), sha256: sha(text) };
+    documents.push({ ...descriptor, text }); return descriptor;
+  };
+  const privateMarker = 'PRIVATE_PACKAGE_OUTPUT_FIXTURE_NOT_FOR_PUBLIC_SUMMARY';
+  const stdoutText = `TAP version 13\n# ${privateMarker}\n1..1\nok 1 - fixture\n# tests ${1 + skipped + todo}\n# suites 0\n# pass 1\n# fail 0\n# cancelled 0\n# skipped ${skipped}\n# todo ${todo}\n`;
+  const result = { tests: 1 + skipped + todo, suites: 0, pass: 1, fail: 0, cancelled: 0, skipped, todo,
+    outcome: skipped + todo ? 'completed-with-declared-skips' : 'passed', allCasesPassed: skipped + todo === 0,
+    skipDisposition: selection.skipDisposition };
+  const summaryOwner = summaryOwnerOverride ?? { path: '/fixture/source/node_modules/summary/test-run-summary.mjs', bytes: 50, sha256: '3'.repeat(64) };
+  const compilerManifest = compilerManifestOverride ?? '/fixture/source/node_modules/esbuild/package.json';
+  const observation = {
+    kind: '561.market-source-package-tests/v1', source, scope: 'original-manifest-source-tests', selection,
+    selectionSha256: sha(JSON.stringify(selection)),
+    command: { executable: process.execPath, nodeVersion: process.version, argv: ['--test', '--test-reporter=tap', ...selection.files.map(file => file.path)] },
+    installedRoot: request.frozenInstallation.nodeModulesRoot, frozenInstallation: request.frozenInstallation,
+    nativeCompilerManifest: compilerManifest, summaryOwner,
+    execution: { exited: true, exitCode: 0, signal: null, error: false, outputComplete: true },
+    stdout: issue('package-tests.tap', stdoutText), stderr: issue('package-tests.stderr.txt', ''), ...result,
+    selectedInputSnapshot: { kind: '561.market-native-selected-test-inputs/v1', files: 1, sha256: '4'.repeat(64),
+      unchanged: true, scope: 'compiler-selected-physical-inputs-and-manifests-plus-enrolled-tests-and-summary-compiler-owners',
+      limits: { files: 16384, bytes: 268435456 }, everyDevelopmentImportReceived: false,
+      completeInstalledByteContinuityReceived: false, importerTopologyReceived: false, mutationProofSandboxReceived: false },
+    caseNameCompletenessIndependentlyReceived: false,
+    custody: { rawOutput: 'embedded-private-carrier', privateCarrierReceived: false, durableRetention: 'unreceived', authorizedRecipient: null },
+    productionDeploymentReceived: false, outsidePaymentReceived: false,
+  };
+  const qualification = {
+    kind: '561.market-worker-native-qualification/v1', source, sourceRevision: source.revision,
+    workerSha256: request.artifact.sha256, workerBytes: request.artifact.bytes,
+    buildReceiptSha256: request.buildReceipt.sha256, configurationSha256: request.configuration.sha256,
+    evidence: {}, evidenceDocuments: documents,
+  };
+  const refresh = () => {
+    const index = documents.findIndex(d => d.path === 'package-tests-observations.json');
+    if (index !== -1) documents.splice(index, 1);
+    qualification.evidence.packageTests = issue('package-tests-observations.json', JSON.stringify(observation));
+  };
+  refresh();
+  let ownerCalls = 0;
+  const owners = { summaryOwner, compilerManifest,
+    parseTestRunSummary: text => { assert.equal(text, stdoutText); return { tests: result.tests, pass: 1, fail: 0 }; },
+    receiveResult: (processResult, summary, disposition) => {
+      ownerCalls++;
+      assert.equal(processResult.stdout, stdoutText); assert.equal(processResult.stderr, '');
+      assert.deepEqual(summary, { tests: result.tests, pass: 1, fail: 0 });
+      assert.deepEqual(disposition, selection.skipDisposition);
+      if (!processResult.exited || processResult.exitCode !== 0 || processResult.signal !== null ||
+          processResult.error || !processResult.outputComplete) throw new Error('Original owner refuses process');
+      return result;
+    },
+  };
+  return { request, qualification, observation, owners, result, refresh, privateMarker, ownerCalls: () => ownerCalls };
+}
+
+test('bridge receives actual private package streams through original owners and exports only bounded result metadata', () => {
+  for (const disposition of [{}, { skipped: 2 }, { todo: 1 }]) {
+    const fixture = packageEvidenceFixture(disposition);
+    const summary = receiveMarketPackageTestEvidence(fixture.qualification, fixture.request, fixture.owners);
+    assert.equal(fixture.ownerCalls(), 1);
+    assert.equal(summary.outcome, fixture.result.outcome);
+    assert.equal(summary.allCasesPassed, fixture.result.allCasesPassed);
+    assert.equal(summary.tests, fixture.result.tests);
+    assert.equal(summary.durableRetention, 'unreceived');
+    assert.equal(summary.caseNameCompletenessIndependentlyReceived, false);
+    assert.ok(!JSON.stringify(summary).includes(fixture.privateMarker));
+    assert.ok(!JSON.stringify(summary).includes('/fixture/'));
+    assert.ok(!Object.hasOwn(summary, 'text'));
+  }
+});
+
+test('selected package evidence refuses omission, forgery, process failure and invented custody rather than downgrading', () => {
+  for (const change of [
+    f => { delete f.qualification.evidence.packageTests; },
+    f => { f.qualification.evidenceDocuments.shift(); },
+    f => { f.qualification.evidenceDocuments.push(f.qualification.evidenceDocuments[0]); },
+    f => { f.qualification.evidenceDocuments[0].text += 'changed'; },
+    f => { f.observation.selectionSha256 = '0'.repeat(64); f.refresh(); },
+    f => { f.observation.selection = { ...f.observation.selection, script: 'npm test' }; f.refresh(); },
+    f => { f.observation.source = { ...f.observation.source, revision: '0'.repeat(40) }; f.refresh(); },
+    f => { f.observation.frozenInstallation = { ...f.observation.frozenInstallation, frozenLockfile: false }; f.refresh(); },
+    f => { f.observation.command.argv.push('test/extra.test.mjs'); f.refresh(); },
+    f => { f.observation.nativeCompilerManifest = '/outside/compiler.json'; f.refresh(); },
+    f => { f.observation.summaryOwner = { ...f.observation.summaryOwner, sha256: '0'.repeat(64) }; f.refresh(); },
+    f => { f.observation.tests++; f.refresh(); },
+    f => { f.observation.pass++; f.refresh(); },
+    f => { f.observation.fail = 1; f.refresh(); },
+    f => { f.observation.cancelled = 1; f.refresh(); },
+    f => { f.observation.skipped = 1; f.refresh(); },
+    f => { f.observation.outcome = 'unreceived'; f.refresh(); },
+    f => { f.observation.execution.exitCode = 1; f.refresh(); },
+    f => { f.observation.execution.signal = 'SIGTERM'; f.refresh(); },
+    f => { f.observation.execution.error = true; f.refresh(); },
+    f => { f.observation.execution.outputComplete = false; f.refresh(); },
+    f => { f.observation.custody.durableRetention = 'received'; f.refresh(); },
+    f => { f.observation.custody.privateCarrierReceived = true; f.refresh(); },
+    f => { f.observation.caseNameCompletenessIndependentlyReceived = true; f.refresh(); },
+    f => { f.observation.selectedInputSnapshot.unchanged = false; f.refresh(); },
+    f => { f.observation.selectedInputSnapshot.sha256 = ['4'.repeat(64)]; f.refresh(); },
+    f => { f.observation.selectedInputSnapshot.importerTopologyReceived = true; f.refresh(); },
+    f => { f.observation.selectedInputSnapshot.everyDevelopmentImportReceived = true; f.refresh(); },
+  ]) {
+    const fixture = packageEvidenceFixture(); change(fixture);
+    assert.throws(() => receiveMarketPackageTestEvidence(fixture.qualification, fixture.request, fixture.owners), /PACKAGE_TEST_|Original owner refuses/u);
+  }
+});
+
+test('selected profile completes the existing fabrication path with raw evidence private in the unchanged fifteen-file carrier', async () => {
+  const fixture = await createCanonicalMarketFabricationFixture();
+  try {
+    const order = await selectFixturePackageTests(fixture);
+    // Explicit component doubles: the native owner separately qualifies the real
+    // result semantics. The public bridge must bind and invoke these exact owners.
+    const receiverBytes = Buffer.from(`export function receiveNativeMarketPackageTestResult(process, summary, skipDisposition) {
+      if (process.exitCode !== 0 || process.stderr !== '' || summary.tests !== 1) throw Error('fixture owner refusal');
+      return { tests: 1, suites: 0, pass: 1, fail: 0, cancelled: 0, skipped: 0, todo: 0,
+        outcome: 'passed', allCasesPassed: true, skipDisposition };
+    }\n`);
+    fixture.files['ops/receive-native-worker.mjs'] = receiverBytes;
+    await writeFile(join(fixture.sourceRoot, 'ops/receive-native-worker.mjs'), receiverBytes);
+    fixture.git(fixture.sourceRoot, 'add', 'ops/receive-native-worker.mjs');
+    fixture.git(fixture.sourceRoot, '-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.invalid', 'commit', '--quiet', '-m', 'Native result owner double');
+    order.source.market.revision = fixture.git(fixture.sourceRoot, 'rev-parse', 'HEAD');
+    order.source.market.tree = fixture.git(fixture.sourceRoot, 'rev-parse', 'HEAD^{tree}');
+    order.source.receiver.revision = order.source.market.revision;
+    order.sourceInputs.nativeReceiver = { path: 'ops/receive-native-worker.mjs', bytes: receiverBytes.length, sha256: sha(receiverBytes) };
+    const summaryRoot = join(fixture.sourceRoot, 'node_modules/@red-cup-engineering/npm-workspace-publication-service');
+    await mkdir(summaryRoot, { recursive: true });
+    const summaryBytes = Buffer.from('export const parseTestRunSummary = () => ({ tests: 1, pass: 1, fail: 0 });\n');
+    const summaryPath = join(summaryRoot, 'test-run-summary.mjs');
+    await writeFile(summaryPath, summaryBytes);
+    await writeFile(join(summaryRoot, 'package.json'), JSON.stringify({
+      name: '@red-cup-engineering/npm-workspace-publication-service', version: '0.14.18', type: 'module',
+      exports: { './test-run-summary': './test-run-summary.mjs', './package.json': './package.json' },
+    }));
+    let selectedEvidence, narrowEnrollment = false;
+    const options = {
+      destination: join(fixture.root, 'private-package-carrier'), sourceRoot: fixture.sourceRoot, installSuppliers: true,
+      incumbentCarrierDirectory: fixture.incumbentCarrierRoot,
+      exec: async (command, argv, options) => command === 'corepack'
+        ? { stdout: argv.includes('--version') ? '11.28.5\n' : '' } : defaultExec(command, argv, options),
+      buildWorker: ({ outputRoot, sourceRoot }) => writeMockBuildOutputs(outputRoot, sourceRoot, fixture),
+      receiveWorker: async request => {
+        if (narrowEnrollment) request.packageTests.files.pop();
+        selectedEvidence = packageEvidenceFixture({ requestOverride: request,
+          summaryOwnerOverride: { path: summaryPath, bytes: summaryBytes.length, sha256: sha(summaryBytes) },
+          compilerManifestOverride: join(fixture.esbuildRoot, 'package.json') });
+        Object.assign(selectedEvidence.qualification, {
+          outsidePaymentReceived: false, artifactInternalComputationInstrumented: false,
+          checks: { startup: { passed: true }, sourceSuite: { passed: true } },
+        });
+        await mkdir(request.outputRoot, { recursive: true });
+        await writeFile(join(request.outputRoot, 'native-qualification.json'), JSON.stringify(selectedEvidence.qualification));
+      },
+      buildReceiver: mockBuildReceiver,
+    };
+    const result = await fabricateMarketCarrier(order, options);
+    assert.equal(Object.keys(result.manifest.artifacts).length, 15);
+    assert.equal(result.fabricationReceipt.packageTests.privateCarrierReceived, true);
+    assert.equal(result.fabricationReceipt.packageTests.durableRetention, 'unreceived');
+    assert.equal(result.fabricationReceipt.packageTests.everyDevelopmentImportReceived, false);
+    assert.equal(result.fabricationReceipt.workspaceDisposed, true);
+    assert.ok(!JSON.stringify(result.fabricationReceipt).includes(selectedEvidence.privateMarker));
+    const received = await verifyMarketCarrier(result.carrierDirectory, result.manifestSha256);
+    const retained = await readFile(join(received.root, received.manifest.artifacts.nativeQualification.path), 'utf8');
+    assert.ok(retained.includes(selectedEvidence.privateMarker));
+    assert.equal((await lstat(join(received.root, received.manifest.artifacts.nativeQualification.path))).mode & 0o777, 0o600);
+    await assert.rejects(lstat(join(fixture.root, 'private-package-carrier/workspace')), { code: 'ENOENT' });
+    narrowEnrollment = true;
+    await assert.rejects(fabricateMarketCarrier(order, { ...options, destination: join(fixture.root, 'narrowed-package-carrier') }),
+      /PACKAGE_TEST_OBSERVATION_MISMATCH/u);
+    assert.equal(order.packageTests.files.length, 3);
+  } finally { await rm(fixture.root, { recursive: true, force: true }); }
 });
