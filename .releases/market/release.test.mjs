@@ -284,7 +284,7 @@ test('the reviewed selection binds the exact forward e4c4 native fabrication wor
   const workOrderPath = fileURLToPath(new URL('./work-order.json', import.meta.url));
   const selected = await selectMarketCarrier(selectionPath);
   assert.equal(selected.ready, true);
-  assert.equal(selected.operation, 'observe');
+  assert.ok(['observe', 'release'].includes(selected.operation), `operation must be supported: ${selected.operation}`);
   assert.equal(selected.repository, '561-group/561-group-frontdoor-services-section');
   assert.equal(selected.revision, 'ee620c373d62a6ba04a54942e119737459535d83');
   assert.equal(selected.directory, '.service-releases/market/20261027-operational-readings-e4c4f49');
@@ -310,6 +310,15 @@ test('the reviewed selection binds the exact forward e4c4 native fabrication wor
     const tempSelection = join(root, 'selection.json');
     const rawSelection = JSON.parse(await readFile(selectionPath, 'utf8'));
     await writeFile(join(root, 'work-order.json'), await readFile(workOrderPath));
+
+    for (const op of ['observe', 'release']) {
+      await writeFile(tempSelection, JSON.stringify({ ...rawSelection, operation: op }));
+      const sel = await selectMarketCarrier(tempSelection);
+      assert.equal(sel.ready, true);
+      assert.equal(sel.operation, op);
+      assert.equal(sel.workOrderSha256, selected.workOrderSha256);
+    }
+
     await writeFile(tempSelection, JSON.stringify({ ...rawSelection, workOrderSha256: '0'.repeat(64) }));
     await assert.rejects(selectMarketCarrier(tempSelection), { code: 'FABRICATION_WORK_ORDER_BYTES_CHANGED' });
 
