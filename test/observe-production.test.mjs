@@ -9,12 +9,14 @@ const revision = { repository:'561-group/561.group', origin:'https://561.group',
   renderer:'TUFTE', application:'LivingWebServer', workerVersionId:'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee' };
 const headers = { 'x-content-type-options':'nosniff', 'strict-transport-security':'max-age=31536000' };
 function provider({ revisionStatus = 200, aliasStatus = 301, aliasLocation = 'https://561.group/contact/?witness=1',
- estateBody = JSON.stringify(estate), abortPath = null, blankPath = null,
+ estateBody = JSON.stringify(estate), estateHeadStatus = 200,
+ estateHeadCache = 'public, max-age=300', estateHeadBody = false,
+ abortPath = null, blankPath = null,
  secure = true, claim = revision,
  htmlDirective = '', extraHeaders = {}, canonical = path => 'https://561.group' + path,
  robotsBody = 'User-agent: *\nAllow: /',
  researchHref = 'https://science.561.group/', researchAsText = false } = {}) {
-  return async url => {
+  return async (url, options = {}) => {
     const path = new URL(url).pathname;
     if (path === abortPath) throw new Error('no route observed');
     if (url.includes('www.561.group')) return new Response('',{status:aliasStatus,headers:{location:aliasLocation}});
@@ -38,7 +40,12 @@ function provider({ revisionStatus = 200, aliasStatus = 301, aliasLocation = 'ht
       {headers:{'content-type':'text/html',...security,...extraHeaders}}
     );
     if (path === '/contact/') return new Response('<html>'+head+'Contact</html>',{headers:{'content-type':'text/html',...security,...extraHeaders}});
-    if (path === '/estate.json') return new Response(estateBody,{headers:{'content-type':'application/json'}});
+    if (path === '/estate.json') return new Response(options.method === 'HEAD' && !estateHeadBody ? null : estateBody, {
+      status: options.method === 'HEAD' ? estateHeadStatus : 200,
+      headers: {'content-type':'application/json; charset=utf-8',
+        'cache-control': options.method === 'HEAD' ? estateHeadCache : 'public, max-age=300',
+        'access-control-allow-origin':'*', ...security },
+    });
     if (path === '/llms.txt') return new Response('# 561 Group',{headers:{'content-type':'text/plain'}});
     if (path === '/robots.txt') return new Response(robotsBody,{headers:{'content-type':'text/plain'}});
     if (path === '/sitemap.xml') return new Response('<?xml version="1.0"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"></urlset>',{headers:{'content-type':'application/xml'}});
@@ -61,6 +68,31 @@ test('exact selected source readback and public resources qualify only HTTP obse
   assert.match(markdownSummary(r),/not.*established/u);
 });
 
+test('the original outside observer samples one GET and one zero-body HEAD and compares source-independent metadata', async()=>{
+  const requests=[], source=provider();
+  const r=await observeProduction({fetchImpl:(url,options)=>{
+    if(url==='https://561.group/estate.json')requests.push(options.method);
+    return source(url,options);
+  }});
+  const reading=r.checks.find(x=>x.name==='estate-head-contract');
+  assert.deepEqual(requests.sort(),['GET','HEAD']);
+  assert.equal(reading.outcome,'pass');
+  assert.equal(reading.bytes,0);
+  assert.equal(reading.cacheControl,'public, max-age=300');
+  assert.equal(reading.cors,'*');
+  assert.match(markdownSummary(r),/estate-head-contract/u);
+  assert.equal(r.providerDeploymentVerified,false);
+});
+test('HEAD body, cache metadata and availability mismatch are public receiving failures, not green performance claims',async()=>{
+  for(const settings of [{estateHeadBody:true},{estateHeadCache:'private, no-store'},{estateHeadStatus:503}]){
+    const result=await observeProduction({fetchImpl:provider(settings)});
+    const reading=result.checks.find(x=>x.name==='estate-head-contract');
+    assert.equal(reading.outcome,'fail');
+    assert.equal(result.overall,'public-checks-failed');
+  }
+  const noHead=await observeProduction({fetchImpl:provider({abortPath:'/estate.json'})});
+  assert.equal(noHead.checks.find(x=>x.name==='estate-head-contract').outcome,'unknown');
+});
 test('a live primary research pathway is checked separately without duplicate homepage requests',async()=>{
   const requests=[];
   const source=provider();
