@@ -139,7 +139,10 @@ response=await fetchWorker(new Request('https://561.group/estate.json?arbitrary=
 check('every authored public node and machine probed',()=>assert.equal(probes.length,estate.nodes.length+estate.machines.length));
 check('probes use exact paths/manual redirects/timeout',()=>{assert.ok(probes.every(p=>p.init.method==='GET'&&p.init.redirect==='manual'&&p.init.signal instanceof AbortSignal));assert.ok(probes.some(p=>p.url==='https://cold-red-gate.561.group/healthz'))});
 check('first responses keep authored four-value semantics',()=>assert.deepEqual(body.nodes.slice(0,8).map(n=>n.told),['true','true','both','both','both','false','false','false']));
-check('source revision cache key ignores arbitrary request query',()=>{assert.equal(keys[0],'https://561.group/estate.json?revision=local-source-fixture');assert.equal(puts[0].key,keys[0])});
+check('data revision and cache contract ignore arbitrary request query',()=>{
+  assert.equal(keys[0],'https://561.group/estate.json?revision=local-source-fixture&contract=estate-json-300s-v2');
+  assert.equal(puts[0].key,keys[0]);
+});
 check('cached estate retains public cache contract',()=>{assert.equal(response.headers.get('cache-control'),'public, max-age=300');assert.equal(body.ttlSeconds,300);assert.equal(body.revision,estate.revision)});
 cached=puts[0].value;const probeCount=probes.length;response=await fetchWorker(new Request('https://561.group/estate.json'),env,ctx);
 check('cache hit does not re-probe or lose headers',()=>{assert.equal(probes.length,probeCount);assert.equal(response.headers.get('x-content-type-options'),'nosniff')});
@@ -275,6 +278,33 @@ check('unsupported methods return 405 without probing or caching',()=>{
   assert.equal(deniedResponse.headers.get('cache-control'),'no-store');
   assert.equal(probes.length,beforeDenied);
   assert.equal(puts.length,writeStart+1);
+});
+
+// Prior live GET advertised four hours although current Worker declares five
+// minutes. An old cache hit must not extend a previous policy across releases.
+cached=new Response(JSON.stringify({revision:estate.revision,ttlSeconds:14400,
+  nodes:[{host:'stale.test',told:'true'}],machines:[]}),{
+  headers:{'content-type':'application/json; charset=utf-8',
+    'cache-control':'public, max-age=14400','access-control-allow-origin':'*'}});
+const priorProbes=probes.length,priorPuts=puts.length;
+const refreshed=await fetchWorker(new Request('https://561.group/estate.json?arbitrary=stale'),env,ctx);
+await Promise.all(waits);
+const refreshedBody=await refreshed.json();
+check('stale four-hour cache hit cannot survive the current five-minute response policy',()=>{
+  assert.equal(probes.length-priorProbes,fanout);
+  assert.equal(puts.length-priorPuts,1);
+  assert.equal(refreshed.headers.get('cache-control'),'public, max-age=300');
+  assert.equal(refreshedBody.ttlSeconds,300);
+  assert.equal(refreshedBody.nodes.length,estate.nodes.length);
+  assert.ok(!refreshedBody.nodes.some(node=>node.host==='stale.test'));
+  assert.ok(keys.at(-1).endsWith('&contract=estate-json-300s-v2'));
+});
+cached=puts.at(-1).value;
+const probesAfterRefresh=probes.length;
+const validCache=await fetchWorker(new Request('https://561.group/estate.json?ignored=1'),env,ctx);
+check('same contract still reuses a healthy cached report without extra probes',()=>{
+  assert.equal(probes.length,probesAfterRefresh);
+  assert.equal(validCache.headers.get('cache-control'),'public, max-age=300');
 });
 
 console.log(JSON.stringify({passed:count,scope:'Actual authored Worker/told modules with deterministic assets and ActivityPub binding fixtures; not evidence of deployed provider.'}));
