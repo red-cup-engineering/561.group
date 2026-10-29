@@ -22,7 +22,7 @@ const SIMPLE_CHECKS = Object.freeze([
     mustContain: 'Published machine-readable interfaces' },
   { name: 'contact', path: '/contact/', accept: 'text/html', type: 'html', required: true },
   { name: 'estate', path: '/estate.json', accept: 'application/json', type: 'estate', required: true },
-  { name: 'agent-discovery', path: '/llms.txt', accept: 'text/plain', type: 'plain', required: true },
+  { name: 'agent-discovery', path: '/llms.txt', accept: 'text/plain', type: 'agent-guide', required: true },
   { name: 'crawl-policy', path: '/robots.txt', accept: 'text/plain', type: 'robots', required: true },
   { name: 'sitemap', path: '/sitemap.xml', accept: 'application/xml', type: 'sitemap', required: true },
   { name: 'security-contact', path: '/.well-known/security.txt', accept: 'text/plain', type: 'plain', required: false },
@@ -159,6 +159,18 @@ function evaluateSimple(def, sample) {
     return { ...result, outcome: 'fail', reason: 'invalid-robots-contract' };
   if (def.type === 'sitemap' && !/<(?:urlset|sitemapindex)(?:\s|>)/iu.test(sample.body))
     return { ...result, outcome: 'fail', reason: 'invalid-sitemap-contract' };
+  // Publication is not qualified merely because a plain-text guide exists.
+  // Check the source-approved correction and the public evidence routes in the
+  // same external GET that supplies the content digest; do not infer indexing.
+  if (def.type === 'agent-guide') {
+    if (!media.includes('text/plain'))
+      return { ...result, outcome: 'fail', reason: 'wrong-media-type' };
+    if (!sample.body.includes('parent of four companies, and the public site represents accountable offices and companies; an inquiry never grants authority.'))
+      return { ...result, outcome: 'fail', reason: 'stale-or-unqualified-agent-guide' };
+    if (!['/feed-input-receipt.json', '/feed-provenance.jsonld',
+      '/editorial-question-provenance.jsonld'].every(path => sample.body.includes(path)))
+      return { ...result, outcome: 'fail', reason: 'missing-public-provenance-links' };
+  }
   if (def.type === 'plain' && !media.includes('text/plain'))
     return { ...result, outcome: 'fail', reason: 'wrong-media-type' };
   if (def.mustContain && (!sample.body.includes(def.mustContain) || !sample.body.includes('data-tufte')))
