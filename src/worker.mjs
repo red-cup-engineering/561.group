@@ -17,6 +17,10 @@ const LOCALES = ["en", "zh-Hans", "lkt"];
 const APEX = "561.group";
 const PROBE_TIMEOUT_MS = 4000;
 const ESTATE_TTL_S = 300;
+// Cache API entries survive deployments. Data identity does not prove the
+// still-cached HTTP representation, TTL or cache policy. Advance this source
+// contract whenever the public estate representation semantics change.
+const ESTATE_CACHE_CONTRACT = "estate-json-300s-v2";
 // The public status representation's metadata is independent of its probes.
 // HEAD can advertise these exact GET headers without performing a fresh read.
 const ESTATE_HEADERS = Object.freeze({
@@ -61,9 +65,13 @@ const inFlightEstate = new Map();
 
 async function estateReading(request, ctx) {
   const cache = caches.default;
-  const key = new Request(new URL(`/estate.json?revision=${estate.revision}`, request.url).toString());
+  const key = new Request(new URL(
+    `/estate.json?revision=${estate.revision}&contract=${ESTATE_CACHE_CONTRACT}`, request.url).toString());
   const cached = await cache.match(key);
-  if (cached) return cached;
+  // Never serve an earlier policy even if it remains under this cache key.
+  if (cached && cached.status === 200 &&
+      ["content-type", "cache-control", "access-control-allow-origin"]
+        .every(name => cached.headers.get(name) === ESTATE_HEADERS[name])) return cached;
 
   let pending = inFlightEstate.get(key.url);
   if (!pending) {
@@ -138,7 +146,7 @@ export default {
       // that it does not transfer. Keep its metadata equal to GET.
       if (request.method === "HEAD")
         return withHeaders(new Response(null, { headers: ESTATE_HEADERS }));
-      return withHeaders(await estateReading(request, ctx));
+      return withHeaders(await estateReading(request, ctx), ESTATE_HEADERS);
     }
     if (url.pathname === "/source-revision.json" && (request.method === "GET" || request.method === "HEAD")) {
       return withHeaders(await readSourceRevision(request, env));
