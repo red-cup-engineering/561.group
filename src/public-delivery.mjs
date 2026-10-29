@@ -32,7 +32,7 @@ export function renderStaticAssetHeaders(){
   const headers=Object.entries(SECURITY_HEADERS)
     .map(([name,value])=>"  "+name+": "+value).join("\n");
   return [
-    "# 561.group public static edge assets; generated from original Engineering source.",
+    "# 561.group public static edge assets; generated from original Engineering source.\n"+
     "# The dynamic Worker always owns publication, contact, estate, receipt and federation.",
     ...STATIC_FAST_PATHS.map(path=>
       path+"\n"+headers+"\n  cache-control: public, max-age="+STATIC_CACHE_SECONDS)
