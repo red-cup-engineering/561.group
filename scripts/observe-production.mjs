@@ -61,11 +61,11 @@ async function limitedBytes(response) {
   return result;
 }
 
-async function observe(url, accept, fetchImpl, timeoutMs, clock) {
-  let nosniff = false, hsts = false;
+async function observe(url, accept, fetchImpl, timeoutMs, clock, method = 'GET') {
+  let nosniff = false, hsts = false, noHeadBody = null, cors = null;
   const observation = await observeSiteOperation({
-    endpoint: '561-group-public-delivery', url, method: 'GET', redirect: 'manual',
-    responseType: 'text', timeoutMs, maxBodyBytes: MAX_BYTES,
+    endpoint: '561-group-public-delivery', url, method, redirect: 'manual',
+    responseType: method === 'HEAD' ? 'none' : 'text', timeoutMs, maxBodyBytes: MAX_BYTES,
   }, {
     clock, safeErrors: true, readResponseBody: limitedBytes, identityContentCoding: true,
     userAgent: '561-group-public-delivery-witness/1',
@@ -76,6 +76,8 @@ async function observe(url, accept, fetchImpl, timeoutMs, clock) {
       const response = await fetchImpl(target, { ...options, cache: 'no-store', headers });
       nosniff = response.headers.get('x-content-type-options') === 'nosniff';
       hsts = Boolean(response.headers.get('strict-transport-security'));
+      if (method === 'HEAD') noHeadBody = response.body === null;
+      cors = response.headers.get('access-control-allow-origin');
       return response;
     },
   });
@@ -90,9 +92,31 @@ async function observe(url, accept, fetchImpl, timeoutMs, clock) {
   }
   return { observation, readWallMs, status: observation.httpStatus,
     contentType: observation.headers['content-type'] ?? '',
-    location: observation.headers.location ?? '', nosniff, hsts,
+    cacheControl: observation.headers['cache-control'] ?? '',
+    location: observation.headers.location ?? '', nosniff, hsts, noHeadBody, cors,
     contentSha256: observation.bodyDigest?.value, bytes: observation.bodyBytes ?? 0,
     body: observation.body ?? '' };
+}
+
+/** External HEAD and GET compare one public resource's representation metadata.
+ * This cannot observe Worker-internal remote-probe counts or energy. */
+function evaluateEstateHead(head, get) {
+  const base = { name: 'estate-head-contract', url: `${ORIGIN}/estate.json`,
+    required: true, readWallMs: head.readWallMs ?? null,
+    httpStatus: head.status ?? null, bytes: head.bytes ?? 0 };
+  if (head.unknown || get.unknown)
+    return { ...base, outcome: 'unknown', reason: head.errorKind ?? get.errorKind };
+  if (head.status !== 200 || get.status !== 200)
+    return { ...base, outcome: 'fail', reason: 'estate-get-or-head-status' };
+  if (head.noHeadBody !== true || head.bytes !== 0)
+    return { ...base, outcome: 'fail', reason: 'head-body-present' };
+  if (head.contentType !== get.contentType || head.cacheControl !== get.cacheControl
+      || head.cors !== get.cors || head.cacheControl !== 'public, max-age=300'
+      || head.cors !== '*' || !head.nosniff || !head.hsts)
+    return { ...base, outcome: 'fail', reason: 'head-get-metadata-mismatch' };
+  return { ...base, outcome: 'pass', cacheControl: head.cacheControl,
+    contentType: head.contentType, cors: head.cors,
+    qualification: 'public HTTP HEAD/GET representation only; does not measure internal probe count' };
 }
 
 function evaluateSimple(def, sample) {
@@ -268,9 +292,10 @@ export async function observeProduction({ fetchImpl = fetch, expectedSourceSha =
     throw new TypeError('expected source must be a 40-character hexadecimal commit');
   if (!Number.isSafeInteger(timeoutMs) || timeoutMs < 500 || timeoutMs > 60000)
     throw new RangeError('timeout must be between 500 and 60000ms');
-  const [simpleSamples, alias, revision, houseClimateVisibility] = await Promise.all([
+  const [simpleSamples, estateHead, alias, revision, houseClimateVisibility] = await Promise.all([
     Promise.all(SIMPLE_CHECKS.map(def =>
       observe(`${ORIGIN}${def.path}`, def.accept, fetchImpl, timeoutMs, now))),
+    observe(`${ORIGIN}/estate.json`, 'application/json', fetchImpl, timeoutMs, now, 'HEAD'),
     observe('https://www.561.group/contact/?witness=1', 'text/html', fetchImpl, timeoutMs, now),
     observe(`${ORIGIN}/source-revision.json`, 'application/json', fetchImpl, timeoutMs, now),
     observeHouseClimateVisibility({fetchImpl,timeoutMs,clock:now}),
@@ -299,8 +324,9 @@ export async function observeProduction({ fetchImpl = fetch, expectedSourceSha =
   const researchRaw = evaluateSimple(RESEARCH_CHECK, simpleSamples[0]);
   const research = researchRaw.reason === 'missing-useful-visitor-page'
     ? { ...researchRaw, reason: 'missing-research-discovery-link' } : researchRaw;
-  const checks = [simple[0], research, ...simple.slice(1), ...searchChecks,
-    evaluateAlias(alias), evaluateRevision(revision, expectedSourceSha)];
+  const checks = [simple[0], research, ...simple.slice(1),
+    evaluateEstateHead(estateHead, simpleSamples[SIMPLE_CHECKS.findIndex(def => def.name === 'estate')]),
+    ...searchChecks, evaluateAlias(alias), evaluateRevision(revision, expectedSourceSha)];
   const requiredChecks = checks.filter(check => check.required);
   const failed = checks.some(check => check.outcome === 'fail');
   const passed = requiredChecks.every(check => check.outcome === 'pass');
