@@ -8,7 +8,7 @@ import {SECURITY_HEADERS,STATIC_FAST_PATHS,STATIC_CACHE_SECONDS,renderStaticAsse
 
 const root=resolve(dirname(fileURLToPath(import.meta.url)),"..");
 const config=JSON.parse(readFileSync(join(root,"wrangler.jsonc"),"utf8")
-  .replace(/^\\s*\/\/.*$/gmu,""));
+  .replace(/^\s*\/\/.*$/gmu,""));
 const routeRules=config.assets.run_worker_first;
 const bypass=(path)=>STATIC_FAST_PATHS.some(p=>
   p.endsWith("/*") ? path.startsWith(p.slice(0,-1)) : p===path);
