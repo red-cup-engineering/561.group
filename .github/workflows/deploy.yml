@@ -392,6 +392,39 @@ jobs:
           // These are the exact already-fetched public bytes, not a second
           // crawler or a check of unpublished checkout-only representations.
           const {readFile}=await import('node:fs/promises');
+          const staticReceipts=[
+            {path:'/fonts/space-grotesk.woff2',source:'public/fonts/space-grotesk.woff2',
+              mime:/woff2/u,publicDigest:null},
+            {path:'/work/audit/preview.mjs',source:'public/work/audit/preview.mjs',
+              mime:/(?:javascript|ecmascript)/iu,publicDigest:'work/audit/preview.mjs'}
+          ];
+          for(const item of staticReceipts){
+            const response=await read(item.path);
+            if(response.status!==200 || response.redirected ||
+               response.url!==host+item.path ||
+               !item.mime.test(response.headers.get('content-type')??'')){
+              throw Error('Original static edge resource not served at its exact public route: '+item.path);
+            }
+            const header=response.headers;
+            if(!(header.get('cache-control')??'').includes('max-age=300') ||
+               header.get('x-content-type-options')!=='nosniff' ||
+               !(header.get('strict-transport-security')??'').includes('includeSubDomains') ||
+               !(header.get('content-security-policy')??'').includes("frame-ancestors 'none'")){
+              throw Error('Source-owned fast-asset security/cache contract not received: '+item.path);
+            }
+            const actual=Buffer.from(await response.arrayBuffer());
+            const source=await readFile(item.source);
+            if(!actual.equals(source))throw Error('Public static asset differs from original source bytes: '+item.path);
+            if(item.publicDigest){
+              const digest='sha256:'+Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',actual)),
+                b=>b.toString(16).padStart(2,'0')).join('');
+              if(receipt.artifactDigests[item.publicDigest]!==digest)
+                throw Error('Public Work browser source differs from its original release digest');
+            }
+            console.log('Received same-source fast static asset '+item.path+' ('+actual.byteLength+
+              ' bytes, 300-second cache and original security headers); Worker invocation not inferred from HTTP alone');
+          }
+
 
           const sourceHome=JSON.parse(await readFile('data/home.json','utf8'));
           const feedReceipt=assayPublicFeedProjection({
