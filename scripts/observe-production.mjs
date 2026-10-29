@@ -227,6 +227,9 @@ function evaluatePublicEvidenceManifest(revision,checks) {
   const evidence=SIMPLE_CHECKS.filter(def=>def.evidenceKind);
   for(const def of evidence) {
     const read=checks.find(check=>check.name===def.name);
+    if(read?.outcome==='unknown')
+      return {...base,outcome:'unknown',reason:'public-evidence-unreadable',
+        artifact:def.path.slice(1)};
     if(read?.outcome!=='pass' || !/^[a-f0-9]{64}$/u.test(read.contentSha256??''))
       return {...base,outcome:'fail',reason:'public-evidence-unreceived',artifact:def.path.slice(1)};
     const expected=manifest?.artifactDigests?.[def.path.slice(1)];
