@@ -7,6 +7,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import assert from "node:assert/strict";
 import {assayEditorialQuestionProvenance} from "../src/editorial-question-provenance.mjs";
+import {renderStaticAssetHeaders} from "../src/public-delivery.mjs";
 
 // Qualifies the actual unchanged publication producer with a single original
 // site-owned estate, not a copied test-game catalogue or a second renderer.
@@ -34,13 +35,20 @@ check("actual original build executes with authored ARB inputs and no unavailabl
 const obsolete=await readFile(path.join(app,"public/index.html"),"utf8").then(()=>true,
   error=>{if(error.code==="ENOENT")return false;throw error;});
 check("root has one TUFTE authority and stale static index is removed",()=>assert.equal(obsolete,false));
-const names=["source-revision.json","estate-records.json","work/audit/preview.mjs","zh-hans/index.html",
+const names=["_headers","source-revision.json","estate-records.json","work/audit/preview.mjs","zh-hans/index.html",
   "lkt/index.html","llms.txt","llms-full.txt","feed.json","feed.atom.xml",
   "feed.rss.xml","feed-input-receipt.json","feed-provenance.jsonld","editorial-question-provenance.jsonld",".well-known/security.txt","8d232583e7cba18a83bf5c0325fcc7c9.txt",
   "humans.txt","robots.txt","sitemap.xml"];
 const readOutputs=async()=>Object.fromEntries(await Promise.all(names.map(async name=>[
   name,await readFile(path.join(app,"public",name),"utf8")])));
 const before=await readOutputs();
+check("source generated static edge security is independently reproducible and never a public GET artifact",()=>{
+  assert.equal(before["_headers"],renderStaticAssetHeaders());
+  assert.ok(before["_headers"].includes("max-age=300"));
+  const receipt=JSON.parse(before["source-revision.json"]);
+  assert.equal(receipt.artifactDigests["_headers"],undefined);
+  assert.equal(receipt.artifactDigests["work/audit/preview.mjs"]?.startsWith("sha256:"),true);
+});
 check("original Work audit module and sitemap derive from the same public build",()=>{
   assert.ok(before["work/audit/preview.mjs"].includes("inspectPublicGitHub"));
   assert.ok(before["sitemap.xml"].includes("<loc>https://561.group/work/audit/</loc>"));
@@ -117,7 +125,7 @@ check("current release binds exact source and every generated public representat
   assert.equal(receipt.origin,"https://561.group");
   assert.equal(receipt.publicationDay,"2026-10-22");
   const expected=Object.fromEntries(Object.entries(before)
-    .filter(([name])=>name!=="source-revision.json")
+    .filter(([name])=>name!=="source-revision.json" && name!=="_headers")
     .sort(([a],[b])=>a.localeCompare(b))
     .map(([name,bytes])=>[name,
       "sha256:"+createHash("sha256").update(bytes,"utf8").digest("hex")]));
