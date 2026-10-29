@@ -4,13 +4,14 @@ import {createHash} from 'node:crypto';
 import {readFileSync} from 'node:fs';
 import { observeProduction, markdownSummary, HOUSE_CLIMATE_ARTICLES } from '../scripts/observe-production.mjs';
 const SHA = '1234567890abcdef1234567890abcdef12345678';
-const estate = { revision: 'dated-original-archive', nodes: [{host:'node.561.group',told:'both'}] };
+const estate = { revision: 'dated-original-archive', ttlSeconds:300, nodes: [{host:'node.561.group',told:'both'}] };
 const revision = { repository:'561-group/561.group', origin:'https://561.group', sourceCommit:SHA,
   renderer:'TUFTE', application:'LivingWebServer', workerVersionId:'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee' };
 const headers = { 'x-content-type-options':'nosniff', 'strict-transport-security':'max-age=31536000' };
 function provider({ revisionStatus = 200, aliasStatus = 301, aliasLocation = 'https://561.group/contact/?witness=1',
  estateBody = JSON.stringify(estate), estateHeadStatus = 200,
- estateHeadCache = 'public, max-age=300', estateHeadBody = false,
+ estateHeadCache = 'public, max-age=300', estateGetCache = 'public, max-age=300',
+ estateHeadBody = false,
  abortPath = null, blankPath = null,
  secure = true, claim = revision,
  htmlDirective = '', extraHeaders = {}, canonical = path => 'https://561.group' + path,
@@ -43,7 +44,7 @@ function provider({ revisionStatus = 200, aliasStatus = 301, aliasLocation = 'ht
     if (path === '/estate.json') return new Response(options.method === 'HEAD' && !estateHeadBody ? null : estateBody, {
       status: options.method === 'HEAD' ? estateHeadStatus : 200,
       headers: {'content-type':'application/json; charset=utf-8',
-        'cache-control': options.method === 'HEAD' ? estateHeadCache : 'public, max-age=300',
+        'cache-control': options.method === 'HEAD' ? estateHeadCache : estateGetCache,
         'access-control-allow-origin':'*', ...security },
     });
     if (path === '/llms.txt') return new Response('# 561 Group',{headers:{'content-type':'text/plain'}});
@@ -137,6 +138,19 @@ test('outside HTTP witness measures complete reads without extra network request
   assert.equal(requests.filter(url=>url==='https://561.group/').length,1);
   assert.match(markdownSummary(result),/\\| Read ms \\|/u);
   assert.equal(result.providerDeploymentVerified,false);
+});
+
+test('a stale four-hour GET header or JSON TTL refuses public estate receiving',async()=>{
+  for(const stale of [
+    {estateGetCache:'public, max-age=14400'},
+    {estateBody:JSON.stringify({...estate,ttlSeconds:14400})}
+  ]){
+    const result=await observeProduction({fetchImpl:provider(stale)});
+    const reading=result.checks.find(x=>x.name==='estate');
+    assert.equal(reading.outcome,'fail');
+    assert.equal(reading.reason,'stale-estate-cache-contract');
+    assert.equal(result.overall,'public-checks-failed');
+  }
 });
 
 test('the original observer requests identity bytes and binds public digests to that received representation',async()=>{
