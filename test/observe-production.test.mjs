@@ -5,8 +5,25 @@ import {readFileSync} from 'node:fs';
 import { observeProduction, markdownSummary, HOUSE_CLIMATE_ARTICLES } from '../scripts/observe-production.mjs';
 const SHA = '1234567890abcdef1234567890abcdef12345678';
 const estate = { revision: 'dated-original-archive', ttlSeconds:300, nodes: [{host:'node.561.group',told:'both'}] };
+const EVIDENCE = Object.freeze({
+  '/feed-input-receipt.json': JSON.stringify({schema:'561.group/feed-input-receipt/v1',
+    origin:'https://561.group',expectedSourceCount:4,
+    sources:[0,1,2,3].map(i=>({companyId:'company-'+i,state:'received'}))}),
+  '/feed-provenance.jsonld': JSON.stringify({
+    '@id':'https://561.group/feed-provenance.jsonld',
+    '@context':{schema:'https://schema.org/',prov:'http://www.w3.org/ns/prov#'},
+    '@graph':[{'@id':'urn:sha256:'+'a'.repeat(64),'@type':'prov:Entity'}]}),
+  '/editorial-question-provenance.jsonld': JSON.stringify({
+    '@id':'https://561.group/editorial-question-provenance.jsonld',
+    '@type':'schema:Dataset',
+    '@context':{schema:'https://schema.org/',prov:'http://www.w3.org/ns/prov#'},
+    '@graph':[{'@id':'urn:sha256:'+'b'.repeat(64),'@type':'prov:Entity'}]})
+});
 const revision = { repository:'561-group/561.group', origin:'https://561.group', sourceCommit:SHA,
-  renderer:'TUFTE', application:'LivingWebServer', workerVersionId:'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee' };
+  renderer:'TUFTE', application:'LivingWebServer', workerVersionId:'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee',
+  artifactDigests:Object.fromEntries(Object.entries(EVIDENCE).map(([path,body])=>
+    [path.slice(1),'sha256:'+createHash('sha256').update(body).digest('hex')]))
+};
 const headers = { 'x-content-type-options':'nosniff', 'strict-transport-security':'max-age=31536000' };
 const GUIDE = [
   '# 561 Group',
@@ -21,7 +38,8 @@ function provider({ revisionStatus = 200, aliasStatus = 301, aliasLocation = 'ht
  secure = true, claim = revision,
  htmlDirective = '', extraHeaders = {}, canonical = path => 'https://561.group' + path,
  robotsBody = 'User-agent: *\nAllow: /',
- guideBody = GUIDE,
+ guideBody = GUIDE, evidenceBodies = EVIDENCE,
+ evidenceMissing = null, evidenceWrongMedia = null,
  researchHref = 'https://science.561.group/', researchAsText = false } = {}) {
   return async (url, options = {}) => {
     const path = new URL(url).pathname;
@@ -54,6 +72,11 @@ function provider({ revisionStatus = 200, aliasStatus = 301, aliasLocation = 'ht
         'access-control-allow-origin':'*', ...security },
     });
     if (path === '/llms.txt') return new Response(guideBody,{headers:{'content-type':'text/plain'}});
+    if (Object.hasOwn(EVIDENCE,path)) {
+      if (path === evidenceMissing) return new Response('missing',{status:404});
+      return new Response(evidenceBodies[path],{headers:{'content-type':path === evidenceWrongMedia
+        ? 'text/html' : path.endsWith('.jsonld') ? 'application/ld+json' : 'application/json'}});
+    }
     if (path === '/robots.txt') return new Response(robotsBody,{headers:{'content-type':'text/plain'}});
     if (path === '/sitemap.xml') return new Response('<?xml version="1.0"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"></urlset>',{headers:{'content-type':'application/xml'}});
     if (path === '/.well-known/security.txt') return new Response('Contact: mailto:emsenn@561.group',{headers:{'content-type':'text/plain'}});
@@ -93,6 +116,47 @@ test('public agent guide must receive corrected office wording and source eviden
   const incomplete=await observeProduction({fetchImpl:provider({abortPath:'/llms.txt'})});
   assert.equal(incomplete.checks.find(item=>item.name==='agent-discovery').outcome,'unknown');
   assert.equal(incomplete.overall,'receiving-incomplete');
+});
+
+test('one bounded read per public provenance document receives exact declared evidence bytes', async()=>{
+  const calls=[],source=provider();
+  const r=await observeProduction({fetchImpl:(url,opts)=>{calls.push(url);return source(url,opts)}});
+  for(const path of Object.keys(EVIDENCE)) {
+    assert.equal(calls.filter(url=>url==='https://561.group'+path).length,1);
+    const reading=r.checks.find(c=>c.url==='https://561.group'+path);
+    assert.equal(reading.outcome,'pass',path);
+    assert.equal(reading.contentSha256,createHash('sha256').update(EVIDENCE[path]).digest('hex'));
+  }
+  const manifest=r.checks.find(c=>c.name==='published-evidence-byte-identity');
+  assert.equal(manifest.outcome,'pass');
+  assert.equal(manifest.artifacts,3);
+  assert.equal(r.providerDeploymentVerified,false);
+  assert.equal(r.independentHumanAcceptance,false);
+});
+
+test('public evidence rejects missing, unreadable, wrong MIME, false identity and digest mismatch',async()=>{
+  const path='/feed-provenance.jsonld';
+  const altered=JSON.parse(EVIDENCE[path]);
+  altered['@graph'][0]['schema:description']='public bytes changed without matching release digest';
+  for(const [args,checkName,reason] of [
+    [{evidenceMissing:path},'feed-item-provenance','http-404'],
+    [{evidenceWrongMedia:path},'feed-item-provenance','wrong-evidence-media-type'],
+    [{evidenceBodies:{...EVIDENCE,[path]:'{' }},'feed-item-provenance','invalid-evidence-json'],
+    [{evidenceBodies:{...EVIDENCE,[path]:JSON.stringify({...altered,'@id':'https://other.example/'})}},'feed-item-provenance','invalid-public-evidence-identity'],
+    [{evidenceBodies:{...EVIDENCE,[path]:JSON.stringify(altered)}},'published-evidence-byte-identity','published-evidence-digest-mismatch'],
+    [{claim:{...revision,artifactDigests:{}}},'published-evidence-byte-identity','published-evidence-digest-mismatch'],
+  ]) {
+    const r=await observeProduction({fetchImpl:provider(args)});
+    const evidence=r.checks.find(c=>c.name===checkName);
+    assert.equal(evidence.outcome,'fail',reason);
+    assert.equal(evidence.reason,reason);
+    assert.equal(r.overall,'public-checks-failed');
+    assert.equal(r.providerDeploymentVerified,false);
+  }
+  const unknown=await observeProduction({fetchImpl:provider({abortPath:path})});
+  assert.equal(unknown.checks.find(c=>c.name==='feed-item-provenance').outcome,'unknown');
+  assert.equal(unknown.checks.find(c=>c.name==='published-evidence-byte-identity').outcome,'unknown');
+  assert.equal(unknown.overall,'receiving-incomplete');
 });
 
 test('the original outside observer samples one GET and one zero-body HEAD and compares source-independent metadata', async()=>{
