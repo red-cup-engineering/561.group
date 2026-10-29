@@ -213,8 +213,11 @@ function evaluateSimple(def, sample) {
  * public consistency check, not provider authentication or research assent.
  * The original source/editorial semantic assays remain in the release lane. */
 function evaluatePublicEvidenceManifest(revision,checks) {
+  // A missing or unreadable manifest cannot qualify the three public
+  // provenance documents, even without an operator-selected source SHA.
+  // Record absence/uncertainty without mislabeling it a provider outage.
   const base={name:'published-evidence-byte-identity',
-    url:ORIGIN+'/source-revision.json',required:revision.status===200};
+    url:ORIGIN+'/source-revision.json',required:true};
   if(revision.unknown)
     return {...base,outcome:'unknown',reason:'revision-manifest-unreadable'};
   if(revision.status===404)
