@@ -110,10 +110,19 @@ function evaluateEstateHead(head, get) {
     return { ...base, outcome: 'fail', reason: 'estate-get-or-head-status' };
   if (head.noHeadBody !== true || head.bytes !== 0)
     return { ...base, outcome: 'fail', reason: 'head-body-present' };
+  // Retain only public response metadata; no request headers, cookies,
+  // credentials, query parameters, private data or response bodies.
+  const metadata = {
+    head: { type: head.contentType, cache: head.cacheControl, cors: head.cors,
+      nosniff: head.nosniff, hsts: head.hsts },
+    get: { type: get.contentType, cache: get.cacheControl, cors: get.cors,
+      nosniff: get.nosniff, hsts: get.hsts },
+  };
   if (head.contentType !== get.contentType || head.cacheControl !== get.cacheControl
       || head.cors !== get.cors || head.cacheControl !== 'public, max-age=300'
       || head.cors !== '*' || !head.nosniff || !head.hsts)
-    return { ...base, outcome: 'fail', reason: 'head-get-metadata-mismatch' };
+    return { ...base, outcome: 'fail', reason: 'head-get-metadata-mismatch',
+      metadata };
   return { ...base, outcome: 'pass', cacheControl: head.cacheControl,
     contentType: head.contentType, cors: head.cors,
     qualification: 'public HTTP HEAD/GET representation only; does not measure internal probe count' };
