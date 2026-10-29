@@ -89,6 +89,13 @@ test('HEAD body, cache metadata and availability mismatch are public receiving f
     const reading=result.checks.find(x=>x.name==='estate-head-contract');
     assert.equal(reading.outcome,'fail');
     assert.equal(result.overall,'public-checks-failed');
+    if (settings.estateHeadCache === 'private, no-store') {
+      assert.equal(reading.metadata.head.cache,'private, no-store');
+      assert.equal(reading.metadata.get.cache,'public, max-age=300');
+      assert.deepEqual(Object.keys(reading.metadata.head),
+        ['type','cache','cors','nosniff','hsts']);
+      assert.equal(JSON.stringify(reading).includes('authorization'),false);
+    }
   }
   const noHead=await observeProduction({fetchImpl:provider({abortPath:'/estate.json'})});
   assert.equal(noHead.checks.find(x=>x.name==='estate-head-contract').outcome,'unknown');
