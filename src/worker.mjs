@@ -10,6 +10,7 @@ import { create561GroupLivingApplication, PUBLIC_ROUTES } from "./living-home.mj
 import { toldOf } from "./told.mjs";
 import { readSourceRevision } from "./source-revision.mjs";
 import { localeOfPath, localeRedirect } from "./locales.mjs";
+import { SECURITY_HEADERS } from "./public-delivery.mjs";
 
 const LOCALES = ["en", "zh-Hans", "lkt"];
 
@@ -22,15 +23,6 @@ const livingHome = create561GroupLivingApplication({
   readFrontdoor: () => frontdoor, readFeed: () => groupFeed,
   readFeedReceipt: () => feedReceipt, releaseHome: home
 });
-
-const SECURITY_HEADERS = {
-  "content-security-policy":
-    "default-src 'self'; script-src 'self' 'unsafe-inline' https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://api.github.com https://cloudflareinsights.com; base-uri 'none'; form-action 'self' mailto:; frame-ancestors 'none'",
-  "x-content-type-options": "nosniff",
-  "referrer-policy": "no-referrer",
-  "permissions-policy": "camera=(), microphone=(), geolocation=(), interest-cohort=()",
-  "strict-transport-security": "max-age=31536000; includeSubDomains",
-};
 
 function withHeaders(response, extra = {}) {
   const out = new Response(response.body, response);
