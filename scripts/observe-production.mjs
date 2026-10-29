@@ -147,6 +147,11 @@ function evaluateSimple(def, sample) {
         estate.nodes.some(n => !['true', 'false', 'both', 'neither'].includes(n.told))) {
       return { ...result, outcome: 'fail', reason: 'invalid-estate-contract' };
     }
+    // Require the GET representation itself to witness five-minute freshness;
+    // even matching GET and HEAD could both be stale under an old cache policy.
+    if (estate.ttlSeconds !== 300 || sample.cacheControl !== 'public, max-age=300'
+        || sample.cors !== '*')
+      return { ...result, outcome: 'fail', reason: 'stale-estate-cache-contract' };
     result.estateNodes = estate.nodes.length;
     result.estateRevision = estate.revision;
   }
