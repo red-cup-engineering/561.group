@@ -337,10 +337,23 @@ test('loss of research destination is a visible failure, not homepage uptime suc
   assert.equal(unknown.checks.find(x=>x.name==='research-discovery').outcome,'unknown');
 });
 
-test('legacy 404 revision is observed absence, not a false match to source',async()=>{
+test('missing public revision stays incomplete even without a selected expected source',async()=>{
   const r=await observeProduction({fetchImpl:provider({revisionStatus:404})});
-  assert.equal(r.overall,'public-checks-passed');
+  assert.equal(r.overall,'receiving-incomplete');
   assert.equal(r.checks.at(-1).outcome,'not-published');
+  assert.equal(r.checks.find(c=>c.name==='published-evidence-byte-identity').outcome,'not-published');
+  assert.equal(r.checks.find(c=>c.name==='published-evidence-byte-identity').required,true);
+  assert.equal(r.selectedReleaseSource,null);
+  assert.equal(r.providerDeploymentVerified,false);
+});
+
+test('unreadable manifest prevents false-green provenance with no selected source',async()=>{
+  const r=await observeProduction({fetchImpl:provider({abortPath:'/source-revision.json'})});
+  const manifest=r.checks.find(c=>c.name==='published-evidence-byte-identity');
+  assert.equal(manifest.outcome,'unknown');
+  assert.equal(manifest.reason,'revision-manifest-unreadable');
+  assert.equal(manifest.required,true);
+  assert.equal(r.overall,'receiving-incomplete');
   assert.equal(r.selectedReleaseSource,null);
   assert.equal(r.providerDeploymentVerified,false);
 });
