@@ -8,6 +8,11 @@ const estate = { revision: 'dated-original-archive', ttlSeconds:300, nodes: [{ho
 const revision = { repository:'561-group/561.group', origin:'https://561.group', sourceCommit:SHA,
   renderer:'TUFTE', application:'LivingWebServer', workerVersionId:'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee' };
 const headers = { 'x-content-type-options':'nosniff', 'strict-transport-security':'max-age=31536000' };
+const GUIDE = [
+  '# 561 Group',
+  'The 561 Group (https://561.group/) is a parent of four companies, and the public site represents accountable offices and companies; an inquiry never grants authority.',
+  'Source evidence: https://561.group/feed-input-receipt.json, https://561.group/feed-provenance.jsonld, and https://561.group/editorial-question-provenance.jsonld.'
+].join('\n');
 function provider({ revisionStatus = 200, aliasStatus = 301, aliasLocation = 'https://561.group/contact/?witness=1',
  estateBody = JSON.stringify(estate), estateHeadStatus = 200,
  estateHeadCache = 'public, max-age=300', estateGetCache = 'public, max-age=300',
@@ -16,6 +21,7 @@ function provider({ revisionStatus = 200, aliasStatus = 301, aliasLocation = 'ht
  secure = true, claim = revision,
  htmlDirective = '', extraHeaders = {}, canonical = path => 'https://561.group' + path,
  robotsBody = 'User-agent: *\nAllow: /',
+ guideBody = GUIDE,
  researchHref = 'https://science.561.group/', researchAsText = false } = {}) {
   return async (url, options = {}) => {
     const path = new URL(url).pathname;
@@ -47,7 +53,7 @@ function provider({ revisionStatus = 200, aliasStatus = 301, aliasLocation = 'ht
         'cache-control': options.method === 'HEAD' ? estateHeadCache : estateGetCache,
         'access-control-allow-origin':'*', ...security },
     });
-    if (path === '/llms.txt') return new Response('# 561 Group',{headers:{'content-type':'text/plain'}});
+    if (path === '/llms.txt') return new Response(guideBody,{headers:{'content-type':'text/plain'}});
     if (path === '/robots.txt') return new Response(robotsBody,{headers:{'content-type':'text/plain'}});
     if (path === '/sitemap.xml') return new Response('<?xml version="1.0"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"></urlset>',{headers:{'content-type':'application/xml'}});
     if (path === '/.well-known/security.txt') return new Response('Contact: mailto:emsenn@561.group',{headers:{'content-type':'text/plain'}});
@@ -67,6 +73,26 @@ test('exact selected source readback and public resources qualify only HTTP obse
   assert.equal(r.checks.at(-1).claimedWorkerVersionId,'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee');
   assert.match(r.checks.at(-1).qualification,/public-self-description-only/u);
   assert.match(markdownSummary(r),/not.*established/u);
+});
+
+test('public agent guide must receive corrected office wording and source evidence links', async()=>{
+  const cases=[
+    [GUIDE.replace('and the public site', 'and The public site'), 'stale-or-unqualified-agent-guide'],
+    [GUIDE.replace('/feed-input-receipt.json', '/no-receipt.json'), 'missing-public-provenance-links'],
+    [GUIDE.replace('/feed-provenance.jsonld', '/no-graph.jsonld'), 'missing-public-provenance-links'],
+    [GUIDE.replace('/editorial-question-provenance.jsonld', '/no-editorial.jsonld'), 'missing-public-provenance-links'],
+  ];
+  for (const [guideBody, reason] of cases) {
+    const observed=await observeProduction({fetchImpl:provider({guideBody})});
+    const check=observed.checks.find(item=>item.name==='agent-discovery');
+    assert.equal(check.outcome,'fail');
+    assert.equal(check.reason,reason);
+    assert.equal(observed.overall,'public-checks-failed');
+    assert.equal(observed.providerDeploymentVerified,false);
+  }
+  const incomplete=await observeProduction({fetchImpl:provider({abortPath:'/llms.txt'})});
+  assert.equal(incomplete.checks.find(item=>item.name==='agent-discovery').outcome,'unknown');
+  assert.equal(incomplete.overall,'receiving-incomplete');
 });
 
 test('the original outside observer samples one GET and one zero-body HEAD and compares source-independent metadata', async()=>{
