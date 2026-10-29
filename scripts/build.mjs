@@ -7,6 +7,7 @@ import { createHash } from "node:crypto";
 import { renderHumans, renderSecurity, renderIndex, renderLlms, renderLlmsFull, renderRobots, renderSitemap } from "../src/render.mjs";
 import { readFeedsWithCoverage, mergeItems, renderFeedInputReceipt, renderFeedItemProvenance, renderJsonFeed, renderAtom, renderRss } from "../src/feed.mjs";
 import {renderEditorialQuestionProvenance} from "../src/editorial-question-provenance.mjs";
+import {renderStaticAssetHeaders} from "../src/public-delivery.mjs";
 import { LOCALES, localePath, siteSpace, speaker } from "../src/locales.mjs";
 
 const root = new URL("../", import.meta.url);
@@ -75,6 +76,9 @@ const space = siteSpace({
 });
 const speakers = Object.fromEntries(LOCALES.map((tag) => [tag, speaker(space, tag, { origin: home.origin })]));
 const files = {
+  // Cloudflare deployment configuration: intentionally NOT a public GET path.
+  // The source-revision manifest contains only publicly retrievable artifacts.
+  "public/_headers":renderStaticAssetHeaders(),
   // Original source-generated Work audit browser program, not a second site.
   "public/work/audit/preview.mjs": await readText("src/work-audit-preview.mjs"),
   "public/estate-records.json": JSON.stringify(estate, null, 2) + "\n",
@@ -101,6 +105,7 @@ const files = {
  // from its own hash to avoid self-reference.
 if(sourceCommit){
   const artifactDigests=Object.fromEntries(Object.entries(files)
+    .filter(([path])=>path!=="public/_headers") // not a retrievable asset
     .sort(([a],[b])=>a.localeCompare(b))
     .map(([path,body])=>[path.slice("public/".length),
       "sha256:"+createHash("sha256").update(body,"utf8").digest("hex")]));
