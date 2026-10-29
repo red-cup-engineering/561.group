@@ -39,7 +39,7 @@ test("only original Worker security headers are represented on every fast-path a
   const blocks=text.split("\n\n").slice(1);
   assert.equal(blocks.length,STATIC_FAST_PATHS.length);
   for(const [index,block] of blocks.entries()){
-    const lines=block.split("\n");
+    const lines=block.trimEnd().split("\n");
     assert.equal(lines[0],STATIC_FAST_PATHS[index]);
     const h=Object.fromEntries(lines.slice(1).map(line=>{
       const sep=line.indexOf(": ");
