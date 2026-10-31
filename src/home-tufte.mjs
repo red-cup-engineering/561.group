@@ -714,9 +714,12 @@ export function project561GroupHead(home) {
     alternate("application/ld+json","Source-backed public questions and citations","/editorial-question-provenance.jsonld"),
     alternate("application/atom+xml","Group publications (Atom)","/feed.atom.xml"),
     alternate("application/rss+xml","Group publications (RSS)","/feed.rss.xml"),
-    ...[["en","/"],["zh-Hans","/zh-hans/"],["lkt","/lkt/"]].map(([tag,href]) =>
-      entry("link",{rel:"alternate",hreflang:tag,href:ORIGIN + href})),
-    entry("link",{rel:"alternate",hreflang:"x-default",href:ORIGIN + "/"}),
+    // This headHtml is shared by every English-only TUFTE page, including
+    // /blog/, /work/ and /about/. The site's zh-Hans/lkt URLs are translations
+    // of the HOMEPAGE, not of these routes. Emitting homepage hreflang links
+    // here would falsely declare different content to be alternate versions.
+    // The existing source-owned sitemap advertises only the actual homepage
+    // translation cluster; localized homepage HTML retains its own links.
     '<style data-561-house="visual-design-bible-v0.4-candidate">' + HOUSE_STYLES + "\n" + SITE_STYLES + "</style>"
   ].join("");
 }
