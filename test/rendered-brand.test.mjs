@@ -40,7 +40,7 @@ const editionFixture=()=>{
     company:company.name,status:input[i]+" source entries received",
     href:company.feeds.json,visible:true,meterVisible:true,
     meterHidden:true,unknownIndicator:false,
-    barWidth:Math.round(input[i]/25*100)+"%"
+    barPercent:Math.round(input[i]/25*100)
   }));
   return {home:{group:{companies}},receipt,
     reading:{coverageVisible:true,postsVisible:true,
@@ -53,7 +53,7 @@ test("real Chromium edition evidence must match the exact original source receip
     {passed:true,errors:[]});
   const counterfeit=structuredClone(reading);
   counterfeit.metrics[1].value="100";
-  counterfeit.sources[3].barWidth="0%";
+  counterfeit.sources[3].barPercent=0;
   counterfeit.coverageBeforePosts=false;
   const denied=qualifyBrowserBlogEdition(counterfeit,{home,receipt});
   assert.equal(denied.passed,false);
@@ -70,15 +70,15 @@ test("an unreceived publisher remains visibly unknown in the browser",()=>{
   reading.metrics[1].value="57";reading.metrics[2].value="57";
   reading.metrics[3].value="0";
   reading.sources[3].status="Feed unavailable to this build";
-  reading.sources[3].barWidth=null;
+  reading.sources[3].barPercent=null;
   reading.sources[3].unknownIndicator=true;
   // The measured denominator also changes when the largest source is unread.
   const largest=Math.max(...receipt.sources.filter(source=>source.state==="received")
     .map(source=>source.inputItems));
-  for(let i=0;i<3;i++)reading.sources[i].barWidth=
-    Math.round(receipt.sources[i].inputItems/largest*100)+"%";
+  for(let i=0;i<3;i++)reading.sources[i].barPercent=
+    Math.round(receipt.sources[i].inputItems/largest*100);
   assert.equal(qualifyBrowserBlogEdition(reading,{home,receipt}).passed,true);
-  reading.sources[3].barWidth="0%";
+  reading.sources[3].barPercent=0;
   assert.ok(qualifyBrowserBlogEdition(reading,{home,receipt}).errors.some(x=>
     x.includes("invents missing data")));
 });
