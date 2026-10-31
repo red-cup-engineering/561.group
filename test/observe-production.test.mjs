@@ -328,20 +328,20 @@ test('read-only public witness is executed after an accepted production release,
 
 // The original four URLs are public reader candidates. Fake responses can
 // confirm the detector semantics, not certify any real publisher deployment.
-function withHouseClimateEvidence({missing=null,missingLink=null,changedTitle=null,
+function withGroupClimateEvidence({missing=null,missingLink=null,changedTitle=null,
   wrongCanonical=null,transportUnknown=null}={}) {
   const app=provider();
   return (url,options)=>{
     const target=new URL(url);
-    const house=HOUSE_CLIMATE_ARTICLES.find(row=>row.domain===target.hostname);
-    if(!house)return app(url,options);
-    if(house.house===transportUnknown && target.pathname!=="/")
+    const group=HOUSE_CLIMATE_ARTICLES.find(row=>row.domain===target.hostname);
+    if(!group)return app(url,options);
+    if(group.house===transportUnknown && target.pathname!=="/")
       throw new Error("Simulated remote publisher cannot be observed");
-    const articlePath="/"+house.slug+"/";
+    const articlePath="/"+group.slug+"/";
     if(target.pathname===articlePath) {
-      if(house.house===missing)return new Response("not found",{status:404});
-      const canonical=house.house===wrongCanonical?"https://other.example/wrong/":url;
-      const title=house.house===changedTitle?"An unrelated publication":house.title;
+      if(group.house===missing)return new Response("not found",{status:404});
+      const canonical=group.house===wrongCanonical?"https://other.example/wrong/":url;
+      const title=group.house===changedTitle?"An unrelated publication":group.title;
       return new Response('<!doctype html><html><head><link rel="canonical" href="'+canonical+
         '"></head><body><main><h1>'+title+'</h1><p>Original material is a source claim, not a deployed intervention.</p></main></body></html>',{
         headers:{'content-type':'text/html; charset=utf-8',
@@ -351,7 +351,7 @@ function withHouseClimateEvidence({missing=null,missingLink=null,changedTitle=nu
     if(target.pathname==="/")return new Response(
       '<!doctype html><html><head><link rel="canonical" href="'+url+
       '"></head><body><main><h1>Original company</h1>'+
-      (house.house===missingLink?'':'<a href="'+articlePath+'">Read article</a>')+
+      (group.house===missingLink?'':'<a href="'+articlePath+'">Read article</a>')+
       '</main></body></html>',{
         headers:{'content-type':'text/html; charset=utf-8',
           'x-content-type-options':'nosniff','strict-transport-security':'max-age=31536000'}
@@ -362,18 +362,18 @@ function withHouseClimateEvidence({missing=null,missingLink=null,changedTitle=nu
 
 test('the existing public delivery observer records four exact external climate reader paths without inventing provider receipts',async()=>{
   const calls=[];
-  const source=withHouseClimateEvidence();
+  const source=withGroupClimateEvidence();
   const result=await observeProduction({fetchImpl:(url,options)=>{
     calls.push(url);
     return source(url,options);
   },expectedSourceSha:SHA,now:()=>"2026-10-27T20:00:00.000Z"});
   assert.equal(result.overall,'public-checks-passed');
-  assert.equal(result.houseClimateVisibility.schema,'561.group.house-climate-reader-observations/v1');
-  assert.equal(result.houseClimateVisibility.observedVisible,4);
-  assert.equal(result.houseClimateVisibility.missing,0);
-  assert.equal(result.houseClimateVisibility.incomplete,0);
-  assert.equal(result.houseClimateVisibility.pages.length,4);
-  for(const record of result.houseClimateVisibility.pages){
+  assert.equal(result.groupClimateVisibility.schema,'561.group.group-climate-reader-observations/v1');
+  assert.equal(result.groupClimateVisibility.observedVisible,4);
+  assert.equal(result.groupClimateVisibility.missing,0);
+  assert.equal(result.groupClimateVisibility.incomplete,0);
+  assert.equal(result.groupClimateVisibility.pages.length,4);
+  for(const record of result.groupClimateVisibility.pages){
     assert.equal(record.status,'public-page-and-home-link-observed');
     assert.equal(record.article.httpStatus,200);
     assert.equal(record.homepage.httpStatus,200);
@@ -382,7 +382,7 @@ test('the existing public delivery observer records four exact external climate 
     assert.equal(record.sourceByteEquivalenceVerified,false);
     assert.equal(record.externallyIndexed,null);
     assert.equal(record.independentHumanAcceptance,null);
-    assert.ok(record.articleUrl.startsWith('https://'+record.house+'.561.group/'));
+    assert.ok(record.articleUrl.startsWith('https://'+record.group+'.561.group/'));
     assert.equal(calls.filter(url=>url===record.articleUrl).length,1);
     assert.equal(calls.filter(url=>url===record.homepageUrl).length,1);
   }
@@ -392,32 +392,32 @@ test('the existing public delivery observer records four exact external climate 
 
 test('missing, altered, orphaned and inaccessible house articles remain different observations and never fail the Group release',async()=>{
   const result=await observeProduction({
-    fetchImpl:withHouseClimateEvidence({missing:'science',wrongCanonical:'engineering',
+    fetchImpl:withGroupClimateEvidence({missing:'science',wrongCanonical:'engineering',
       transportUnknown:'operations',missingLink:'services'}),expectedSourceSha:SHA
   });
   assert.equal(result.overall,'public-checks-passed',
     'independent house-source gaps are recorded but cannot revoke a verified Group Worker');
-  const byHouse=Object.fromEntries(result.houseClimateVisibility.pages.map(item=>[item.house,item]));
-  assert.equal(byHouse.science.status,'article-not-found-on-observed-origin');
-  assert.equal(byHouse.science.article.httpStatus,404);
-  assert.equal(byHouse.engineering.status,'article-unqualified');
-  assert.equal(byHouse.engineering.reason,'missing-exact-article-canonical');
-  assert.equal(byHouse.operations.status,'incomplete-public-observation');
-  assert.equal(byHouse.operations.reason,'article-unreadable');
-  assert.equal(byHouse.services.status,'homepage-unqualified');
-  assert.equal(byHouse.services.reason,'article-not-linked-from-home');
-  assert.equal(result.houseClimateVisibility.missing,1);
-  assert.equal(result.houseClimateVisibility.incomplete,1);
-  assert.equal(result.houseClimateVisibility.observedVisible,0);
-  assert.ok(result.houseClimateVisibility.pages.every(p=>
+  const byGroup=Object.fromEntries(result.groupClimateVisibility.pages.map(item=>[item.house,item]));
+  assert.equal(byGroup.science.status,'article-not-found-on-observed-origin');
+  assert.equal(byGroup.science.article.httpStatus,404);
+  assert.equal(byGroup.engineering.status,'article-unqualified');
+  assert.equal(byGroup.engineering.reason,'missing-exact-article-canonical');
+  assert.equal(byGroup.operations.status,'incomplete-public-observation');
+  assert.equal(byGroup.operations.reason,'article-unreadable');
+  assert.equal(byGroup.services.status,'homepage-unqualified');
+  assert.equal(byGroup.services.reason,'article-not-linked-from-home');
+  assert.equal(result.groupClimateVisibility.missing,1);
+  assert.equal(result.groupClimateVisibility.incomplete,1);
+  assert.equal(result.groupClimateVisibility.observedVisible,0);
+  assert.ok(result.groupClimateVisibility.pages.every(p=>
     p.providerReceiptAuthenticated===false && p.externallyIndexed===null));
 });
 
 test('an article with an unrelated title is not accepted merely because the HTTP route is 200',async()=>{
-  const result=await observeProduction({fetchImpl:withHouseClimateEvidence({changedTitle:'science'})});
-  assert.equal(result.houseClimateVisibility.pages[0].status,'article-unqualified');
-  assert.equal(result.houseClimateVisibility.pages[0].reason,'source-title-not-observed');
-  assert.equal(result.houseClimateVisibility.observedVisible,3);
+  const result=await observeProduction({fetchImpl:withGroupClimateEvidence({changedTitle:'science'})});
+  assert.equal(result.groupClimateVisibility.pages[0].status,'article-unqualified');
+  assert.equal(result.groupClimateVisibility.pages[0].reason,'source-title-not-observed');
+  assert.equal(result.groupClimateVisibility.observedVisible,3);
   assert.equal(result.overall,'public-checks-passed');
 });
 

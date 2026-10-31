@@ -228,7 +228,7 @@ function canonicalLinkInBody(body,url) {
     /\brel\s*=\s*["']canonical["']/iu.test(tag) &&
     (tag.includes('href="'+url+'"') || tag.includes("href='"+url+"'")));
 }
-function publicHouseSample(sample,url) {
+function publicGroupSample(sample,url) {
   if(sample.unknown)return {url,state:'unknown',reason:sample.errorKind};
   return {url,state:'observed',httpStatus:sample.status,
     bytes:sample.bytes,contentSha256:sample.contentSha256,
@@ -244,9 +244,9 @@ export function qualifyHouseClimateVisibility(def,article,homepage) {
   const origin='https://'+def.domain;
   const articleUrl=origin+'/'+def.slug+'/';
   const homeUrl=origin+'/';
-  const articleResult=publicHouseSample(article,articleUrl);
-  const homeResult=publicHouseSample(homepage,homeUrl);
-  const base={house:def.house,sourceRepository:def.sourceRepository,
+  const articleResult=publicGroupSample(article,articleUrl);
+  const homeResult=publicGroupSample(homepage,homeUrl);
+  const base={house:def.group,sourceRepository:def.sourceRepository,
     articleUrl,homepageUrl:homeUrl,article:articleResult,homepage:homeResult,
     providerReceiptAuthenticated:false,sourceByteEquivalenceVerified:false,
     externallyIndexed:null,independentHumanAcceptance:null};
@@ -285,7 +285,7 @@ export async function observeHouseClimateVisibility({fetchImpl,timeoutMs,clock})
     return qualifyHouseClimateVisibility(def,article,homepage);
   }));
   return {
-    schema:'561.group.house-climate-reader-observations/v1',
+    schema:'561.group.group-climate-reader-observations/v1',
     scope:'Four source-authorized climate article routes: independent bounded public GET only; does not establish exact source build, Cloudflare version, published claims, search inclusion, remote federation or human results',
     observedVisible:pages.filter(p=>p.status==='public-page-and-home-link-observed').length,
     missing:pages.filter(p=>p.status==='article-not-found-on-observed-origin').length,
@@ -306,7 +306,7 @@ export async function observeProduction({ fetchImpl = fetch, expectedSourceSha =
     throw new TypeError('expected source must be a 40-character hexadecimal commit');
   if (!Number.isSafeInteger(timeoutMs) || timeoutMs < 500 || timeoutMs > 60000)
     throw new RangeError('timeout must be between 500 and 60000ms');
-  const [simpleSamples, estateHead, alias, revision, houseClimateVisibility] = await Promise.all([
+  const [simpleSamples, estateHead, alias, revision, groupClimateVisibility] = await Promise.all([
     Promise.all(SIMPLE_CHECKS.map(def =>
       observe(`${ORIGIN}${def.path}`, def.accept, fetchImpl, timeoutMs, now))),
     observe(`${ORIGIN}/estate.json`, 'application/json', fetchImpl, timeoutMs, now, 'HEAD'),
@@ -350,7 +350,7 @@ export async function observeProduction({ fetchImpl = fetch, expectedSourceSha =
     selectedReleaseSource: expectedSourceSha, sourceSelection: expectedSourceSha ? 'operator-supplied' : 'not-selected',
     overall: failed ? 'public-checks-failed' : passed ? 'public-checks-passed' : 'receiving-incomplete',
     providerDeploymentVerified: false, independentHumanAcceptance: false,
-    checks, searchConformance, houseClimateVisibility,
+    checks, searchConformance, groupClimateVisibility,
     providerNoticeCoverage: searchConsole === null ? 'not-supplied' : 'source-selected-notices',
   };
 }
@@ -364,13 +364,13 @@ export function markdownSummary(result) {
     `Search evidence: ${result.searchConformance.summary.routes} declared entrypoints; ${result.searchConformance.summary.findings} findings; provider notices ${result.providerNoticeCoverage}. Google indexing and unresolved provider notices remain separate from current HTTP checks.`,
     '',
     '**Four house climate article routes — independent public HTTP visibility, not original source/provider-release qualification:** ' +
-      result.houseClimateVisibility.observedVisible + '/4 article-and-home paths sampled as recognizable; ' +
-      result.houseClimateVisibility.missing + ' observed HTTP 404; ' +
-      result.houseClimateVisibility.incomplete + ' transport/reader observations incomplete.',
+      result.groupClimateVisibility.observedVisible + '/4 article-and-home paths sampled as recognizable; ' +
+      result.groupClimateVisibility.missing + ' observed HTTP 404; ' +
+      result.groupClimateVisibility.incomplete + ' transport/reader observations incomplete.',
     '', '| House | Public route observation | Article HTTP | Qualification |',
     '|---|---|---:|---|',
-    ...result.houseClimateVisibility.pages.map(p =>
-      '| ' + escape(p.house) + ' | ' + escape(p.status) + ' | ' +
+    ...result.groupClimateVisibility.pages.map(p =>
+      '| ' + escape(p.group) + ' | ' + escape(p.status) + ' | ' +
       (p.article.httpStatus ?? '—') + ' | ' + escape(p.reason ??
         'No provider/source-byte, indexing, corrected-claim or reader-acceptance receipt') + ' |'),
     '', '| Check | Outcome | HTTP | Read ms | Notes |', '|---|---|---:|---:|---|',

@@ -9,7 +9,7 @@
     "prebuild": "npm run bind",
     "build": "node scripts/build.mjs",
     "precheck": "npm run bind",
-    "check": "node --check src/worker.mjs && node --check src/render.mjs && node --check src/told.mjs && node --check scripts/build.mjs && node --check src/locales.mjs && node --check src/words.mjs && node --check src/feed.mjs && node --check src/apex-house-style.mjs && node --check scripts/verify-brand-source.mjs && node --check src/home-tufte.mjs && node --check src/living-home.mjs && node --check scripts/release-preflight.mjs && node --check scripts/assay-rendered-brand.mjs && node --check scripts/bind-content.mjs && node --check src/editorial-question-provenance.mjs && node --check src/work-audit-preview.mjs && node --check src/public-delivery.mjs",
+    "check": "node --check src/worker.mjs && node --check src/render.mjs && node --check src/told.mjs && node --check scripts/build.mjs && node --check src/locales.mjs && node --check src/words.mjs && node --check src/feed.mjs && node --check src/apex-group-style.mjs && node --check scripts/verify-brand-source.mjs && node --check src/home-tufte.mjs && node --check src/living-home.mjs && node --check scripts/release-preflight.mjs && node --check scripts/assay-rendered-brand.mjs && node --check scripts/bind-content.mjs && node --check src/editorial-question-provenance.mjs && node --check src/work-audit-preview.mjs && node --check src/public-delivery.mjs",
     "predev": "npm run bind",
     "dev": "node scripts/build.mjs && wrangler dev",
     "deploy": "npm run check && npm test && npm run build && node scripts/release-preflight.mjs && wrangler deploy",
