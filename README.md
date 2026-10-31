@@ -65,11 +65,24 @@ not a new analytics source, a claim of current inventory, or an independent
 fact-check. Readers can skip directly to writing and still inspect the source
 receipt and deterministic PROV-O graph. A browser-tested source revision is
 not a deployed or independently received public edition.
- The original `scripts/build.mjs`
+
+The original `scripts/build.mjs`
 already reads accepted public JSON Feeds from the four company sites,
 combines them into one capped, build-time `public/feed.json`, and writes
 RSS/Atom feed representations. The Worker now projects **that same** generated
 JSON Feed into human HTML, machine JSON and negotiated Markdown.
+
+**Standards and truthful dates:** Source JSON Feed 1.1 permits entries without
+publication or modification timestamps, and RSS can carry them without a
+`pubDate`. Atom (RFC 4287) requires `updated` for each entry. The original
+Atom exporter therefore retains only source-dated entries, explicitly states
+how many undated entries were excluded, and links to the complete JSON Feed;
+it never assigns a source entry an unrelated article's update time or an
+invented 1970 date. When an Atom edition has no source-dated entries, its
+feed-level `updated` uses the build's source-qualified publication timestamp,
+not an invented original article date. The feed-level author identifies the
+Group as **syndicator**; each entry retains its actual company author.
+
 
 - Every entry retains its original canonical company URL and sole attributable
   company author; the Group never creates an ActivityPub post or signs on the
