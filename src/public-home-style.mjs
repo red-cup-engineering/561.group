@@ -142,8 +142,7 @@ a.site-action:hover {outline:2px solid currentColor;outline-offset:3px}
 }
 .site-edition-meter>span {display:block;height:100%;background:var(--house-witness)}
 .site-edition-meter--unknown {
-  background:repeating-linear-gradient(135deg,transparent 0,transparent 7px,
-    var(--house-rule) 7px,var(--house-rule) 9px)
+  background:transparent;border:1px dashed var(--house-rule)
 }
 .site-edition-source p {margin:.5rem 0 0}
 .site-edition-links {
