@@ -46,7 +46,7 @@ const editionFixture=()=>{
     reading:{coverageVisible:true,postsVisible:true,
       coverageBeforePosts:true,captionVisible:true,captionConnected:true,
       jumpToPosts:true,leadJumpToPosts:true,leadJumpFirst:true,
-      metrics,sources}};
+      keyboardJump:true,pointerJump:true,metrics,sources}};
 };
 test("real Chromium edition evidence must match the exact original source receipt",()=>{
   const {home,receipt,reading}=editionFixture();
@@ -68,11 +68,17 @@ test("a syndication-first blog, missing article shortcut or late anchor refuses 
   hidden.leadJumpToPosts=false;
   const reordered=structuredClone(reading);
   reordered.leadJumpFirst=false;
-  for(const attempt of [hidden,reordered]) {
+  const keyboardFailed=structuredClone(reading);
+  keyboardFailed.keyboardJump=false;
+  const pointerFailed=structuredClone(reading);
+  pointerFailed.pointerJump=false;
+  for(const attempt of [hidden,reordered,keyboardFailed,pointerFailed]) {
     const result=qualifyBrowserBlogEdition(attempt,{home,receipt});
     assert.equal(result.passed,false);
-    assert.ok(result.errors.some(message=>message.includes("primary article-reading")),
-      "A hidden or secondary reader shortcut must fail browser receiving");
+    assert.ok(result.errors.some(message=>
+      message.includes("primary article-reading") ||
+      message.includes("keyboard or pointer")),
+      "A missing, late or nonfunctional reader shortcut must fail browser receiving");
   }
 });
 
