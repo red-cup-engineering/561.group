@@ -131,9 +131,16 @@ test("the original user-visible regression is independently rejected",()=>{
   for(const fragment of ["Lakota-founded","horizontally","Keyboard focus","navigation","content tiles"])
     assert.ok(result.errors.some(x=>x.includes(fragment)),fragment);
 });
-test("a narrow supported viewport with unchanged visual hierarchy is admissible",()=>{
-  const mobile={...good(),viewportWidth:390,markSize:136.5};
-  assert.equal(qualifyRenderedBrand(mobile).passed,true);
+test("a 320 CSS-pixel reflow viewport remains supported but narrower unsupported evidence is refused",()=>{
+  const original={...good(),viewportWidth:320,markSize:112};
+  assert.equal(qualifyRenderedBrand(original).passed,true);
+  const darkBlog={...original,hasLead:true,tileCount:4,
+    bodyBackground:"rgb(18, 12, 2)"};
+  assert.equal(qualifyRenderedBrand(darkBlog,{path:"/blog/",colorScheme:"dark"}).passed,true);
+  const tooNarrow=qualifyRenderedBrand({...original,viewportWidth:319});
+  assert.equal(tooNarrow.passed,false);
+  assert.ok(tooNarrow.errors.some(x=>x.includes("supported width")));
+  assert.equal(qualifyRenderedBrand({...original,overflowX:true}).passed,false);
 });
 
 test("a dark-mode publisher edition uses original house dark roles",()=>{
