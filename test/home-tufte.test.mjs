@@ -356,6 +356,65 @@ test("Group blog receives only exact company-authored feed articles and preserve
   assert.match(tile(empty,"posts").html,/not evidence that their archives are empty/u);
 });
 
+test("the blog presents a measured source edition before the long article stream",()=>{
+  const blog=model("/blog/");
+  assert.deepEqual(blog.tiles.slice(0,3).map(tile=>tile.id),
+    ["lead","coverage","posts"]);
+  const html=tile(blog,"coverage").html;
+  assert.ok(html.includes('class="site-edition-metrics"'));
+  assert.ok(html.includes('<dd>4 / 4</dd>'));
+  assert.ok(html.includes('<dd>3</dd>'));
+  assert.ok(html.includes('<dd>0</dd>'));
+  assert.ok(html.includes('aria-labelledby="edition-source-caption"'));
+  assert.ok(html.includes('style="width:100%"'),"largest measured source");
+  assert.ok(html.includes('style="width:50%"'),"second measured source");
+  assert.ok(html.includes('href="#posts"'),"reader can bypass the graph");
+  for(const company of home.group.companies){
+    assert.ok(html.includes(company.name),company.id);
+    assert.ok(html.includes(company.feeds.json),company.id);
+  }
+  assert.ok(html.includes("not current live publication totals"));
+  assert.ok(html.includes("Unreceived sources have no measured count"));
+});
+
+test("a missing publisher is visually and textually unknown, not a measured zero",()=>{
+  const receipt=structuredClone(originalReceipt);
+  const last=receipt.sources[3];
+  receipt.sources[3]={companyId:last.companyId,feedUrl:last.feedUrl,
+    state:"unavailable"};
+  receipt.completeness="partial-source-coverage";
+  const page=project561GroupPage({home,estate,frontdoor,path:"/blog/",
+    feed:originalFeed,feedReceipt:receipt});
+  const html=tile(page,"coverage").html;
+  const company=home.group.companies[3].name;
+  const tail=html.slice(html.indexOf("<strong>"+company+"</strong>"));
+  const item=tail.slice(0,tail.indexOf("</li>"));
+  assert.ok(item.includes("Feed unavailable to this build"));
+  assert.ok(item.includes('class="site-edition-meter site-edition-meter--unknown"'));
+  assert.ok(!item.includes('style="width:0%"'));
+});
+
+test("an aggregate article cannot be attributed to an unreceived source even if totals balance",()=>{
+  const receipt=structuredClone(originalReceipt);
+  const science=receipt.sources[0];
+  receipt.sources[0]={companyId:science.companyId,feedUrl:science.feedUrl,
+    state:"unavailable"};
+  receipt.sources[1].inputItems=3;
+  receipt.completeness="partial-source-coverage";
+  assert.throws(()=>project561GroupPage({home,estate,frontdoor,
+    path:"/blog/",feed:originalFeed,feedReceipt:receipt}),
+    /entry from an unreceived source feed/u);
+});
+
+test("a source cannot contribute more selected feed records than were received",()=>{
+  const receipt=structuredClone(originalReceipt);
+  receipt.sources[0].inputItems=1;
+  receipt.sources[1].inputItems=2;
+  assert.throws(()=>project561GroupPage({home,estate,frontdoor,
+    path:"/blog/",feed:originalFeed,feedReceipt:receipt}),
+    /selection exceeds the received source item count/u);
+});
+
 test("Group blog rejects unauthorized, forged, oversized and broken feed records",()=>{
   const wrong={...originalFeed,items:[{...originalFeed.items[0],
     authors:[{name:"Another publisher",url:"https://another.example/"}]}]};
