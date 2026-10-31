@@ -564,6 +564,24 @@ function blogPage(home, blog) {
         [{href:"/feed.rss.xml",label:"Subscribe by RSS"},
          {href:"/feed.atom.xml",label:"Atom"},
          {href:"/feed.json",label:"JSON Feed"}]),12),
+    panel("coverage","This edition · what we actually received",
+      '<p class="site-edition-kicker">SOURCE RECEIPT / BOUNDED BUILD SNAPSHOT</p>' +
+      editionMetrics +
+      para(coverage.received+" of "+coverage.expected+" original company feeds received; "+
+        coverage.admitted+" source "+(coverage.admitted===1?"item":"items")+" admitted, "+coverage.selected+
+        " selected for the capped Group feed, and "+coverage.omittedByLimit+
+        " left outside its 60-item selection.") +
+      para(coverage.rejected+" source "+(coverage.rejected===1?"entry":"entries")+" rejected during this build. "+
+        (coverage.complete ? "All four company feed endpoints were received." :
+         "This was a partial input snapshot: missing company feeds are not empty archives.")) +
+      '<figure class="site-edition-figure"><figcaption id="edition-source-caption">'+
+      'Original source entries seen at build time, by publisher. Each bar is relative to the largest observed source. Unreceived sources have no measured count.'+
+      '</figcaption><ol class="site-edition-sources" aria-labelledby="edition-source-caption">'+
+      originalSources+'</ol></figure>'+
+      note("These are build-time feed input and selection counts, not current live publication totals, reader statistics, independently verified article claims or proof of any correction or withdrawal.")+
+      '<p class="site-edition-links">'+anchor("/feed-input-receipt.json","Read the source receipt")+
+      ' · '+anchor("/feed-provenance.jsonld","Trace original snapshots")+
+      ' · '+anchor("#posts","Jump to the writing")+'</p>',12),
     panel("posts","Recent published writing",
       '<ol class="site-card-grid h-feed">' + posts + '</ol>' +
       (!blog.items.length ? para("This build received no published posts from the company feeds. It is not evidence that their archives are empty.") : "") +
@@ -573,16 +591,6 @@ function blogPage(home, blog) {
       anchor("/feed-input-receipt.json","Inspect this build\u2019s source admission receipt") +
       " · " + anchor("/feed-provenance.jsonld","Trace syndicated items to original feed snapshots") +
       " · " + anchor("/projects/","Explore projects and publications"),12),
-    panel("coverage","What this build actually received",
-      para(coverage.received+" of "+coverage.expected+" original company feeds received; "+
-        coverage.admitted+" source "+(coverage.admitted===1?"item":"items")+" admitted, "+coverage.selected+
-        " selected for the capped Group feed, and "+coverage.omittedByLimit+
-        " left outside its 60-item selection.") +
-      para(coverage.rejected+" source "+(coverage.rejected===1?"entry":"entries")+" rejected during this build. "+
-        (coverage.complete ? "All four company feed endpoints were received." :
-         "This was a partial input snapshot: missing company feeds are not empty archives.")) +
-      '<ul class="site-service-grid">'+originalSources+'</ul>'+
-      note("These are build-time feed input and selection counts, not current live publication totals, reader statistics, independently verified article claims or proof of any correction or withdrawal."),12),
     panel("follow","Follow each original publisher",
       para("Subscribe to the company feeds, or follow its genuine ActivityPub identity. A Group-wide feed does not replace individual author identities.") +
       '<ul class="site-service-grid">' + follow + '</ul>',12),
