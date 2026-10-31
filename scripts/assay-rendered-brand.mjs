@@ -58,6 +58,61 @@ export function qualifyRenderedBrand(value,{path="/",colorScheme="light"}={}) {
   return Object.freeze({passed:errors.length===0,errors});
 }
 
+/** Browser receipt for the original blog edition, compared to the exact
+ * build-produced source artifact. A source-model test cannot show that a
+ * figure was hidden, reordered, stripped of labels or mis-sized by CSS.
+ * This checks rendered communication, not independent publisher custody. */
+export function qualifyBrowserBlogEdition(reading,{home,receipt}={}) {
+  const errors=[];
+  const require=(ok,claim)=>{if(!ok)errors.push(claim)};
+  if(!home?.group?.companies || !Array.isArray(receipt?.sources) ||
+      receipt.sources.length!==home.group.companies.length)
+    return Object.freeze({passed:false,errors:["Original edition source receipt is unavailable"]});
+  require(reading?.coverageVisible===true && reading?.postsVisible===true &&
+    reading?.coverageBeforePosts===true,
+    "The source receipt must be visible before the article listing");
+  require(reading?.captionVisible===true && reading?.captionConnected===true,
+    "The source comparison has lost its accessible caption");
+  require(reading?.jumpToPosts===true,
+    "Readers cannot bypass the source comparison to the writing");
+  const received=receipt.sources.filter(source=>source.state==="received").length;
+  const values=[
+    ["Company feeds received",received+" / "+receipt.expectedSourceCount],
+    ["Source entries admitted",String(receipt.admittedItems)],
+    ["Group feed entries selected",String(receipt.emittedItems)],
+    ["Admitted beyond 60-item cap",String(receipt.omittedByAggregateLimit)]
+  ];
+  require(reading?.metrics?.length===values.length,
+    "The original source-to-edition metric count changed");
+  values.forEach(([label,value],i)=>{
+    const metric=reading?.metrics?.[i];
+    require(metric?.label===label && metric?.value===value &&
+      metric?.visible===true,"Rendered edition count disagrees with build receipt: "+label);
+  });
+  require(reading?.sources?.length===receipt.sources.length,
+    "The original publisher comparison is incomplete");
+  const maxObserved=Math.max(1,...receipt.sources.filter(s=>s.state==="received")
+    .map(s=>s.inputItems));
+  receipt.sources.forEach((source,i)=>{
+    const row=reading?.sources?.[i];
+    const company=home.group.companies[i];
+    const measured=source.state==="received";
+    const status=measured?source.inputItems+" source entries received":
+      source.state==="refused"?"Feed refused by input admission":
+      "Feed unavailable to this build";
+    require(row?.company===company.name && row?.status===status &&
+      row?.href===source.feedUrl && row?.visible===true,
+      "A publisher name, source link or status is not visible: "+company.id);
+    require(row?.meterVisible===true && row?.meterHidden===true &&
+      row?.unknownIndicator===!measured,
+      "Observed and unreceived publisher graphics became indistinguishable: "+company.id);
+    require(row?.barWidth===(measured?
+      Math.round(100*source.inputItems/maxObserved)+"%":null),
+      "Publisher bar differs from the source count or invents missing data: "+company.id);
+  });
+  return Object.freeze({passed:errors.length===0,errors});
+}
+
 async function servedOriginalApplication() {
   const [home,estate,frontdoor,feed,feedReceipt]=await Promise.all([
     readJson("data/home.json"),readJson("data/estate.json"),readJson("data/frontdoor.json"),
@@ -357,6 +412,9 @@ export async function receiveBrowserVisuals({output="artifacts/brand-visual",sou
     {encoding:"utf8",timeout:10000}).trim();
   if(mounted!==observer.commit)throw Error("Rendered color instrument differs from selected Engineering source");
   const host=await servedOriginalApplication();
+  const [editionHome,editionReceipt]=await Promise.all([
+    readJson("data/home.json"),readJson("public/feed-input-receipt.json")
+  ]);
   let browser;
   try{
     browser=await chromium.launch({headless:true,...(process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH?
@@ -411,8 +469,45 @@ export async function receiveBrowserVisuals({output="artifacts/brand-visual",sou
             title:document.title
           };
         });
-        const result=qualifyRenderedBrand(reading,{path:item.path,
+        const brand=qualifyRenderedBrand(reading,{path:item.path,
           colorScheme:item.colorScheme??"light"});
+        const editionReading=item.path==="/blog/"?await page.evaluate(()=>{
+          const visible=element=>!!element && element.getClientRects().length>0 &&
+            getComputedStyle(element).visibility!=="hidden" &&
+            getComputedStyle(element).display!=="none";
+          const coverage=document.getElementById("coverage");
+          const posts=document.getElementById("posts");
+          const figure=coverage?.querySelector("figure.site-edition-figure");
+          const caption=figure?.querySelector("figcaption");
+          return {
+            coverageVisible:visible(coverage),postsVisible:visible(posts),
+            coverageBeforePosts:!!(coverage && posts &&
+              (coverage.compareDocumentPosition(posts)&Node.DOCUMENT_POSITION_FOLLOWING) &&
+              coverage.getBoundingClientRect().top<posts.getBoundingClientRect().top),
+            captionVisible:visible(caption),
+            captionConnected:!!caption && figure.querySelector("ol")?.getAttribute("aria-labelledby")===caption.id,
+            jumpToPosts:!!coverage?.querySelector('a[href="#posts"]') && !!posts,
+            metrics:[...coverage.querySelectorAll(".site-edition-metric")].map(element=>{
+              const dt=element.querySelector("dt"),dd=element.querySelector("dd");
+              return {label:dt?.textContent.trim(),value:dd?.textContent.trim(),
+                visible:visible(dt)&&visible(dd)};
+            }),
+            sources:[...coverage.querySelectorAll(".site-edition-source")].map(element=>{
+              const meter=element.querySelector(".site-edition-meter");
+              return {company:element.querySelector("strong")?.textContent.trim(),
+                status:element.querySelector(".site-edition-source-heading span")?.textContent.trim(),
+                href:element.querySelector("a")?.getAttribute("href"),
+                visible:visible(element),meterVisible:visible(meter),
+                meterHidden:meter?.getAttribute("aria-hidden")==="true",
+                unknownIndicator:meter?.classList.contains("site-edition-meter--unknown"),
+                barWidth:meter?.querySelector("span")?.style.width??null};
+            })
+          };
+        }):null;
+        const edition=editionReading?qualifyBrowserBlogEdition(editionReading,{
+          home:editionHome,receipt:editionReceipt}):{passed:true,errors:[]};
+        const result={passed:brand.passed&&edition.passed,
+          errors:[...brand.errors,...edition.errors]};
         const screenshot=join(output,item.name+".png");
         // Keep keyboard-focus evidence in the JSON, but collect the visual
         // specimen without the test harness leaving a skip-link focus box.
@@ -450,7 +545,8 @@ export async function receiveBrowserVisuals({output="artifacts/brand-visual",sou
         const hash=createHash("sha256").update(png).digest("hex");
         cases.push({name:item.name,path:item.path,colorScheme:item.colorScheme??"light",
           viewport:{width:item.width,height:item.height},
-          ...result,reading,screenshot:item.name+".png",sha256:hash,colorObservation});
+          ...result,reading,...(editionReading?{editionReading}:{}),
+          screenshot:item.name+".png",sha256:hash,colorObservation});
       }finally{await context.close()}
     }
     const workPreview=await receiveBrowserWorkPreview(browser,host,output);
