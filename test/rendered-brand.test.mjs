@@ -72,6 +72,11 @@ test("an unreceived publisher remains visibly unknown in the browser",()=>{
   reading.sources[3].status="Feed unavailable to this build";
   reading.sources[3].barWidth=null;
   reading.sources[3].unknownIndicator=true;
+  // The measured denominator also changes when the largest source is unread.
+  const largest=Math.max(...receipt.sources.filter(source=>source.state==="received")
+    .map(source=>source.inputItems));
+  for(let i=0;i<3;i++)reading.sources[i].barWidth=
+    Math.round(receipt.sources[i].inputItems/largest*100)+"%";
   assert.equal(qualifyBrowserBlogEdition(reading,{home,receipt}).passed,true);
   reading.sources[3].barWidth="0%";
   assert.ok(qualifyBrowserBlogEdition(reading,{home,receipt}).errors.some(x=>
