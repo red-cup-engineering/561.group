@@ -45,7 +45,8 @@ const editionFixture=()=>{
   return {home:{group:{companies}},receipt,
     reading:{coverageVisible:true,postsVisible:true,
       coverageBeforePosts:true,captionVisible:true,captionConnected:true,
-      jumpToPosts:true,metrics,sources}};
+      jumpToPosts:true,leadJumpToPosts:true,leadJumpFirst:true,
+      metrics,sources}};
 };
 test("real Chromium edition evidence must match the exact original source receipt",()=>{
   const {home,receipt,reading}=editionFixture();
@@ -61,6 +62,20 @@ test("real Chromium edition evidence must match the exact original source receip
   assert.ok(denied.errors.some(x=>x.includes("Publisher bar")));
   assert.ok(denied.errors.some(x=>x.includes("before the article")));
 });
+test("a syndication-first blog, missing article shortcut or late anchor refuses original reader receiving",()=>{
+  const {home,receipt,reading}=editionFixture();
+  const hidden=structuredClone(reading);
+  hidden.leadJumpToPosts=false;
+  const reordered=structuredClone(reading);
+  reordered.leadJumpFirst=false;
+  for(const attempt of [hidden,reordered]) {
+    const result=qualifyBrowserBlogEdition(attempt,{home,receipt});
+    assert.equal(result.passed,false);
+    assert.ok(result.errors.some(message=>message.includes("primary article-reading")),
+      "A hidden or secondary reader shortcut must fail browser receiving");
+  }
+});
+
 test("an unreceived publisher remains visibly unknown in the browser",()=>{
   const {home,receipt,reading}=editionFixture();
   receipt.sources[3]={companyId:receipt.sources[3].companyId,
