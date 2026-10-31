@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import {qualifyRenderedBrand,visualReviewPacket} from "../scripts/assay-rendered-brand.mjs";
 
 const good=()=>({
-  viewportWidth:1440,houseStyle:true,tufte:true,
+  viewportWidth:1440,groupStyle:true,tufte:true,
   bodyBackground:"rgb(242, 234, 216)",
   mastheadTop:"8px",markContent:'"561"',
   markColor:"rgb(255, 69, 48)",markSize:416,
@@ -27,7 +27,7 @@ test("a teal startup stylesheet or lost original 561 numeral fails in the browse
     markContent:"none",markColor:"rgb(0, 107, 100)"};
   const result=qualifyRenderedBrand(bad);
   assert.equal(result.passed,false);
-  assert.ok(result.errors.some(x=>x.includes("house bone")));
+  assert.ok(result.errors.some(x=>x.includes("group bone")));
   assert.ok(result.errors.some(x=>x.includes("mark is absent")));
 });
 test("a CSS string in HTML is not enough: computed type, local fonts and reading matter",()=>{

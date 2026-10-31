@@ -49,42 +49,42 @@ function requireStyle(css,pattern,label){
  * common core. This routine does NOT certify screenshot-pixel equivalence.
  */
 export function verifyApexBrand({
-  profile,houseStyles=HOUSE_STYLES,siteStyles=SITE_STYLES,
+  profile,groupStyles=HOUSE_STYLES,siteStyles=SITE_STYLES,
   head,home,edition=brandSource.edition
 }={}){
   if(!profile || profile.edition!==edition)
     throw new Error("Apex did not consume the exact source-owned brand edition");
-  const values=rootRoles(houseStyles);
-  const colorRoles={ink:"--house-ink",bone:"--house-bone",
-    witness:"--house-witness",alarm:"--house-alarm"};
+  const values=rootRoles(groupStyles);
+  const colorRoles={ink:"--group-ink",bone:"--group-bone",
+    witness:"--group-witness",alarm:"--group-alarm"};
   for(const [key,variable] of Object.entries(colorRoles)){
     const actual=values.get(variable),expected=profile.colors?.[key];
     if(!hex.test(expected??"") || actual!==expected)
       throw new Error("Apex "+variable+" differs from source-owned DTCG color."+key);
   }
-  const fontRoles={display:"--house-sans",reading:"--house-slab",
-    evidence:"--house-mono"};
+  const fontRoles={display:"--group-sans",reading:"--group-slab",
+    evidence:"--group-mono"};
   for(const [key,variable] of Object.entries(fontRoles)){
     const actual=values.get(variable),expected=profile.fonts?.[key];
     if(!Array.isArray(expected) ||
         JSON.stringify(normalizeFamily(actual??""))!==JSON.stringify(expected))
       throw new Error("Apex "+variable+" breaks the source-owned "+key+" type channel");
-    if(!houseStyles.includes('font-family:"'+expected[0]+'";src:url("/fonts/'))
+    if(!groupStyles.includes('font-family:"'+expected[0]+'";src:url("/fonts/'))
       throw new Error("Apex missing self-hosted display/reading/evidence font "+expected[0]);
   }
   if(values.get("--tufte-radius")!=="0")
     throw new Error("Apex replaced square-corner institutional geometry");
-  requireStyle(houseStyles,/\.tufte-masthead::before\s*\{\s*content:"561";/u,"giant 561 folio mark");
-  requireStyle(houseStyles,/content:"561";/u,"unaltered 561 mark");
-  requireStyle(houseStyles,/\.tufte-masthead\s*\{[^}]*border-top:8px solid var\(--house-ink\)/su,
+  requireStyle(groupStyles,/\.tufte-masthead::before\s*\{\s*content:"561";/u,"giant 561 folio mark");
+  requireStyle(groupStyles,/content:"561";/u,"unaltered 561 mark");
+  requireStyle(groupStyles,/\.tufte-masthead\s*\{[^}]*border-top:8px solid var\(--group-ink\)/su,
     "institutional folio bar");
-  requireStyle(houseStyles,/\.tufte-footer\s*\{/u,"inked source-owned colophon");
-  requireStyle(houseStyles,/focus-visible/u,"keyboard focus");
-  requireStyle(houseStyles,/@media\s*\(prefers-reduced-motion:reduce\)/u,
+  requireStyle(groupStyles,/\.tufte-footer\s*\{/u,"inked source-owned colophon");
+  requireStyle(groupStyles,/focus-visible/u,"keyboard focus");
+  requireStyle(groupStyles,/@media\s*\(prefers-reduced-motion:reduce\)/u,
     "honest reduced-motion behavior");
-  requireStyle(houseStyles,/@media\s*print/u,"print-compatible house");
-  requireStyle(houseStyles,/@media\s*\(max-width:780px\)/u,"responsive house");
-  requireStyle(houseStyles,/#physical-world\s*\{/u,
+  requireStyle(groupStyles,/@media\s*print/u,"print-compatible house");
+  requireStyle(groupStyles,/@media\s*\(max-width:780px\)/u,"responsive house");
+  requireStyle(groupStyles,/#physical-world\s*\{/u,
     "real material-world message retained in the visual grammar");
 
   // A downstream service-page CSS file may add layout, but may not mint a
@@ -93,13 +93,13 @@ export function verifyApexBrand({
     throw new Error("Site component CSS shadows the source-owned house brand");
   if(/linear-gradient\s*\(|radial-gradient\s*\(\s*(?:#|rgb|hsl)/iu.test(siteStyles))
     throw new Error("Site components introduced a new decorative brand palette");
-  for(const role of ["--house-sans","--house-slab","--house-mono"]){
-    if(!houseStyles.includes("var("+role+")") && !siteStyles.includes("var("+role+")"))
+  for(const role of ["--group-sans","--group-slab","--group-mono"]){
+    if(!groupStyles.includes("var("+role+")") && !siteStyles.includes("var("+role+")"))
       throw new Error("Brand font role is declared but never consumed: "+role);
   }
   if(typeof head!=="string" ||
-      !head.includes('data-561-house="visual-design-bible-v0.4-candidate"') ||
-      !head.includes(houseStyles) || !head.includes(siteStyles))
+      !head.includes('data-561-group="visual-design-bible-v0.4-candidate"') ||
+      !head.includes(groupStyles) || !head.includes(siteStyles))
     throw new Error("TUFTE's actual HTML head does not consume BOTH validated house and page CSS");
   if(!home || home.tiles?.length<5 ||
       home.tiles.some(tile=>typeof tile.html==="string"&&

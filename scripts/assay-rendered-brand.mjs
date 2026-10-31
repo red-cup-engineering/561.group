@@ -29,7 +29,7 @@ const OBSERVER_ROUTE="/__source-owned-color-observation.mjs";
 export function qualifyRenderedBrand(value,{path="/"}={}) {
   const errors=[];
   const need=(truth,claim)=>{if(!truth)errors.push(claim)};
-  need(value?.houseStyle===true,"Original Group CSS not emitted into real TUFTE head");
+  need(value?.groupStyle===true,"Original Group CSS not emitted into real TUFTE head");
   need(value?.tufte===true,"Real TUFTE shell is absent");
   need(value?.bodyBackground===rgb(242,234,216),"Visible body background lost house bone");
   need(value?.mastheadTop==="8px","Institutional masthead lost eight-pixel ink rule");
@@ -395,7 +395,7 @@ export async function receiveBrowserVisuals({output="artifacts/brand-visual",sou
             readingFamily:style(".tufte-tile-body").fontFamily,
             metadataFamily:meta?getComputedStyle(meta).fontFamily:style(".tufte-eyebrow").fontFamily,
             introBackground:intro?getComputedStyle(intro).backgroundColor:"",
-            houseStyle:!!el('style[data-561-house="visual-design-bible-v0.4-candidate"]'),
+            groupStyle:!!el('style[data-561-group="visual-design-bible-v0.4-candidate"]'),
             tufte:!!el(".tufte-shell[data-tufte]"),
             tileCount:tileElements.length,hasLead:!!el("#lead"),
             hasNavigation:!!el("[data-tufte-navigation] a"),
@@ -425,7 +425,7 @@ export async function receiveBrowserVisuals({output="artifacts/brand-visual",sou
             const pixelBytes=new Uint8Array(rgba.buffer,rgba.byteOffset,rgba.byteLength);
             const css=getComputedStyle(document.documentElement);
             const colors=["alarm","witness"].map(id=>({
-              id,hex:css.getPropertyValue("--house-"+id).trim()
+              id,hex:css.getPropertyValue("--group-"+id).trim()
             }));
             const observer=await import("/__source-owned-color-observation.mjs");
             return observer.measureColorCoverage({

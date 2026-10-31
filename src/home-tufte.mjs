@@ -260,7 +260,7 @@ function navigation(pathname) {
   ].map(item => ({...item,...(item.href === pathname ? {current:true} : {})}));
 }
 function houses(home) {
-  return '<ul class="site-house-list">' + home.group.companies.map(company =>
+  return '<ul class="site-group-list">' + home.group.companies.map(company =>
     '<li><strong>' + esc(company.name) + '</strong>' + para(company.role) +
     anchor(company.url, "Visit " + company.name) + "</li>"
   ).join("") + "</ul>";
@@ -688,6 +688,6 @@ export function project561GroupHead(home) {
     ...[["en","/"],["zh-Hans","/zh-hans/"],["lkt","/lkt/"]].map(([tag,href]) =>
       entry("link",{rel:"alternate",hreflang:tag,href:ORIGIN + href})),
     entry("link",{rel:"alternate",hreflang:"x-default",href:ORIGIN + "/"}),
-    '<style data-561-house="visual-design-bible-v0.4-candidate">' + HOUSE_STYLES + "\n" + SITE_STYLES + "</style>"
+    '<style data-561-group="visual-design-bible-v0.4-candidate">' + HOUSE_STYLES + "\n" + SITE_STYLES + "</style>"
   ].join("");
 }

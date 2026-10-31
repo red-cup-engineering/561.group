@@ -16,7 +16,7 @@ const fixture=()=>({
     evidence:["JetBrains Mono","ui-monospace","Courier New","monospace"]}
 });
 const candidate=()=>({
-  profile:fixture(),houseStyles:HOUSE_STYLES,siteStyles:SITE_STYLES,
+  profile:fixture(),groupStyles:HOUSE_STYLES,siteStyles:SITE_STYLES,
   head:project561GroupHead(source),
   home:project561GroupHome({home:source,estate,frontdoor})
 });
@@ -37,27 +37,27 @@ test("current actual authored head consumes common brand roles and both source-q
 });
 test("wrong colors and website-owned substitutions fail before publishing",()=>{
   const c=candidate();
-  assert.throws(()=>verifyApexBrand({...c,houseStyles:HOUSE_STYLES.replace(
-    "--house-bone:#F2EAD8","--house-bone:#EEF3E5")}),/differs from source-owned DTCG color.bone/u);
-  assert.throws(()=>verifyApexBrand({...c,houseStyles:HOUSE_STYLES.replace(
-    "--house-ink:#0A0A0A","--house-ink:#154342")}),/differs from source-owned DTCG color.ink/u);
+  assert.throws(()=>verifyApexBrand({...c,groupStyles:HOUSE_STYLES.replace(
+    "--group-bone:#F2EAD8","--group-bone:#EEF3E5")}),/differs from source-owned DTCG color.bone/u);
+  assert.throws(()=>verifyApexBrand({...c,groupStyles:HOUSE_STYLES.replace(
+    "--group-ink:#0A0A0A","--group-ink:#154342")}),/differs from source-owned DTCG color.ink/u);
   assert.throws(()=>verifyApexBrand({...c,siteStyles:SITE_STYLES+
-    "\n:root{--house-ink:#ff00ff}"}),/shadows the source-owned house/u);
+    "\n:root{--group-ink:#ff00ff}"}),/shadows the source-owned house/u);
   assert.throws(()=>verifyApexBrand({...c,siteStyles:SITE_STYLES+
     "\n.panel{background:linear-gradient(90deg,#aaccee,#fff)}"}),/decorative brand palette/u);
 });
 test("wrong font, removed giant mark or folio and deleted focus behavior fail",()=>{
   const c=candidate();
-  assert.throws(()=>verifyApexBrand({...c,houseStyles:HOUSE_STYLES.replace(
-    '--house-sans:"Space Grotesk"','--house-sans:"Generic Startup"')}),/display type channel/u);
-  assert.throws(()=>verifyApexBrand({...c,houseStyles:HOUSE_STYLES.replace(
+  assert.throws(()=>verifyApexBrand({...c,groupStyles:HOUSE_STYLES.replace(
+    '--group-sans:"Space Grotesk"','--group-sans:"Generic Startup"')}),/display type channel/u);
+  assert.throws(()=>verifyApexBrand({...c,groupStyles:HOUSE_STYLES.replace(
     'font-family:"Space Grotesk"','font-family:"Generic Startup"')}),/missing self-hosted/u);
-  assert.throws(()=>verifyApexBrand({...c,houseStyles:HOUSE_STYLES.replace(
-    ".tufte-masthead::before{",".lost-visual-house-mark{")}),/giant 561 folio mark/u);
-  assert.throws(()=>verifyApexBrand({...c,houseStyles:HOUSE_STYLES.replace(
-    "border-top:8px solid var(--house-ink)","border-top:1px solid var(--house-ink)")}),
+  assert.throws(()=>verifyApexBrand({...c,groupStyles:HOUSE_STYLES.replace(
+    ".tufte-masthead::before{",".lost-visual-group-mark{")}),/giant 561 folio mark/u);
+  assert.throws(()=>verifyApexBrand({...c,groupStyles:HOUSE_STYLES.replace(
+    "border-top:8px solid var(--group-ink)","border-top:1px solid var(--group-ink)")}),
     /institutional folio bar/u);
-  assert.throws(()=>verifyApexBrand({...c,houseStyles:HOUSE_STYLES.replaceAll(
+  assert.throws(()=>verifyApexBrand({...c,groupStyles:HOUSE_STYLES.replaceAll(
     "focus-visible","focus-lost")}),/keyboard focus/u);
 });
 test("a style string merely declared in a file cannot pass unless TUFTE actually emits it",()=>{
@@ -65,7 +65,7 @@ test("a style string merely declared in a file cannot pass unless TUFTE actually
   assert.throws(()=>verifyApexBrand({...c,head:"<style></style>"}),
     /actual HTML head does not consume BOTH/u);
   assert.throws(()=>verifyApexBrand({...c,head:c.head.replace(
-    "data-561-house=","data-anonymous-house=")}),/actual HTML head/u);
+    "data-561-group=","data-anonymous-group=")}),/actual HTML head/u);
   const missing=structuredClone(c.home);
   missing.tiles=missing.tiles.filter(tile=>tile.id!=="physical-world");
   assert.throws(()=>verifyApexBrand({...c,home:missing}),/lost its material-world position/u);

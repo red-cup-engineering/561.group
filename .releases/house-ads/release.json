@@ -16,11 +16,11 @@
   "target": {
     "accountId": "337e54ee6dc7d488933f473204a6d89e",
     "origin": "https://ads.561.group",
-    "worker": "house-ads-server",
+    "worker": "group-ads-server",
     "kvBinding": "AD_RECEIPTS",
     "kvNamespace": "56b1e309a1f24442a61d82b8b7eff38e",
     "analyticsEnabled": false,
     "analyticsBinding": "AD_ACTIVITY",
-    "analyticsDataset": "house_ads_activity"
+    "analyticsDataset": "group_ads_activity"
   }
 }
