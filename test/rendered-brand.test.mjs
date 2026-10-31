@@ -17,7 +17,7 @@ const good=()=>({
     {family:"JetBrains Mono",status:"loaded"}
   ],
   tileCount:11,hasLead:false,hasNavigation:true,hasContact:true,focusWidth:3,
-  overflowX:false,identityAppeal:false
+  overflowX:false,identityAppeal:false,hreflangLinks:0
 });
 const editionFixture=()=>{
   const companies=["Science","Engineering","Operations","Public services"].map((name,i)=>({
@@ -99,6 +99,13 @@ test("hidden captions, metrics, publisher source links and graphical labels refu
 test("rendered Chromium observation has a passable explicit conformance shape",()=>{
   assert.deepEqual(qualifyRenderedBrand(good()),{passed:true,errors:[]});
 });
+test("the real TUFTE head must not mislabel untranslated reader pages as homepage translations",()=>{
+  const claimed={...good(),hreflangLinks:4};
+  const result=qualifyRenderedBrand(claimed,{path:"/blog/"});
+  assert.equal(result.passed,false);
+  assert.ok(result.errors.some(message=>message.includes("falsely advertises")));
+});
+
 test("a teal startup stylesheet or lost original 561 numeral fails in the browser",()=>{
   const bad={...good(),bodyBackground:"rgb(244, 244, 238)",
     markContent:"none",markColor:"rgb(0, 107, 100)"};
