@@ -6,7 +6,7 @@ import { spawnSync } from "node:child_process";
 import {
   readFeeds, readFeedsWithCoverage, mergeItems, renderFeedInputReceipt,
   renderFeedItemProvenance, renderJsonFeed, renderAtom, renderRss,
-  syndicatedItemIdentity
+  syndicatedItemIdentity, syndicatedItemContentText
 } from "../src/feed.mjs";
 
 const home = JSON.parse(readFileSync(new URL("../data/home.json", import.meta.url), "utf8"));
@@ -447,6 +447,7 @@ test("source metadata revisions trigger review with both prior and proposed vers
   const before=publicationWithRevision(),after=proposedFrom(before);
   after.feed.items[0].title="Correction candidate: pending source editorial review";
   after.feed.items[0].summary="Changed claimed summary; not a scientific verification";
+  after.feed.items[0].content_text=syndicatedItemContentText(after.feed.items[0]);
   const report=revisionDelta(before,after);
   assert.equal(report.editorialReviewRequired,true);
   assert.equal(report.counts.metadataRevisions,1);
@@ -465,6 +466,7 @@ test("a new admitted company item is selection, not an implied correction",()=>{
     date_published:"2026-10-27T18:00:00Z",
     authors:[{name:science.name,url:science.url}],tags:["research"]
   };
+  addition.content_text=syndicatedItemContentText(addition);
   after.feed.items.unshift(addition);
   after.receipt.sources[0].inputItems++;
   after.receipt.sourceItemCount++;
