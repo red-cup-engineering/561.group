@@ -88,7 +88,7 @@ const files = {
   "public/feed-provenance.jsonld": renderFeedItemProvenance(home, feedSources, items),
   "public/editorial-question-provenance.jsonld": renderEditorialQuestionProvenance(home,frontdoor,frontdoorSha256),
   "public/feed.json": renderJsonFeed(home, items),
-  "public/feed.atom.xml": renderAtom(home, items),
+  "public/feed.atom.xml": renderAtom(home, items, `${updated}T00:00:00Z`),
   "public/feed.rss.xml": renderRss(home, items),
   "public/llms.txt": renderLlms(home, estate, facts),
   "public/llms-full.txt": renderLlmsFull(home, estate, facts),
