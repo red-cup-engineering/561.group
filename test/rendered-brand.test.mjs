@@ -52,6 +52,15 @@ test("a narrow supported viewport with unchanged visual hierarchy is admissible"
   assert.equal(qualifyRenderedBrand(mobile).passed,true);
 });
 
+test("a dark-mode publisher edition uses original house dark roles",()=>{
+  const blog={...good(),tileCount:4,hasLead:true,introBackground:"",
+    bodyBackground:"rgb(18, 12, 2)"};
+  assert.equal(qualifyRenderedBrand(blog,{path:"/blog/",colorScheme:"dark"}).passed,true);
+  const falseLight=qualifyRenderedBrand(blog,{path:"/blog/",colorScheme:"light"});
+  assert.equal(falseLight.passed,false);
+  assert.ok(falseLight.errors.some(message=>message.includes("house bone")));
+});
+
 test("a real secondary visitor page uses its own lead and independent tile count",()=>{
   const work={...good(),tileCount:4,hasLead:true,introBackground:""};
   assert.equal(qualifyRenderedBrand(work,{path:"/work/"}).passed,true);
