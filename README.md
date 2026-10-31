@@ -195,6 +195,18 @@ Group as **syndicator**; each entry retains its actual company author.
   build*. It is **not** a complete archive, a live crawl, or an observed
   ActivityPub delivery receipt. An empty build-time feed does not mean the
   company archives are empty.
+- The original JSON Feed keeps each publisher's opaque item identifier and
+  author unchanged. JSON Feed 1.1 requires item content even for a link to an
+  external article: this publisher now projects only a bounded, labelled
+  publisher-supplied summary and its original canonical article link as
+  `content_text`, never copied full article HTML. The original post-release
+  read-only assay refuses missing/forged content or unapproved copied HTML.
+  Its corresponding Atom entry uses the **same absolute item IRI as the
+  already published PROV-O `schema:DataFeedItem`**, instead of an illegal
+  relative/opaque `atom:id`. JSON Feed retains the actual source `id`;
+  PROV-O retains that identifier separately from the Group projection IRI.
+  These are cross-format identities, not proof of downstream subscriber
+  delivery, search-index coverage, or independent editorial rights.
 - Original articles, their site-owned publishing and revisions, metadata,
   search and moderation remain with Science/Engineering/Operations/Services.
   Each site's original `site.json` may additionally opt into the upstream
