@@ -14,6 +14,7 @@ const pages=Object.freeze([
   {name:"home",path:"/",width:1440,height:900},
   {name:"home-mobile",path:"/",width:390,height:844},
   {name:"work-mobile",path:"/work/",width:390,height:844},
+  {name:"blog",path:"/blog/",width:1440,height:900},
   {name:"blog-mobile",path:"/blog/",width:390,height:844},
   {name:"about",path:"/about/",width:1440,height:900}
 ]);
