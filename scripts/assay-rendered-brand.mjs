@@ -54,6 +54,8 @@ export function qualifyRenderedBrand(value,{path="/",colorScheme="light"}={}) {
   need(value?.focusWidth>=3,"Keyboard focus has no sufficiently visible outline");
   need(value?.overflowX===false,"Layout overflows viewport horizontally");
   need(value?.identityAppeal===false,"Rejected Lakota-founded appeal is visible again");
+  need(value?.hreflangLinks===0,
+    "Shared English-only TUFTE head falsely advertises other routes as homepage translations");
   need(value?.viewportWidth>=320,"Visual assay viewport is not a supported width");
   return Object.freeze({passed:errors.length===0,errors});
 }
@@ -464,6 +466,7 @@ export async function receiveBrowserVisuals({output="artifacts/brand-visual",sou
             metadataFamily:meta?getComputedStyle(meta).fontFamily:style(".tufte-eyebrow").fontFamily,
             introBackground:intro?getComputedStyle(intro).backgroundColor:"",
             houseStyle:!!el('style[data-561-house="visual-design-bible-v0.4-candidate"]'),
+            hreflangLinks:document.head.querySelectorAll('link[rel="alternate"][hreflang]').length,
             tufte:!!el(".tufte-shell[data-tufte]"),
             tileCount:tileElements.length,hasLead:!!el("#lead"),
             hasNavigation:!!el("[data-tufte-navigation] a"),
