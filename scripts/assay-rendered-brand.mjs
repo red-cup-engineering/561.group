@@ -16,6 +16,7 @@ const pages=Object.freeze([
   {name:"work-mobile",path:"/work/",width:390,height:844},
   {name:"blog",path:"/blog/",width:1440,height:900},
   {name:"blog-mobile",path:"/blog/",width:390,height:844},
+  {name:"blog-dark-mobile",path:"/blog/",width:390,height:844,colorScheme:"dark"},
   {name:"about",path:"/about/",width:1440,height:900}
 ]);
 const expectedFontNames=["Space Grotesk","Roboto Slab","JetBrains Mono"];
@@ -27,12 +28,13 @@ const FONT_ROUTE=new Map([
 const rgb=(r,g,b)=>"rgb("+[r,g,b].join(", ")+")";
 const OBSERVER_ROUTE="/__source-owned-color-observation.mjs";
 
-export function qualifyRenderedBrand(value,{path="/"}={}) {
+export function qualifyRenderedBrand(value,{path="/",colorScheme="light"}={}) {
   const errors=[];
   const need=(truth,claim)=>{if(!truth)errors.push(claim)};
   need(value?.houseStyle===true,"Original Group CSS not emitted into real TUFTE head");
   need(value?.tufte===true,"Real TUFTE shell is absent");
-  need(value?.bodyBackground===rgb(242,234,216),"Visible body background lost house bone");
+  need(value?.bodyBackground===(colorScheme==="dark"?rgb(18,12,2):rgb(242,234,216)),
+    "Visible body background lost house "+(colorScheme==="dark"?"dark":"bone")+" role");
   need(value?.mastheadTop==="8px","Institutional masthead lost eight-pixel ink rule");
   need(value?.markContent==='"561"', "Giant original typographic 561 mark is absent");
   need(value?.markColor===rgb(255,69,48),"561 mark lost reserved alarm-red role");
@@ -43,7 +45,8 @@ export function qualifyRenderedBrand(value,{path="/"}={}) {
   need(value?.fontFaces?.every(x=>x.status==="loaded") &&
        expectedFontNames.every(name=>value.fontFaces.some(x=>x.family===name)),
        "A local required font was not loaded");
-  if(path==="/")need(value?.introBackground===rgb(10,10,10),"Homepage introduction lost black-ink mass");
+  if(path==="/")need(value?.introBackground===(colorScheme==="dark"?rgb(242,234,216):rgb(10,10,10)),
+    "Homepage introduction lost contrasting ink mass");
   else need(value?.hasLead===true,"Non-home visitor page lost its own lead section");
   need(value?.tileCount>=(path==="/"?5:3),"A real public visitor route lost its content tiles");
   need(value?.hasNavigation===true,"Useful public navigation disappeared");
@@ -298,7 +301,7 @@ export function visualReviewPacket(witness){
     "",
     "| Route | Viewport | Computed result | Image | SHA-256 |",
     "| --- | --- | --- | --- | --- |",
-    ...witness.cases.map(c=>"| "+c.path+" | "+c.viewport.width+"x"+
+    ...witness.cases.map(c=>"| "+c.path+" ("+(c.colorScheme??"light")+") | "+c.viewport.width+"x"+
       c.viewport.height+" | "+(c.passed?"pass":"REFUSED: "+c.errors.join("; "))+ 
       " | ["+c.screenshot+"]("+c.screenshot+") | "+c.sha256+" |"),
     "",
@@ -314,7 +317,7 @@ export function visualReviewPacket(witness){
       const alarm=r.colors.find(v=>v.id==="alarm");
       const blue=r.colors.find(v=>v.id==="witness");
       const val=v=>v?(100*v.fraction).toFixed(3)+"%":"not measured";
-      return "| "+c.path+" "+c.viewport.width+"x"+c.viewport.height+
+      return "| "+c.path+" ("+(c.colorScheme??"light")+") "+c.viewport.width+"x"+c.viewport.height+
         " | "+r.region.id+" | "+(alarm?.matchedPixels??"?")+"/"+r.areaPixels+
         " | "+val(alarm)+" | "+(blue?.matchedPixels??"?")+"/"+r.areaPixels+
         " | "+val(blue)+" |";
@@ -363,7 +366,7 @@ export async function receiveBrowserVisuals({output="artifacts/brand-visual",sou
     for(const item of pages){
       const context=await browser.newContext({
         viewport:{width:item.width,height:item.height},deviceScaleFactor:1,
-        colorScheme:"light",reducedMotion:"reduce",javaScriptEnabled:true
+        colorScheme:item.colorScheme??"light",reducedMotion:"reduce",javaScriptEnabled:true
       });
       try{
         // Avoid third-party network dependencies. Local fonts are from this exact source.
@@ -408,7 +411,8 @@ export async function receiveBrowserVisuals({output="artifacts/brand-visual",sou
             title:document.title
           };
         });
-        const result=qualifyRenderedBrand(reading,{path:item.path});
+        const result=qualifyRenderedBrand(reading,{path:item.path,
+          colorScheme:item.colorScheme??"light"});
         const screenshot=join(output,item.name+".png");
         // Keep keyboard-focus evidence in the JSON, but collect the visual
         // specimen without the test harness leaving a skip-link focus box.
@@ -444,7 +448,8 @@ export async function receiveBrowserVisuals({output="artifacts/brand-visual",sou
            colorObservation.reports.length!==2)
           throw Error("Rendered visual instrument invented authority or omitted the comparison");
         const hash=createHash("sha256").update(png).digest("hex");
-        cases.push({name:item.name,path:item.path,viewport:{width:item.width,height:item.height},
+        cases.push({name:item.name,path:item.path,colorScheme:item.colorScheme??"light",
+          viewport:{width:item.width,height:item.height},
           ...result,reading,screenshot:item.name+".png",sha256:hash,colorObservation});
       }finally{await context.close()}
     }
