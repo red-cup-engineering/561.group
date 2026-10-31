@@ -344,8 +344,8 @@ ${dated.map((i) => `<entry>
 <title>${xml(i.title)}</title>
 <link rel="alternate" href="${xml(i.url)}"/>
 <updated>${xml(sourceUpdated(i))}</updated>
-${i.date_published ? `<published>${xml(i.date_published)}</published>\\n` : ""}<author><name>${xml(i.authors[0].name)}</name><uri>${xml(i.authors[0].url)}</uri></author>
-${i.summary ? `<summary>${xml(i.summary)}</summary>\\n` : ""}${(i.tags ?? []).map((t) => `<category term="${xml(t)}"/>\\n`).join("")}</entry>`).join("\\n")}
+${i.date_published ? `<published>${xml(i.date_published)}</published>\n` : ""}<author><name>${xml(i.authors[0].name)}</name><uri>${xml(i.authors[0].url)}</uri></author>
+${i.summary ? `<summary>${xml(i.summary)}</summary>\n` : ""}${(i.tags ?? []).map((t) => `<category term="${xml(t)}"/>\n`).join("")}</entry>`).join("\n")}
 </feed>
 `;
 }
