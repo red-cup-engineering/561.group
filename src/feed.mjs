@@ -300,24 +300,52 @@ export function renderJsonFeed(home, items) {
   }, null, 2) + "\n";
 }
 
-const updatedOf = (items) => items.map((i) => i.date_modified ?? i.date_published).filter((d) => Number.isFinite(Date.parse(d))).sort().at(-1) ?? "1970-01-01T00:00:00Z";
+// Atom requires a real RFC 3339 updated timestamp for each entry. JSON Feed
+// permits undated items, and RSS permits omission of pubDate. Do not assign
+// one article another publisher's time or fabricate 1970 for an empty feed.
+// Retain the source item in the other two formats and disclose Atom omissions.
+const sourceUpdated=(item)=>item.date_modified??item.date_published;
+const latestUpdated=(items)=>{
+  const dated=items.map(sourceUpdated).filter(date=>admittedDate(date));
+  return dated.sort((a,b)=>Date.parse(b)-Date.parse(a)||a.localeCompare(b))[0]??null;
+};
 
-export function renderAtom(home, items) {
+/** A source-qualified Atom projection of only records whose original
+ * publishers supplied a real date. When none is dated, the feed-level
+ * modification time comes from the original build's selected publication
+ * timestamp, not a synthetic article history. */
+export function renderAtom(home, items, publicationTimestamp) {
+  const dated=items.filter(item=>{
+    const timestamp=sourceUpdated(item);
+    if(timestamp===undefined)return false;
+    if(!admittedDate(timestamp))
+      throw new TypeError("Atom source updated date must be original valid RFC 3339");
+    return true;
+  });
+  const omitted=items.length-dated.length;
+  const updated=latestUpdated(dated)??publicationTimestamp;
+  if(!admittedDate(updated))
+    throw new TypeError("Empty or undated Atom feed needs the source-qualified publication timestamp");
+  const disclosure=omitted
+    ? ` ${omitted} undated source ${omitted===1?"entry is":"entries are"} available in JSON Feed and RSS but omitted from Atom rather than assigned a fictional updated date.`
+    : "";
   return `<?xml version="1.0" encoding="utf-8"?>
 <feed xmlns="http://www.w3.org/2005/Atom" xml:lang="en">
 <title>${xml(TITLE(home))}</title>
-<subtitle>${xml(DESCRIPTION)}</subtitle>
+<subtitle>${xml(DESCRIPTION+disclosure)}</subtitle>
 <id>${home.origin}/feed.atom.xml</id>
+<author><name>${xml(home.name)}</name><uri>${home.origin}/</uri></author>
 <link rel="self" type="application/atom+xml" href="${home.origin}/feed.atom.xml"/>
-<link rel="alternate" type="text/html" href="${home.origin}/"/>
-<updated>${xml(updatedOf(items))}</updated>
-${items.map((i) => `<entry>
+<link rel="alternate" type="text/html" href="${home.origin}/blog/"/>
+<link rel="related" type="application/feed+json" href="${home.origin}/feed.json"/>
+<updated>${xml(updated)}</updated>
+${dated.map((i) => `<entry>
 <id>${xml(i.id)}</id>
 <title>${xml(i.title)}</title>
 <link rel="alternate" href="${xml(i.url)}"/>
-<updated>${xml(i.date_modified ?? i.date_published ?? updatedOf(items))}</updated>
-${i.date_published ? `<published>${xml(i.date_published)}</published>\n` : ""}<author><name>${xml(i.authors[0].name)}</name><uri>${xml(i.authors[0].url)}</uri></author>
-${i.summary ? `<summary>${xml(i.summary)}</summary>\n` : ""}${(i.tags ?? []).map((t) => `<category term="${xml(t)}"/>\n`).join("")}</entry>`).join("\n")}
+<updated>${xml(sourceUpdated(i))}</updated>
+${i.date_published ? `<published>${xml(i.date_published)}</published>\\n` : ""}<author><name>${xml(i.authors[0].name)}</name><uri>${xml(i.authors[0].url)}</uri></author>
+${i.summary ? `<summary>${xml(i.summary)}</summary>\\n` : ""}${(i.tags ?? []).map((t) => `<category term="${xml(t)}"/>\\n`).join("")}</entry>`).join("\\n")}
 </feed>
 `;
 }
