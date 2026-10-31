@@ -139,6 +139,14 @@ export function assayPublicFeedProjection({ home, feed, receipt, graph }) {
         typeof item.id !== "string" || !item.id ||
         !Array.isArray(item.authors) || item.authors.length !== 1)
       fail("malformed syndicated entry");
+    // Reconstruct the public reader's bounded source summary independently
+    // of the producer. JSON Feed 1.1 needs content; a copied HTML body,
+    // invented prose, or an altered original link is not a received edition.
+    const sourceSummary=typeof item.summary==="string"&&item.summary.trim()
+      ? "Publisher-supplied summary: "+item.summary.trim()+"\n\n" : "";
+    const expectedText=sourceSummary+"Read the complete original article: "+item.url;
+    if(item.content_html!==undefined || item.content_text!==expectedText)
+      fail("JSON Feed content must be the bounded source summary and original link");
     if (seenUrls.has(item.url) || seenItemIds.has(item.id))
       fail("duplicate syndicated URL or original identifier");
     seenUrls.add(item.url); seenItemIds.add(item.id);
