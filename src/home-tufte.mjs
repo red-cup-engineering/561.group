@@ -513,13 +513,32 @@ function projectsPage(home, estate, frontdoor, source) {
 }
 function blogPage(home, blog) {
   const coverage=blog.coverage;
-  const originalSources=coverage.sources.map(({company,state,inputItems})=>
-    '<li><strong>'+esc(company.name)+'</strong> · '+
-    (state==='received' ? esc(String(inputItems))+' source entries received' :
-     state==='refused' ? 'Feed refused by input admission' :
-     'Feed unavailable to this build')+
-    ' · '+anchor(company.feeds.json,'Original company feed')+'</li>'
-  ).join('');
+  const largestObserved=Math.max(1,...coverage.sources
+    .filter(source=>source.state==="received").map(source=>source.inputItems));
+  // The bars show observed original feed entries, never published article or
+  // readership counts. Missing input is unknown, not a zero-height bar.
+  const originalSources=coverage.sources.map(({company,state,inputItems})=>{
+    const received=state==="received";
+    const status=received ? inputItems+" source entries received" :
+      state==="refused" ? "Feed refused by input admission" :
+      "Feed unavailable to this build";
+    const width=received?Math.round(100*inputItems/largestObserved):null;
+    return '<li class="site-edition-source"><div class="site-edition-source-heading">'+
+      '<strong>'+esc(company.name)+'</strong><span>'+esc(status)+'</span></div>'+
+      '<div class="site-edition-meter'+(received?'':' site-edition-meter--unknown')+
+      '" aria-hidden="true">'+(received?'<span style="width:'+width+'%"></span>':'')+'</div>'+
+      '<p class="site-muted">'+(received?'Received at build time':
+        state==="refused"?'Unreceived · refused':'Unreceived · unavailable')+
+      ' · '+anchor(company.feeds.json,'Original company feed')+'</p></li>';
+  }).join('');
+  const editionMetric=(count,label)=>
+    '<div class="site-edition-metric"><dt>'+esc(label)+'</dt><dd>'+
+    esc(String(count))+'</dd></div>';
+  const editionMetrics='<dl class="site-edition-metrics">'+
+    editionMetric(coverage.received+' / '+coverage.expected,'Company feeds received')+
+    editionMetric(coverage.admitted,'Source entries admitted')+
+    editionMetric(coverage.selected,'Group feed entries selected')+
+    editionMetric(coverage.omittedByLimit,'Admitted beyond 60-item cap')+'</dl>';
   const posts = blog.items.map(item =>
     '<li class="site-card h-entry"><span class="site-category">' + esc(item.company.name) +
     '</span><h3>' + anchor(item.url,item.title,"p-name u-url") + '</h3>' +
