@@ -82,10 +82,12 @@ test("sitemap advertises only actual homepage translations, never invented versi
   const sitemap=renderSitemap(home,"2026-10-31",
     speaker(space,"en",{origin:home.origin}).alternates());
   const urlRecord=pathname=>{
-    const escaped=(home.origin+pathname).replace(/[.*+?^${}()|[\]\\]/g,"\\test("the apex is a hub for search and answer engines: graph, head, follow block, llms files, robots, sitemap", () => {");
-    const match=new RegExp("<url><loc>"+escaped+"<\\/loc>[\\s\\S]*?<\\/url>","u").exec(sitemap);
-    assert.ok(match,"Original sitemap must contain "+pathname);
-    return match[0];
+    const prefix="<url><loc>"+home.origin+pathname+"</loc>";
+    const offset=sitemap.indexOf(prefix);
+    assert.ok(offset>=0,"Original sitemap must contain "+pathname);
+    const closing=sitemap.indexOf("</url>",offset);
+    assert.ok(closing>offset,"Source sitemap URL block must close");
+    return sitemap.slice(offset,closing+"</url>".length);
   };
   for(const locale of ["/","/zh-hans/","/lkt/"]){
     const record=urlRecord(locale);
