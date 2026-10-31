@@ -13,10 +13,15 @@ const readJson=async path=>JSON.parse(await readFile(new URL("../"+path,import.m
 const pages=Object.freeze([
   {name:"home",path:"/",width:1440,height:900},
   {name:"home-mobile",path:"/",width:390,height:844},
+  // WCAG 2.2 reflow target: 320 CSS pixels, not just a 390px phone.
+  // Capture original rendered pages and refuse horizontal overflow.
+  {name:"home-reflow",path:"/",width:320,height:640},
   {name:"work-mobile",path:"/work/",width:390,height:844},
   {name:"blog",path:"/blog/",width:1440,height:900},
   {name:"blog-mobile",path:"/blog/",width:390,height:844},
+  {name:"blog-reflow",path:"/blog/",width:320,height:640},
   {name:"blog-dark-mobile",path:"/blog/",width:390,height:844,colorScheme:"dark"},
+  {name:"blog-dark-reflow",path:"/blog/",width:320,height:640,colorScheme:"dark"},
   {name:"about",path:"/about/",width:1440,height:900}
 ]);
 const expectedFontNames=["Space Grotesk","Roboto Slab","JetBrains Mono"];
@@ -397,6 +402,9 @@ export function visualReviewPacket(witness){
     "mobile readability and any rejected identity-led persuasion.",
     "The historical v0.3 6% alarm and 3% witness bounding-box color budgets",
     "require a separate measured image proof; CSS declaration is insufficient.",
+    "The 320 CSS-pixel homepage and light/dark blog specimens assay horizontal",
+    "reflow only. They do not certify all of WCAG 2.2, browser zoom, screen",
+    "readers, or independent human design and accessibility acceptance.",
     "Keyboard focus and reduced-motion settings were checked, but full WCAG",
     "or screen-reader accessibility audits were not performed by this job.",
     "",
