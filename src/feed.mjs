@@ -252,8 +252,7 @@ export function renderFeedItemProvenance(home, sources, items) {
     if (!source || !company || item.authors.length !== 1 ||
         item.authors[0].name !== company.name)
       throw new TypeError("An aggregated item cannot acquire unobserved source provenance");
-    const id = home.origin + "/feed.json#item-" +
-      createHash("sha256").update(item.url).digest("hex");
+    const id = syndicatedItemIdentity(home,item);
     return {
       "@id": id, "@type": ["schema:DataFeedItem", "prov:Entity"],
       "schema:item": { "@id": item.url },
@@ -284,6 +283,25 @@ export function renderFeedItemProvenance(home, sources, items) {
   }, null, 2) + "\n";
 }
 
+/** A source-owned article permalink gives the original PROV-O DataFeedItem
+ * and the Atom feed one stable absolute IRI. Its original opaque JSON Feed
+ * identifier is preserved verbatim in JSON Feed and schema:identifier. */
+export function syndicatedItemIdentity(home,item) {
+  return home.origin + "/feed.json#item-" +
+    createHash("sha256").update(item.url).digest("hex");
+}
+
+/** JSON Feed requires source-backed content rather than an empty item.
+ * Render only the original publisher's admitted summary plus its canonical
+ * link; never copy the complete article or claim an independent fact check. */
+export function syndicatedItemContentText(item) {
+  if(typeof item?.title!=="string" || typeof item?.url!=="string")
+    throw new TypeError("Original syndicated title and permalink are required");
+  const summary=typeof item.summary==="string" && item.summary.trim()
+    ? "Publisher-supplied summary: "+item.summary.trim()+"\n\n" : "";
+  return summary+"Read the complete original article: "+item.url;
+}
+
 const TITLE = (home) => `${home.name}: what the Group is publishing`;
 const DESCRIPTION = "The latest from Lenticule Science, Red Cup Engineering, Coesite Operations and Causeway Services.";
 
@@ -296,7 +314,7 @@ export function renderJsonFeed(home, items) {
     description: DESCRIPTION,
     language: "en",
     authors: [{ name: home.name, url: `${home.origin}/` }],
-    items,
+    items:items.map(item=>({...item,content_text:syndicatedItemContentText(item)})),
   }, null, 2) + "\n";
 }
 
@@ -340,7 +358,7 @@ export function renderAtom(home, items, publicationTimestamp) {
 <link rel="related" type="application/feed+json" href="${home.origin}/feed.json"/>
 <updated>${xml(updated)}</updated>
 ${dated.map((i) => `<entry>
-<id>${xml(i.id)}</id>
+<id>${xml(syndicatedItemIdentity(home,i))}</id>
 <title>${xml(i.title)}</title>
 <link rel="alternate" href="${xml(i.url)}"/>
 <updated>${xml(sourceUpdated(i))}</updated>
