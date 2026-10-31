@@ -538,8 +538,11 @@ test("the genuine TUFTE document keeps discoverability, responsive design, keybo
   assert.match(head,/name="fediverse:creator"/u);
   for(const path of ["/llms.txt","/feed.json","/feed.atom.xml","/feed.rss.xml","/estate.json"])
     assert.ok(head.includes('href="'+path+'"'));
-  for(const lang of ["en","zh-Hans","lkt","x-default"])
-    assert.ok(head.includes('hreflang="'+lang+'"'));
+  // This head is shared with /blog/, /work/, /about/ and other English-only
+  // routes. Homepage language variants belong to the source-owned sitemap,
+  // not an invented translation claim on every English-only document.
+  assert.doesNotMatch(head,/\\bhreflang=/u,
+    "A shared TUFTE head cannot claim other pages are homepage translations");
   assert.ok(head.includes(":focus-visible"));
   assert.ok(head.includes("max-width:430px"));
   assert.ok(head.includes("prefers-reduced-motion:reduce"));
