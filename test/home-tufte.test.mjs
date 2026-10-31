@@ -339,7 +339,13 @@ test("Group blog receives only exact company-authored feed articles and preserve
     assert.ok(follow.includes(company.feeds.rss));
     assert.ok(follow.includes(company.feeds.json));
   }
-  assert.ok(tile(blog,"lead").html.includes("/feed.rss.xml"));
+  const lead=tile(blog,"lead").html;
+  assert.ok(lead.includes("/feed.rss.xml"),"Original RSS subscription remains available");
+  assert.ok(lead.includes("/feed.atom.xml"),"Original Atom subscription remains available");
+  assert.ok(lead.includes('href="#posts"'),"Reader has a direct writing shortcut");
+  assert.ok(lead.indexOf('href="#posts"')<lead.indexOf('href="/feed.rss.xml"'),
+    "Reading is primary; syndication is secondary, not a barrier to articles");
+  assert.equal(blog.tiles[2].id,"posts","Shortcut targets the real original TUFTE tile");
   const coverage=tile(blog,"coverage").html;
   assert.ok(coverage.includes("4 of 4 original company feeds received"));
   assert.ok(coverage.includes("3 source items admitted, 3 selected"));
