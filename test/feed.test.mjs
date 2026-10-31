@@ -92,6 +92,55 @@ test("three independently parseable syndication formats carry the same admitted 
     /<guid isPermaLink="false">a&amp;b<\/guid>[\s\S]*<pubDate>Sat, 10 Oct 2026 00:00:00 GMT<\/pubDate>/u);
 });
 
+test("Atom never invents a timestamp for a legitimate undated source article", () => {
+  const entries=mergeItems([{company:services,feed:feed(services,[
+    item(services,"dated","2026-10-21T08:00:00Z"),
+    item(services,"undated",undefined)
+  ])}]);
+  assert.deepEqual(entries.map(entry=>entry.id),["dated","undated"]);
+  const json=JSON.parse(renderJsonFeed(home,entries));
+  assert.equal(json.items.length,2);
+  assert.equal(json.items[1].date_published,undefined);
+  const rss=renderRss(home,entries);
+  assert.match(rss,/<guid isPermaLink="false">undated<\/guid>/u);
+  const atom=renderAtom(home,entries);
+  assert.equal((atom.match(/<entry>/gu)??[]).length,1);
+  assert.match(atom,/<id>dated<\/id>/u);
+  assert.doesNotMatch(atom,/<id>undated<\/id>|1970-01-01/u);
+  assert.match(atom,/1 undated source entry is available in JSON Feed and RSS/u);
+  assert.match(atom,/rel="related" type="application\/feed\+json" href="https:\/\/561\.group\/feed\.json"/u);
+  assert.match(atom,/rel="alternate" type="text\/html" href="https:\/\/561\.group\/blog\/"/u);
+  assert.match(atom,/<author><name>The 561 Group<\/name><uri>https:\/\/561\.group\/<\/uri><\/author>/u);
+});
+
+test("an empty or fully undated Atom edition requires its source-selected publication timestamp", () => {
+  const items=mergeItems([{company:services,feed:feed(services,[
+    item(services,"without-date",undefined)
+  ])}]);
+  assert.throws(()=>renderAtom(home,items),/source-qualified publication timestamp/u);
+  assert.throws(()=>renderAtom(home,[]),/source-qualified publication timestamp/u);
+  assert.throws(()=>renderAtom(home,items,"not-a-date"),/source-qualified publication timestamp/u);
+  const fixed="2026-10-30T00:00:00Z";
+  const xml=renderAtom(home,items,fixed);
+  assert.match(xml,/<updated>2026-10-30T00:00:00Z<\/updated>/u);
+  assert.equal((xml.match(/<entry>/gu)??[]).length,0);
+  assert.doesNotMatch(xml,/1970-01-01|without-date<\/id>/u);
+  assert.match(xml,/1 undated source entry is available in JSON Feed and RSS/u);
+  const empty=renderAtom(home,[],fixed);
+  assert.equal((empty.match(/<entry>/gu)??[]).length,0);
+  assert.match(empty,/<updated>2026-10-30T00:00:00Z<\/updated>/u);
+});
+
+test("Atom determines the most recent source date by actual RFC 3339 instant, not string sort", () => {
+  const items=mergeItems([{company:services,feed:feed(services,[
+    item(services,"earlier","2026-10-27T01:00:00Z"),
+    item(services,"later","2026-10-26T23:30:00-05:00")
+  ])}]);
+  const atom=renderAtom(home,items);
+  assert.match(atom,/<feed[\s\S]*?<updated>2026-10-26T23:30:00-05:00<\/updated>[\s\S]*?<entry>/u);
+  assert.equal((atom.match(/<entry>/gu)??[]).length,2);
+});
+
 test("a foreign, malformed or duplicate entry cannot gain the company's author in any feed", () => {
   const date = "2026-10-20T00:00:00Z";
   const rejected = [];
