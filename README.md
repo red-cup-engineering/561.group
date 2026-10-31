@@ -52,7 +52,20 @@ deliver a signed ActivityPub update, or demonstrate reader/customer results.
 ## The Group's publication hub
 
 `/blog/` is an original TUFTE + LivingWebServer page of the same Worker,
-not a duplicate CMS or another publisher. The original `scripts/build.mjs`
+not a duplicate CMS or another publisher.
+
+Its reader-first edition summary projects the **original** build receipt before
+up to 60 syndicated records. Four large, text-labelled figures distinguish
+company feeds received, source entries admitted, Group feed entries selected,
+and admitted entries outside the cap. An accessible comparison names each
+company and its original feed. Bars represent only observed input counts;
+an unavailable or refused feed is **unknown, never zero**. The HTML, CSS and
+negative source-custody tests belong to the existing site projection; this is
+not a new analytics source, a claim of current inventory, or an independent
+fact-check. Readers can skip directly to writing and still inspect the source
+receipt and deterministic PROV-O graph. A browser-tested source revision is
+not a deployed or independently received public edition.
+ The original `scripts/build.mjs`
 already reads accepted public JSON Feeds from the four company sites,
 combines them into one capped, build-time `public/feed.json`, and writes
 RSS/Atom feed representations. The Worker now projects **that same** generated
