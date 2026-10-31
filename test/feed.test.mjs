@@ -443,6 +443,41 @@ test("unchanged public metadata is not invented into an editorial correction",()
   assert.equal(report.originalCorrectionPublished,false);
   assert.equal(report.proposedRelease.deployed,false);
 });
+test("original main historical contentless feed is read only as a prior publication, never as a new release",()=>{
+  const present=publicationWithRevision();
+  const previous=structuredClone(present);
+  previous.sourceRevision.sourceCommit="f9d59a82c78136d409dee4286a97d6d9d3142f94";
+  for(const entry of previous.feed.items) delete entry.content_text;
+  assert.throws(()=>assayPublicFeedProjection(previous),
+    /bounded source summary and original link/,
+    "current public readback still refuses historical contentless items");
+  const next=proposedFrom(present);
+  const report=revisionDelta(previous,next);
+  assert.equal(report.previousRelease.sourceCommit,previous.sourceRevision.sourceCommit);
+  assert.equal(report.counts.unchanged,4);
+  assert.equal(report.editorialReviewRequired,false,
+    "old format alone is not fabricated as a scientific correction");
+  assert.equal(report.originalCorrectionPublished,false);
+  assert.equal(report.proposedRelease.deployed,false);
+  const unqualified=structuredClone(previous);
+  unqualified.sourceRevision.sourceCommit="3".repeat(40);
+  assert.throws(()=>revisionDelta(unqualified,next),
+    /bounded source summary and original link/,
+    "a different historical revision cannot impersonate the one exact legacy release");
+  const fabricated=structuredClone(previous);
+  fabricated.feed.items[0].content_text="invented source material";
+  assert.throws(()=>revisionDelta(fabricated,next),/bounded source summary and original link/);
+  const orphan=structuredClone(previous);
+  orphan.graph["@graph"].find(x=>Array.isArray(x["@type"])&&
+    x["@type"].includes("schema:DataFeedItem"))["prov:wasAttributedTo"]["@id"]="https://other.example/";
+  assert.throws(()=>revisionDelta(orphan,next),/Unreceived public feed evidence/);
+  const invalidNew=proposedFrom(present);
+  delete invalidNew.feed.items[0].content_text;
+  assert.throws(()=>revisionDelta(previous,invalidNew),
+    /bounded source summary and original link/,
+    "the legacy exception must never apply to proposed output");
+});
+
 test("source metadata revisions trigger review with both prior and proposed versions",()=>{
   const before=publicationWithRevision(),after=proposedFrom(before);
   after.feed.items[0].title="Correction candidate: pending source editorial review";
