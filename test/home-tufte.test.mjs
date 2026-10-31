@@ -332,6 +332,7 @@ test("Group blog receives only exact company-authored feed articles and preserve
   assert.ok(html.includes("bounded, build-time"));
   assert.match(tile(blog,"posts").html,/original company feeds/);
   assert.ok(tile(blog,"posts").html.includes("A reported update is not itself an accepted correction or retraction"));
+  assert.ok(tile(blog,"posts").html.includes("undated source items remain in JSON Feed and RSS"));
   const follow=tile(blog,"follow").html;
   for(const company of home.group.companies){
     assert.ok(follow.includes(company.actor));
