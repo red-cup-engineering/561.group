@@ -561,9 +561,12 @@ function blogPage(home, blog) {
       lead("ORIGINAL WRITING / FOUR ACCOUNTABLE PUBLISHERS",
         "Writing from the 561 Group",
         "Research, engineering, operations and public services, published by their own companies. Each link opens the original article; the Group does not claim to have authored these posts.",
-        [{href:"/feed.rss.xml",label:"Subscribe by RSS"},
-         {href:"/feed.atom.xml",label:"Atom"},
-         {href:"/feed.json",label:"JSON Feed"}]),12),
+        // A person coming here to read should not have to traverse the
+        // evidence dashboard before reaching the writing. Subscriptions are
+        // still exposed here, in page metadata and by the original publishers.
+        [{href:"#posts",label:"Read recent writing"},
+         {href:"/feed.rss.xml",label:"Subscribe by RSS"},
+         {href:"/feed.atom.xml",label:"Atom"}]),12),
     panel("coverage","This edition · what we actually received",
       '<p class="site-edition-kicker">SOURCE RECEIPT / BOUNDED BUILD SNAPSHOT</p>' +
       editionMetrics +
