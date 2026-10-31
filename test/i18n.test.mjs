@@ -78,6 +78,28 @@ test("the sitemap lists every language with its alternates; llms.txt names them"
   assert.match(renderLlms(home, estate), /## Languages\n\n- \[English\]\(https:\/\/561\.group\/\)\n- \[简体中文\]\(https:\/\/561\.group\/zh-hans\/\)/u);
 });
 
+test("sitemap advertises only actual homepage translations, never invented versions of English-only routes", () => {
+  const sitemap=renderSitemap(home,"2026-10-31",
+    speaker(space,"en",{origin:home.origin}).alternates());
+  const urlRecord=pathname=>{
+    const escaped=(home.origin+pathname).replace(/[.*+?^${}()|[\]\\]/g,"\\test("the apex is a hub for search and answer engines: graph, head, follow block, llms files, robots, sitemap", () => {");
+    const match=new RegExp("<url><loc>"+escaped+"<\\/loc>[\\s\\S]*?<\\/url>","u").exec(sitemap);
+    assert.ok(match,"Original sitemap must contain "+pathname);
+    return match[0];
+  };
+  for(const locale of ["/","/zh-hans/","/lkt/"]){
+    const record=urlRecord(locale);
+    for(const tag of ["en","zh-Hans","lkt","x-default"])
+      assert.ok(record.includes('hreflang="'+tag+'"'),
+        "Original homepage language cluster must remain discoverable: "+locale+" "+tag);
+  }
+  for(const path of ["/blog/","/about/","/work/","/projects/","/for-agents/"]){
+    const record=urlRecord(path);
+    assert.doesNotMatch(record,/hreflang=/u,
+      "English-only route must not claim translated pages: "+path);
+  }
+});
+
 test("the apex is a hub for search and answer engines: graph, head, follow block, llms files, robots, sitemap", () => {
   const html = page("en");
   const graph = JSON.parse(/<script type="application\/ld\+json">(.*?)<\/script>/su.exec(html)[1])["@graph"];
