@@ -82,6 +82,8 @@ export function qualifyBrowserBlogEdition(reading,{home,receipt}={}) {
     "The source comparison has lost its accessible caption");
   require(reading?.jumpToPosts===true,
     "Readers cannot bypass the source comparison to the writing");
+  require(reading?.leadJumpToPosts===true && reading?.leadJumpFirst===true,
+    "The primary article-reading action is missing or hidden behind subscriptions");
   const received=receipt.sources.filter(source=>source.state==="received").length;
   const values=[
     ["Company feeds received",received+" / "+receipt.expectedSourceCount],
@@ -492,6 +494,8 @@ export async function receiveBrowserVisuals({output="artifacts/brand-visual",sou
           const visible=element=>!!element && element.getClientRects().length>0 &&
             getComputedStyle(element).visibility!=="hidden" &&
             getComputedStyle(element).display!=="none";
+          const lead=document.getElementById("lead");
+          const leadActions=[...lead?.querySelectorAll("a.site-action")??[]];
           const coverage=document.getElementById("coverage");
           const posts=document.getElementById("posts");
           const figure=coverage?.querySelector("figure.site-edition-figure");
@@ -504,6 +508,11 @@ export async function receiveBrowserVisuals({output="artifacts/brand-visual",sou
             captionVisible:visible(caption),
             captionConnected:!!caption && figure.querySelector("ol")?.getAttribute("aria-labelledby")===caption.id,
             jumpToPosts:!!coverage?.querySelector('a[href="#posts"]') && !!posts,
+            leadJumpToPosts:!!leadActions.find(a=>a.getAttribute("href")==="#posts" &&
+              a.textContent.includes("Read recent writing") && visible(a)) && !!posts,
+            leadJumpFirst:leadActions[0]?.getAttribute("href")==="#posts" &&
+              !!lead && !!coverage &&
+              !!(lead.compareDocumentPosition(coverage)&Node.DOCUMENT_POSITION_FOLLOWING),
             metrics:[...coverage.querySelectorAll(".site-edition-metric")].map(element=>{
               const dt=element.querySelector("dt"),dd=element.querySelector("dd");
               return {label:dt?.textContent.trim(),value:dd?.textContent.trim(),
@@ -525,6 +534,23 @@ export async function receiveBrowserVisuals({output="artifacts/brand-visual",sou
         }):null;
         const edition=editionReading?qualifyBrowserBlogEdition(editionReading,{
           home:editionHome,receipt:editionReceipt}):{passed:true,errors:[]};
+        // Exercise the actual primary user action, not only the presence of a
+        // same-page anchor in serialized HTML. Restore the viewport before
+        // collecting the identical full-page visual specimen.
+        if(editionReading) {
+          await page.locator('#lead a.site-action[href="#posts"]').click();
+          const arrived=await page.evaluate(()=>{
+            const posts=document.getElementById("posts");
+            const top=posts?.getBoundingClientRect().top;
+            return location.hash==="#posts" && typeof top==="number" &&
+              top>=-1 && top<innerHeight;
+          });
+          if(!arrived)throw Error("Primary writing action did not navigate to actual articles");
+          await page.evaluate(()=>{
+            history.replaceState(null,"",location.pathname);
+            window.scrollTo({top:0,behavior:"instant"});
+          });
+        }
         const result={passed:brand.passed&&edition.passed,
           errors:[...brand.errors,...edition.errors]};
         const screenshot=join(output,item.name+".png");
