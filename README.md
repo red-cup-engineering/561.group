@@ -66,6 +66,18 @@ fact-check. Readers can skip directly to writing and still inspect the source
 receipt and deterministic PROV-O graph. A browser-tested source revision is
 not a deployed or independently received public edition.
 
+**Page-specific language discovery:** The TUFTE application's `headHtml`
+extension is shared by every English-only route, so it must not advertise the
+Chinese and Lakota *homepages* as translations of `/blog/`, `/work/`,
+`/about/` or other untranslated content. The original `/sitemap.xml`
+already projects reciprocal English, Mandarin and Lakota alternates for the
+three actual homepage URLs, and leaves English-only routes without fabricated
+translation links. Their canonical URLs and language labels remain in their
+original page metadata. The original Chromium receiving assay checks that
+global `headHtml` introduces no false `hreflang`; the sitemap regression
+assays the actual homepage cluster. This is a discovery semantics repair, not
+evidence that a crawler has indexed any of these pages.
+
 The original `scripts/build.mjs`
 already reads accepted public JSON Feeds from the four company sites,
 combines them into one capped, build-time `public/feed.json`, and writes
