@@ -332,13 +332,20 @@ test("Group blog receives only exact company-authored feed articles and preserve
   assert.ok(html.includes("bounded, build-time"));
   assert.match(tile(blog,"posts").html,/original company feeds/);
   assert.ok(tile(blog,"posts").html.includes("A reported update is not itself an accepted correction or retraction"));
+  assert.ok(tile(blog,"posts").html.includes("undated source items remain in JSON Feed and RSS"));
   const follow=tile(blog,"follow").html;
   for(const company of home.group.companies){
     assert.ok(follow.includes(company.actor));
     assert.ok(follow.includes(company.feeds.rss));
     assert.ok(follow.includes(company.feeds.json));
   }
-  assert.ok(tile(blog,"lead").html.includes("/feed.rss.xml"));
+  const lead=tile(blog,"lead").html;
+  assert.ok(lead.includes("/feed.rss.xml"),"Original RSS subscription remains available");
+  assert.ok(lead.includes("/feed.atom.xml"),"Original Atom subscription remains available");
+  assert.ok(lead.includes('href="#posts"'),"Reader has a direct writing shortcut");
+  assert.ok(lead.indexOf('href="#posts"')<lead.indexOf('href="/feed.rss.xml"'),
+    "Reading is primary; syndication is secondary, not a barrier to articles");
+  assert.equal(blog.tiles[2].id,"posts","Shortcut targets the real original TUFTE tile");
   const coverage=tile(blog,"coverage").html;
   assert.ok(coverage.includes("4 of 4 original company feeds received"));
   assert.ok(coverage.includes("3 source items admitted, 3 selected"));
@@ -354,6 +361,65 @@ test("Group blog receives only exact company-authored feed articles and preserve
       sources:originalReceipt.sources.map(source=>({...source,inputItems:0})),
       sourceItemCount:0,admittedItems:0,emittedItems:0}});
   assert.match(tile(empty,"posts").html,/not evidence that their archives are empty/u);
+});
+
+test("the blog presents a measured source edition before the long article stream",()=>{
+  const blog=model("/blog/");
+  assert.deepEqual(blog.tiles.slice(0,3).map(tile=>tile.id),
+    ["lead","coverage","posts"]);
+  const html=tile(blog,"coverage").html;
+  assert.ok(html.includes('class="site-edition-metrics"'));
+  assert.ok(html.includes('<dd>4 / 4</dd>'));
+  assert.ok(html.includes('<dd>3</dd>'));
+  assert.ok(html.includes('<dd>0</dd>'));
+  assert.ok(html.includes('aria-labelledby="edition-source-caption"'));
+  assert.ok(html.includes('style="width:100%"'),"largest measured source");
+  assert.ok(html.includes('style="width:50%"'),"second measured source");
+  assert.ok(html.includes('href="#posts"'),"reader can bypass the graph");
+  for(const company of home.group.companies){
+    assert.ok(html.includes(company.name),company.id);
+    assert.ok(html.includes(company.feeds.json),company.id);
+  }
+  assert.ok(html.includes("not current live publication totals"));
+  assert.ok(html.includes("Unreceived sources have no measured count"));
+});
+
+test("a missing publisher is visually and textually unknown, not a measured zero",()=>{
+  const receipt=structuredClone(originalReceipt);
+  const last=receipt.sources[3];
+  receipt.sources[3]={companyId:last.companyId,feedUrl:last.feedUrl,
+    state:"unavailable"};
+  receipt.completeness="partial-source-coverage";
+  const page=project561GroupPage({home,estate,frontdoor,path:"/blog/",
+    feed:originalFeed,feedReceipt:receipt});
+  const html=tile(page,"coverage").html;
+  const company=home.group.companies[3].name;
+  const tail=html.slice(html.indexOf("<strong>"+company+"</strong>"));
+  const item=tail.slice(0,tail.indexOf("</li>"));
+  assert.ok(item.includes("Feed unavailable to this build"));
+  assert.ok(item.includes('class="site-edition-meter site-edition-meter--unknown"'));
+  assert.ok(!item.includes('style="width:0%"'));
+});
+
+test("an aggregate article cannot be attributed to an unreceived source even if totals balance",()=>{
+  const receipt=structuredClone(originalReceipt);
+  const science=receipt.sources[0];
+  receipt.sources[0]={companyId:science.companyId,feedUrl:science.feedUrl,
+    state:"unavailable"};
+  receipt.sources[1].inputItems=3;
+  receipt.completeness="partial-source-coverage";
+  assert.throws(()=>project561GroupPage({home,estate,frontdoor,
+    path:"/blog/",feed:originalFeed,feedReceipt:receipt}),
+    /entry from an unreceived source feed/u);
+});
+
+test("a source cannot contribute more selected feed records than were received",()=>{
+  const receipt=structuredClone(originalReceipt);
+  receipt.sources[0].inputItems=1;
+  receipt.sources[1].inputItems=2;
+  assert.throws(()=>project561GroupPage({home,estate,frontdoor,
+    path:"/blog/",feed:originalFeed,feedReceipt:receipt}),
+    /selection exceeds the received source item count/u);
 });
 
 test("Group blog rejects unauthorized, forged, oversized and broken feed records",()=>{
@@ -478,8 +544,11 @@ test("the genuine TUFTE document keeps discoverability, responsive design, keybo
   assert.match(head,/name="fediverse:creator"/u);
   for(const path of ["/llms.txt","/feed.json","/feed.atom.xml","/feed.rss.xml","/estate.json"])
     assert.ok(head.includes('href="'+path+'"'));
-  for(const lang of ["en","zh-Hans","lkt","x-default"])
-    assert.ok(head.includes('hreflang="'+lang+'"'));
+  // This head is shared with /blog/, /work/, /about/ and other English-only
+  // routes. Homepage language variants belong to the source-owned sitemap,
+  // not an invented translation claim on every English-only document.
+  assert.doesNotMatch(head,/\\bhreflang=/u,
+    "A shared TUFTE head cannot claim other pages are homepage translations");
   assert.ok(head.includes(":focus-visible"));
   assert.ok(head.includes("max-width:430px"));
   assert.ok(head.includes("prefers-reduced-motion:reduce"));

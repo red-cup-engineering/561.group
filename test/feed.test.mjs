@@ -5,7 +5,8 @@ import { createHash } from "node:crypto";
 import { spawnSync } from "node:child_process";
 import {
   readFeeds, readFeedsWithCoverage, mergeItems, renderFeedInputReceipt,
-  renderFeedItemProvenance, renderJsonFeed, renderAtom, renderRss
+  renderFeedItemProvenance, renderJsonFeed, renderAtom, renderRss,
+  syndicatedItemIdentity, syndicatedItemContentText
 } from "../src/feed.mjs";
 
 const home = JSON.parse(readFileSync(new URL("../data/home.json", import.meta.url), "utf8"));
@@ -86,10 +87,105 @@ test("three independently parseable syndication formats carry the same admitted 
   assert.equal(json.feed_url, "https://561.group/feed.json");
   assert.equal(json.items.length, 1);
   assert.equal(json.items[0].url, services.url + "a%26b/");
-  assert.match(renderAtom(home, items),
-    /<entry>\s*<id>a&amp;b<\/id>[\s\S]*<published>2026-10-10T00:00:00Z<\/published>/u);
+  const atom=renderAtom(home,items);
+  const absoluteId=syndicatedItemIdentity(home,items[0]);
+  assert.ok(atom.includes("<entry>\n<id>"+absoluteId+"</id>"));
+  assert.doesNotMatch(atom,/<id>a&amp;b<\/id>/u);
+  assert.match(atom,/<published>2026-10-10T00:00:00Z<\/published>/u);
+  assert.equal(json.items[0].id,"a&b","JSON Feed retains its original source identifier");
+  assert.equal(json.items[0].content_text,
+    "Publisher-supplied summary: S a&b\n\nRead the complete original article: "+items[0].url);
+  assert.equal(json.items[0].content_html,undefined,
+    "The Group must not republish the source company's full HTML");
   assert.match(renderRss(home, items),
     /<guid isPermaLink="false">a&amp;b<\/guid>[\s\S]*<pubDate>Sat, 10 Oct 2026 00:00:00 GMT<\/pubDate>/u);
+});
+
+test("Atom never invents a timestamp for a legitimate undated source article", () => {
+  const entries=mergeItems([{company:services,feed:feed(services,[
+    item(services,"dated","2026-10-21T08:00:00Z"),
+    item(services,"undated",undefined)
+  ])}]);
+  assert.deepEqual(entries.map(entry=>entry.id),["dated","undated"]);
+  const json=JSON.parse(renderJsonFeed(home,entries));
+  assert.equal(json.items.length,2);
+  assert.equal(json.items[1].date_published,undefined);
+  const rss=renderRss(home,entries);
+  assert.match(rss,/<guid isPermaLink="false">undated<\/guid>/u);
+  const atom=renderAtom(home,entries);
+  assert.equal((atom.match(/<entry>/gu)??[]).length,1);
+  assert.ok(atom.includes("<id>"+syndicatedItemIdentity(home,entries[0])+"</id>"));
+  assert.doesNotMatch(atom,/<id>undated<\/id>|1970-01-01/u);
+  assert.match(atom,/1 undated source entry is available in JSON Feed and RSS/u);
+  assert.match(atom,/rel="related" type="application\/feed\+json" href="https:\/\/561\.group\/feed\.json"/u);
+  assert.match(atom,/rel="alternate" type="text\/html" href="https:\/\/561\.group\/blog\/"/u);
+  assert.match(atom,/<author><name>The 561 Group<\/name><uri>https:\/\/561\.group\/<\/uri><\/author>/u);
+});
+
+test("an empty or fully undated Atom edition requires its source-selected publication timestamp", () => {
+  const items=mergeItems([{company:services,feed:feed(services,[
+    item(services,"without-date",undefined)
+  ])}]);
+  assert.throws(()=>renderAtom(home,items),/source-qualified publication timestamp/u);
+  assert.throws(()=>renderAtom(home,[]),/source-qualified publication timestamp/u);
+  assert.throws(()=>renderAtom(home,items,"not-a-date"),/source-qualified publication timestamp/u);
+  const fixed="2026-10-30T00:00:00Z";
+  const xml=renderAtom(home,items,fixed);
+  assert.match(xml,/<updated>2026-10-30T00:00:00Z<\/updated>/u);
+  assert.equal((xml.match(/<entry>/gu)??[]).length,0);
+  assert.doesNotMatch(xml,/1970-01-01|without-date<\/id>/u);
+  assert.match(xml,/1 undated source entry is available in JSON Feed and RSS/u);
+  const empty=renderAtom(home,[],fixed);
+  assert.equal((empty.match(/<entry>/gu)??[]).length,0);
+  assert.match(empty,/<updated>2026-10-30T00:00:00Z<\/updated>/u);
+});
+
+test("Atom determines the most recent source date by actual RFC 3339 instant, not string sort", () => {
+  const items=mergeItems([{company:services,feed:feed(services,[
+    item(services,"earlier","2026-10-27T01:00:00Z"),
+    item(services,"later","2026-10-26T23:30:00-05:00")
+  ])}]);
+  const atom=renderAtom(home,items);
+  assert.match(atom,/<feed[\s\S]*?<updated>2026-10-26T23:30:00-05:00<\/updated>[\s\S]*?<entry>/u);
+  assert.equal((atom.match(/<entry>/gu)??[]).length,2);
+});
+
+test("Atom identities equal the original PROV-O item identity, not opaque local JSON Feed IDs",()=>{
+  const originals=[item(science,"s:unqualified","2026-10-28T00:00:00Z"),
+    item(services,"opaque source ID","2026-10-29T00:00:00Z")];
+  const admitted=mergeItems([
+    {company:science,feed:feed(science,[originals[0]])},
+    {company:services,feed:feed(services,[originals[1]])}
+  ]);
+  const atom=renderAtom(home,admitted),json=JSON.parse(renderJsonFeed(home,admitted));
+  const receipts=home.group.companies.map((company,i)=>({
+    companyId:company.id,feedUrl:company.feeds.json,
+    ...(company.id===science.id||company.id===services.id
+      ? {state:"received",inputItems:1,bytes:10,sha256:"sha256:"+String(i+1).repeat(64)}
+      : {state:"unavailable"})
+  }));
+  const graph=JSON.parse(renderFeedItemProvenance(home,receipts,admitted));
+  for(const entry of admitted){
+    const ir=syndicatedItemIdentity(home,entry);
+    assert.match(ir,/^https:\/\/561\.group\/feed\.json#item-[0-9a-f]{64}$/u);
+    assert.ok(atom.includes("<id>"+ir+"</id>"),"Atom identifies the same syndicated entity");
+    const node=graph["@graph"].find(n=>n["@id"]===ir);
+    assert.equal(node["schema:identifier"],entry.id,"PROV-O retains the opaque original ID");
+    assert.equal(node["schema:item"]["@id"],entry.url,"Original publisher URL is unchanged");
+    assert.equal(json.items.find(x=>x.url===entry.url).id,entry.id,"JSON Feed original ID preserved");
+  }
+  assert.equal(new Set([...atom.matchAll(/<entry>\s*<id>([^<]+)<\/id>/gu)].map(m=>m[1])).size,2);
+});
+
+test("Source-bounded JSON content exists even without a summary, with no invented article prose",()=>{
+  const raw=item(services,"no-summary","2026-10-29T12:00:00Z");
+  delete raw.summary;
+  const admitted=mergeItems([{company:services,feed:feed(services,[raw])}]);
+  const produced=JSON.parse(renderJsonFeed(home,admitted));
+  assert.equal(produced.items[0].content_text,
+    "Read the complete original article: "+admitted[0].url);
+  assert.equal(produced.items[0].content_html,undefined);
+  assert.equal(produced.items[0].authors[0].url,services.url);
 });
 
 test("a foreign, malformed or duplicate entry cannot gain the company's author in any feed", () => {
@@ -238,6 +334,9 @@ test("release refuses forged or orphaned public article-to-source mappings",()=>
     x=>x.graph["@graph"].push(structuredClone(x.graph["@graph"][0])),
     x=>x.feed.items[0].authors[0].name="Unverified Source",
     x=>x.graph["@context"].prov="http://forged.example/ns#",
+    x=>{delete x.feed.items[0].content_text},
+    x=>x.feed.items[0].content_text="invented article body",
+    x=>x.feed.items[0].content_html="<p>copied source article</p>",
     x=>x.receipt.sources[1].sha256="sha256:"+"f".repeat(64),
     x=>x.receipt.sourceItemCount+=1,
     x=>x.receipt.completeness="partial-source-coverage",
@@ -344,10 +443,46 @@ test("unchanged public metadata is not invented into an editorial correction",()
   assert.equal(report.originalCorrectionPublished,false);
   assert.equal(report.proposedRelease.deployed,false);
 });
+test("original main historical contentless feed is read only as a prior publication, never as a new release",()=>{
+  const present=publicationWithRevision();
+  const previous=structuredClone(present);
+  previous.sourceRevision.sourceCommit="f9d59a82c78136d409dee4286a97d6d9d3142f94";
+  for(const entry of previous.feed.items) delete entry.content_text;
+  assert.throws(()=>assayPublicFeedProjection(previous),
+    /bounded source summary and original link/,
+    "current public readback still refuses historical contentless items");
+  const next=proposedFrom(present);
+  const report=revisionDelta(previous,next);
+  assert.equal(report.previousRelease.sourceCommit,previous.sourceRevision.sourceCommit);
+  assert.equal(report.counts.unchanged,4);
+  assert.equal(report.editorialReviewRequired,false,
+    "old format alone is not fabricated as a scientific correction");
+  assert.equal(report.originalCorrectionPublished,false);
+  assert.equal(report.proposedRelease.deployed,false);
+  const unqualified=structuredClone(previous);
+  unqualified.sourceRevision.sourceCommit="3".repeat(40);
+  assert.throws(()=>revisionDelta(unqualified,next),
+    /bounded source summary and original link/,
+    "a different historical revision cannot impersonate the one exact legacy release");
+  const fabricated=structuredClone(previous);
+  fabricated.feed.items[0].content_text="invented source material";
+  assert.throws(()=>revisionDelta(fabricated,next),/bounded source summary and original link/);
+  const orphan=structuredClone(previous);
+  orphan.graph["@graph"].find(x=>Array.isArray(x["@type"])&&
+    x["@type"].includes("schema:DataFeedItem"))["prov:wasAttributedTo"]["@id"]="https://other.example/";
+  assert.throws(()=>revisionDelta(orphan,next),/Unreceived public feed evidence/);
+  const invalidNew=proposedFrom(present);
+  delete invalidNew.feed.items[0].content_text;
+  assert.throws(()=>revisionDelta(previous,invalidNew),
+    /bounded source summary and original link/,
+    "the legacy exception must never apply to proposed output");
+});
+
 test("source metadata revisions trigger review with both prior and proposed versions",()=>{
   const before=publicationWithRevision(),after=proposedFrom(before);
   after.feed.items[0].title="Correction candidate: pending source editorial review";
   after.feed.items[0].summary="Changed claimed summary; not a scientific verification";
+  after.feed.items[0].content_text=syndicatedItemContentText(after.feed.items[0]);
   const report=revisionDelta(before,after);
   assert.equal(report.editorialReviewRequired,true);
   assert.equal(report.counts.metadataRevisions,1);
@@ -366,6 +501,7 @@ test("a new admitted company item is selection, not an implied correction",()=>{
     date_published:"2026-10-27T18:00:00Z",
     authors:[{name:science.name,url:science.url}],tags:["research"]
   };
+  addition.content_text=syndicatedItemContentText(addition);
   after.feed.items.unshift(addition);
   after.receipt.sources[0].inputItems++;
   after.receipt.sourceItemCount++;

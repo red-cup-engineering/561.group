@@ -513,13 +513,32 @@ function projectsPage(home, estate, frontdoor, source) {
 }
 function blogPage(home, blog) {
   const coverage=blog.coverage;
-  const originalSources=coverage.sources.map(({company,state,inputItems})=>
-    '<li><strong>'+esc(company.name)+'</strong> · '+
-    (state==='received' ? esc(String(inputItems))+' source entries received' :
-     state==='refused' ? 'Feed refused by input admission' :
-     'Feed unavailable to this build')+
-    ' · '+anchor(company.feeds.json,'Original company feed')+'</li>'
-  ).join('');
+  const largestObserved=Math.max(1,...coverage.sources
+    .filter(source=>source.state==="received").map(source=>source.inputItems));
+  // The bars show observed original feed entries, never published article or
+  // readership counts. Missing input is unknown, not a zero-height bar.
+  const originalSources=coverage.sources.map(({company,state,inputItems})=>{
+    const received=state==="received";
+    const status=received ? inputItems+" source entries received" :
+      state==="refused" ? "Feed refused by input admission" :
+      "Feed unavailable to this build";
+    const width=received?Math.round(100*inputItems/largestObserved):null;
+    return '<li class="site-edition-source"><div class="site-edition-source-heading">'+
+      '<strong>'+esc(company.name)+'</strong><span>'+esc(status)+'</span></div>'+
+      '<div class="site-edition-meter'+(received?'':' site-edition-meter--unknown')+
+      '" aria-hidden="true">'+(received?'<span style="width:'+width+'%"></span>':'')+'</div>'+
+      '<p class="site-muted">'+(received?'Received at build time':
+        state==="refused"?'Unreceived · refused':'Unreceived · unavailable')+
+      ' · '+anchor(company.feeds.json,'Original company feed')+'</p></li>';
+  }).join('');
+  const editionMetric=(count,label)=>
+    '<div class="site-edition-metric"><dt>'+esc(label)+'</dt><dd>'+
+    esc(String(count))+'</dd></div>';
+  const editionMetrics='<dl class="site-edition-metrics">'+
+    editionMetric(coverage.received+' / '+coverage.expected,'Company feeds received')+
+    editionMetric(coverage.admitted,'Source entries admitted')+
+    editionMetric(coverage.selected,'Group feed entries selected')+
+    editionMetric(coverage.omittedByLimit,'Admitted beyond 60-item cap')+'</dl>';
   const posts = blog.items.map(item =>
     '<li class="site-card h-entry"><span class="site-category">' + esc(item.company.name) +
     '</span><h3>' + anchor(item.url,item.title,"p-name u-url") + '</h3>' +
@@ -542,19 +561,15 @@ function blogPage(home, blog) {
       lead("ORIGINAL WRITING / FOUR ACCOUNTABLE PUBLISHERS",
         "Writing from the 561 Group",
         "Research, engineering, operations and public services, published by their own companies. Each link opens the original article; the Group does not claim to have authored these posts.",
-        [{href:"/feed.rss.xml",label:"Subscribe by RSS"},
-         {href:"/feed.atom.xml",label:"Atom"},
-         {href:"/feed.json",label:"JSON Feed"}]),12),
-    panel("posts","Recent published writing",
-      '<ol class="site-card-grid h-feed">' + posts + '</ol>' +
-      (!blog.items.length ? para("This build received no published posts from the company feeds. It is not evidence that their archives are empty.") : "") +
-      note("This is a bounded, build-time selection of up to 60 items, not a complete archive or a live count.") +
-      note("Publication and modification dates come from original company feeds. A reported update is not itself an accepted correction or retraction; follow the original article for its publisher's revision history.") +
-      para("Check which original company feeds were actually received and which upstream records were withheld from this build.") +
-      anchor("/feed-input-receipt.json","Inspect this build\u2019s source admission receipt") +
-      " · " + anchor("/feed-provenance.jsonld","Trace syndicated items to original feed snapshots") +
-      " · " + anchor("/projects/","Explore projects and publications"),12),
-    panel("coverage","What this build actually received",
+        // A person coming here to read should not have to traverse the
+        // evidence dashboard before reaching the writing. Subscriptions are
+        // still exposed here, in page metadata and by the original publishers.
+        [{href:"#posts",label:"Read recent writing"},
+         {href:"/feed.rss.xml",label:"Subscribe by RSS"},
+         {href:"/feed.atom.xml",label:"Atom"}]),12),
+    panel("coverage","This edition · what we actually received",
+      '<p class="site-edition-kicker">SOURCE RECEIPT / BOUNDED BUILD SNAPSHOT</p>' +
+      editionMetrics +
       para(coverage.received+" of "+coverage.expected+" original company feeds received; "+
         coverage.admitted+" source "+(coverage.admitted===1?"item":"items")+" admitted, "+coverage.selected+
         " selected for the capped Group feed, and "+coverage.omittedByLimit+
@@ -562,8 +577,25 @@ function blogPage(home, blog) {
       para(coverage.rejected+" source "+(coverage.rejected===1?"entry":"entries")+" rejected during this build. "+
         (coverage.complete ? "All four company feed endpoints were received." :
          "This was a partial input snapshot: missing company feeds are not empty archives.")) +
-      '<ul class="site-service-grid">'+originalSources+'</ul>'+
-      note("These are build-time feed input and selection counts, not current live publication totals, reader statistics, independently verified article claims or proof of any correction or withdrawal."),12),
+      '<figure class="site-edition-figure"><figcaption id="edition-source-caption">'+
+      'Original source entries seen at build time, by publisher. Each bar is relative to the largest observed source. Unreceived sources have no measured count.'+
+      '</figcaption><ol class="site-edition-sources" aria-labelledby="edition-source-caption">'+
+      originalSources+'</ol></figure>'+
+      note("These are build-time feed input and selection counts, not current live publication totals, reader statistics, independently verified article claims or proof of any correction or withdrawal.")+
+      '<p class="site-edition-links">'+anchor("/feed-input-receipt.json","Read the source receipt")+
+      ' · '+anchor("/feed-provenance.jsonld","Trace original snapshots")+
+      ' · '+anchor("#posts","Jump to the writing")+'</p>',12),
+    panel("posts","Recent published writing",
+      '<ol class="site-card-grid h-feed">' + posts + '</ol>' +
+      (!blog.items.length ? para("This build received no published posts from the company feeds. It is not evidence that their archives are empty.") : "") +
+      note("This is a bounded, build-time selection of up to 60 items, not a complete archive or a live count.") +
+      note("Publication and modification dates come from original company feeds. A reported update is not itself an accepted correction or retraction; follow the original article for its publisher's revision history.") +
+      note("Atom requires an updated timestamp for each entry, so undated source items remain in JSON Feed and RSS without invented dates; they are omitted from Atom with an explanation there.") +
+      note("JSON Feed contains source-labelled summaries and original article links, not copied full-text articles. Atom entry identifiers match the published provenance graph; original source identifiers remain intact.") +
+      para("Check which original company feeds were actually received and which upstream records were withheld from this build.") +
+      anchor("/feed-input-receipt.json","Inspect this build\u2019s source admission receipt") +
+      " · " + anchor("/feed-provenance.jsonld","Trace syndicated items to original feed snapshots") +
+      " · " + anchor("/projects/","Explore projects and publications"),12),
     panel("follow","Follow each original publisher",
       para("Subscribe to the company feeds, or follow its genuine ActivityPub identity. A Group-wide feed does not replace individual author identities.") +
       '<ul class="site-service-grid">' + follow + '</ul>',12),
@@ -685,9 +717,12 @@ export function project561GroupHead(home) {
     alternate("application/ld+json","Source-backed public questions and citations","/editorial-question-provenance.jsonld"),
     alternate("application/atom+xml","Group publications (Atom)","/feed.atom.xml"),
     alternate("application/rss+xml","Group publications (RSS)","/feed.rss.xml"),
-    ...[["en","/"],["zh-Hans","/zh-hans/"],["lkt","/lkt/"]].map(([tag,href]) =>
-      entry("link",{rel:"alternate",hreflang:tag,href:ORIGIN + href})),
-    entry("link",{rel:"alternate",hreflang:"x-default",href:ORIGIN + "/"}),
+    // This headHtml is shared by every English-only TUFTE page, including
+    // /blog/, /work/ and /about/. The site's zh-Hans/lkt URLs are translations
+    // of the HOMEPAGE, not of these routes. Emitting homepage hreflang links
+    // here would falsely declare different content to be alternate versions.
+    // The existing source-owned sitemap advertises only the actual homepage
+    // translation cluster; localized homepage HTML retains its own links.
     '<style data-561-house="visual-design-bible-v0.4-candidate">' + HOUSE_STYLES + "\n" + SITE_STYLES + "</style>"
   ].join("");
 }
