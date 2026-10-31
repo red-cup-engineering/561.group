@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {qualifyRenderedBrand,visualReviewPacket} from "../scripts/assay-rendered-brand.mjs";
+import {qualifyRenderedBrand,qualifyBrowserBlogEdition,visualReviewPacket} from "../scripts/assay-rendered-brand.mjs";
 
 const good=()=>({
   viewportWidth:1440,houseStyle:true,tufte:true,
@@ -19,6 +19,78 @@ const good=()=>({
   tileCount:11,hasLead:false,hasNavigation:true,hasContact:true,focusWidth:3,
   overflowX:false,identityAppeal:false
 });
+const editionFixture=()=>{
+  const companies=["Science","Engineering","Operations","Public services"].map((name,i)=>({
+    id:"company-"+i,name,feeds:{json:"https://company"+i+".example/feed.json"}
+  }));
+  const input=[21,16,20,25];
+  const receipt={expectedSourceCount:4,admittedItems:82,
+    emittedItems:60,omittedByAggregateLimit:22,
+    sources:companies.map((company,i)=>({
+      companyId:company.id,feedUrl:company.feeds.json,
+      state:"received",inputItems:input[i]
+    }))};
+  const metrics=[
+    ["Company feeds received","4 / 4"],
+    ["Source entries admitted","82"],
+    ["Group feed entries selected","60"],
+    ["Admitted beyond 60-item cap","22"]
+  ].map(([label,value])=>({label,value,visible:true}));
+  const sources=companies.map((company,i)=>({
+    company:company.name,status:input[i]+" source entries received",
+    href:company.feeds.json,visible:true,meterVisible:true,
+    meterHidden:true,unknownIndicator:false,
+    barWidth:Math.round(input[i]/25*100)+"%"
+  }));
+  return {home:{group:{companies}},receipt,
+    reading:{coverageVisible:true,postsVisible:true,
+      coverageBeforePosts:true,captionVisible:true,captionConnected:true,
+      jumpToPosts:true,metrics,sources}};
+};
+test("real Chromium edition evidence must match the exact original source receipt",()=>{
+  const {home,receipt,reading}=editionFixture();
+  assert.deepEqual(qualifyBrowserBlogEdition(reading,{home,receipt}),
+    {passed:true,errors:[]});
+  const counterfeit=structuredClone(reading);
+  counterfeit.metrics[1].value="100";
+  counterfeit.sources[3].barWidth="0%";
+  counterfeit.coverageBeforePosts=false;
+  const denied=qualifyBrowserBlogEdition(counterfeit,{home,receipt});
+  assert.equal(denied.passed,false);
+  assert.ok(denied.errors.some(x=>x.includes("Source entries admitted")));
+  assert.ok(denied.errors.some(x=>x.includes("Publisher bar")));
+  assert.ok(denied.errors.some(x=>x.includes("before the article")));
+});
+test("an unreceived publisher remains visibly unknown in the browser",()=>{
+  const {home,receipt,reading}=editionFixture();
+  receipt.sources[3]={companyId:receipt.sources[3].companyId,
+    feedUrl:receipt.sources[3].feedUrl,state:"unavailable"};
+  receipt.admittedItems=57;receipt.emittedItems=57;receipt.omittedByAggregateLimit=0;
+  reading.metrics[0].value="3 / 4";
+  reading.metrics[1].value="57";reading.metrics[2].value="57";
+  reading.metrics[3].value="0";
+  reading.sources[3].status="Feed unavailable to this build";
+  reading.sources[3].barWidth=null;
+  reading.sources[3].unknownIndicator=true;
+  assert.equal(qualifyBrowserBlogEdition(reading,{home,receipt}).passed,true);
+  reading.sources[3].barWidth="0%";
+  assert.ok(qualifyBrowserBlogEdition(reading,{home,receipt}).errors.some(x=>
+    x.includes("invents missing data")));
+});
+test("hidden captions, metrics, publisher source links and graphical labels refuse visual receiving",()=>{
+  const {home,receipt,reading}=editionFixture();
+  reading.captionConnected=false;
+  reading.metrics[1].visible=false;
+  reading.sources[2].href="https://foreign.example/feed.json";
+  reading.sources[0].meterHidden=false;
+  reading.jumpToPosts=false;
+  const result=qualifyBrowserBlogEdition(reading,{home,receipt});
+  assert.equal(result.passed,false);
+  for(const term of ["accessible caption","Source entries admitted",
+    "source link","graphics","bypass"])
+    assert.ok(result.errors.some(e=>e.includes(term)),term);
+});
+
 test("rendered Chromium observation has a passable explicit conformance shape",()=>{
   assert.deepEqual(qualifyRenderedBrand(good()),{passed:true,errors:[]});
 });
