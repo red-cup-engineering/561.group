@@ -44,7 +44,13 @@ const isRecord = value => Boolean(value) && typeof value === "object" && !Array.
 const typed = (node, kind) => node?.["@type"] === kind ||
   (Array.isArray(node?.["@type"]) && node["@type"].includes(kind));
 
-export function assayPublicFeedProjection({ home, feed, receipt, graph }) {
+// The exact original main release was published before JSON Feed 1.1's
+// mandatory item content was enforced. Its manifest-bound historical bytes
+// need comparison, not retrospective rewriting or permission to publish new
+// contentless items. This exception is private to the transition assessor.
+const HISTORICAL_CONTENTLESS_REVISION = "f9d59a82c78136d409dee4286a97d6d9d3142f94";
+
+function assayPublication({ home, feed, receipt, graph }, { historicalContentless = false } = {}) {
   if (home?.origin !== "https://561.group" ||
       !Array.isArray(home.group?.companies) || home.group.companies.length !== 4)
     fail("original four companies are required");
@@ -145,7 +151,12 @@ export function assayPublicFeedProjection({ home, feed, receipt, graph }) {
     const sourceSummary=typeof item.summary==="string"&&item.summary.trim()
       ? "Publisher-supplied summary: "+item.summary.trim()+"\n\n" : "";
     const expectedText=sourceSummary+"Read the complete original article: "+item.url;
-    if(item.content_html!==undefined || item.content_text!==expectedText)
+    // Historic main used the correct original metadata and provenance but
+    // emitted neither JSON Feed content field. Admit that exact predecessor
+    // for a read-only transition comparison ONLY. New publications must have
+    // source-backed content and may not reintroduce the historical omission.
+    const priorUndecorated = historicalContentless && item.content_text===undefined;
+    if(item.content_html!==undefined || (!priorUndecorated && item.content_text!==expectedText))
       fail("JSON Feed content must be the bounded source summary and original link");
     if (seenUrls.has(item.url) || seenItemIds.has(item.id))
       fail("duplicate syndicated URL or original identifier");
@@ -188,6 +199,12 @@ export function assayPublicFeedProjection({ home, feed, receipt, graph }) {
   });
 }
 
+// Production public-byte receiving always uses the strict contemporary
+// contract. No public caller can set the read-only historical exception.
+export function assayPublicFeedProjection(publication) {
+  return assayPublication(publication);
+}
+
 // This deterministic exact URL identity matches the original build's
 // createHash('sha256').update(item.url).digest('hex'), without any network I/O.
 import { createHash } from "node:crypto";
@@ -206,8 +223,11 @@ export function comparePublicFeedRevisions({home,previous,proposed,observedAt}){
        snapshot.sourceRevision.origin!==home?.origin ||
        !/^[a-f0-9]{40}$/u.test(snapshot.sourceRevision.sourceCommit??""))
       fail("missing exact "+label+" release identity");
-    assayPublicFeedProjection({home,feed:snapshot.feed,
-      receipt:snapshot.receipt,graph:snapshot.graph});
+    assayPublication({home,feed:snapshot.feed,
+      receipt:snapshot.receipt,graph:snapshot.graph}, {
+        historicalContentless:label==="previous" &&
+          snapshot.sourceRevision.sourceCommit===HISTORICAL_CONTENTLESS_REVISION
+      });
   }
   if(typeof observedAt!=="string"||!Number.isFinite(Date.parse(observedAt)))
     fail("transition requires an explicit observation timestamp");
