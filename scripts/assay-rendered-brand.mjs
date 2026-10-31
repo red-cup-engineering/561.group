@@ -106,8 +106,14 @@ export function qualifyBrowserBlogEdition(reading,{home,receipt}={}) {
     require(row?.meterVisible===true && row?.meterHidden===true &&
       row?.unknownIndicator===!measured,
       "Observed and unreceived publisher graphics became indistinguishable: "+company.id);
-    require(row?.barWidth===(measured?
-      Math.round(100*source.inputItems/maxObserved)+"%":null),
+    // Read painted geometry rather than serialized styles; the TUFTE/HTML
+    // renderer may normalize or drop inline style attributes. An actual
+    // visible bar must represent the admitted source count within one point.
+    const expectedPercent=Math.round(100*source.inputItems/maxObserved);
+    require(measured ?
+      typeof row?.barPercent==="number" &&
+        Math.abs(row.barPercent-expectedPercent)<=1 :
+      row?.barPercent===null,
       "Publisher bar differs from the source count or invents missing data: "+company.id);
   });
   return Object.freeze({passed:errors.length===0,errors});
@@ -500,7 +506,9 @@ export async function receiveBrowserVisuals({output="artifacts/brand-visual",sou
                 visible:visible(element),meterVisible:visible(meter),
                 meterHidden:meter?.getAttribute("aria-hidden")==="true",
                 unknownIndicator:meter?.classList.contains("site-edition-meter--unknown"),
-                barWidth:meter?.querySelector("span")?.style.width??null};
+                barPercent:meter?.querySelector("span") && meter.getBoundingClientRect().width>0
+                  ? 100*meter.querySelector("span").getBoundingClientRect().width/
+                    meter.getBoundingClientRect().width:null};
             })
           };
         }):null;
