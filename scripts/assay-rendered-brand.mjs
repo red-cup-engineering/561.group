@@ -84,6 +84,8 @@ export function qualifyBrowserBlogEdition(reading,{home,receipt}={}) {
     "Readers cannot bypass the source comparison to the writing");
   require(reading?.leadJumpToPosts===true && reading?.leadJumpFirst===true,
     "The primary article-reading action is missing or hidden behind subscriptions");
+  require(reading?.keyboardJump===true && reading?.pointerJump===true,
+    "The actual reader shortcut failed keyboard or pointer navigation");
   const received=receipt.sources.filter(source=>source.state==="received").length;
   const values=[
     ["Company feeds received",received+" / "+receipt.expectedSourceCount],
@@ -532,25 +534,31 @@ export async function receiveBrowserVisuals({output="artifacts/brand-visual",sou
             })
           };
         }):null;
-        const edition=editionReading?qualifyBrowserBlogEdition(editionReading,{
-          home:editionHome,receipt:editionReceipt}):{passed:true,errors:[]};
-        // Exercise the actual primary user action, not only the presence of a
-        // same-page anchor in serialized HTML. Restore the viewport before
-        // collecting the identical full-page visual specimen.
+        // Test the SAME primary reader link using keyboard and pointer
+        // interaction in actual Chromium. An anchor present in HTML is not
+        // evidence that anyone can activate it and reach original articles.
         if(editionReading) {
-          await page.locator('#lead a.site-action[href="#posts"]').click();
-          const arrived=await page.evaluate(()=>{
+          const action=page.locator('#lead a.site-action[href="#posts"]');
+          const reachedArticles=()=>page.evaluate(()=>{
             const posts=document.getElementById("posts");
             const top=posts?.getBoundingClientRect().top;
             return location.hash==="#posts" && typeof top==="number" &&
               top>=-1 && top<innerHeight;
           });
-          if(!arrived)throw Error("Primary writing action did not navigate to actual articles");
-          await page.evaluate(()=>{
+          const resetLocation=()=>page.evaluate(()=>{
             history.replaceState(null,"",location.pathname);
             window.scrollTo({top:0,behavior:"instant"});
           });
+          await action.focus();
+          await page.keyboard.press("Enter");
+          editionReading.keyboardJump=await reachedArticles();
+          await resetLocation();
+          await action.click();
+          editionReading.pointerJump=await reachedArticles();
+          await resetLocation();
         }
+        const edition=editionReading?qualifyBrowserBlogEdition(editionReading,{
+          home:editionHome,receipt:editionReceipt}):{passed:true,errors:[]};
         const result={passed:brand.passed&&edition.passed,
           errors:[...brand.errors,...edition.errors]};
         const screenshot=join(output,item.name+".png");
