@@ -22,7 +22,16 @@ const SIMPLE_CHECKS = Object.freeze([
     mustContain: 'Published machine-readable interfaces' },
   { name: 'contact', path: '/contact/', accept: 'text/html', type: 'html', required: true },
   { name: 'estate', path: '/estate.json', accept: 'application/json', type: 'estate', required: true },
-  { name: 'agent-discovery', path: '/llms.txt', accept: 'text/plain', type: 'plain', required: true },
+  { name: 'agent-discovery', path: '/llms.txt', accept: 'text/plain', type: 'agent-guide', required: true },
+  // Read the advertised public provenance, not just URL substrings in llms.txt.
+  { name: 'feed-source-receipt', path: '/feed-input-receipt.json',
+    accept: 'application/json', type: 'evidence', evidenceKind: 'source-receipt', required: true },
+  { name: 'feed-item-provenance', path: '/feed-provenance.jsonld',
+    accept: 'application/ld+json, application/json', type: 'evidence',
+    evidenceKind: 'feed-graph', required: true },
+  { name: 'editorial-question-provenance', path: '/editorial-question-provenance.jsonld',
+    accept: 'application/ld+json, application/json', type: 'evidence',
+    evidenceKind: 'editorial-graph', required: true },
   { name: 'crawl-policy', path: '/robots.txt', accept: 'text/plain', type: 'robots', required: true },
   { name: 'sitemap', path: '/sitemap.xml', accept: 'application/xml', type: 'sitemap', required: true },
   { name: 'security-contact', path: '/.well-known/security.txt', accept: 'text/plain', type: 'plain', required: false },
@@ -159,6 +168,37 @@ function evaluateSimple(def, sample) {
     return { ...result, outcome: 'fail', reason: 'invalid-robots-contract' };
   if (def.type === 'sitemap' && !/<(?:urlset|sitemapindex)(?:\s|>)/iu.test(sample.body))
     return { ...result, outcome: 'fail', reason: 'invalid-sitemap-contract' };
+  // Publication is not qualified merely because a plain-text guide exists.
+  // Check the source-approved correction and the public evidence routes in the
+  // same external GET that supplies the content digest; do not infer indexing.
+  if (def.type === 'agent-guide') {
+    if (!media.includes('text/plain'))
+      return { ...result, outcome: 'fail', reason: 'wrong-media-type' };
+    if (!sample.body.includes('parent of four companies, and the public site represents accountable offices and companies; an inquiry never grants authority.'))
+      return { ...result, outcome: 'fail', reason: 'stale-or-unqualified-agent-guide' };
+    if (!['/feed-input-receipt.json', '/feed-provenance.jsonld',
+      '/editorial-question-provenance.jsonld'].every(path => sample.body.includes(path)))
+      return { ...result, outcome: 'fail', reason: 'missing-public-provenance-links' };
+  }
+  if (def.type === 'evidence') {
+    if (!media.includes('application/json') && !media.includes('application/ld+json'))
+      return { ...result, outcome: 'fail', reason: 'wrong-evidence-media-type' };
+    let record;
+    try { record = JSON.parse(sample.body); }
+    catch { return { ...result, outcome: 'fail', reason: 'invalid-evidence-json' }; }
+    const root = ORIGIN + def.path;
+    const valid = def.evidenceKind === 'source-receipt'
+      ? record?.schema === '561.group/feed-input-receipt/v1' &&
+        record.origin === ORIGIN && record.expectedSourceCount === 4 &&
+        Array.isArray(record.sources) && record.sources.length === 4
+      : record?.['@id'] === root &&
+        record?.['@context']?.prov === 'http://www.w3.org/ns/prov#' &&
+        record?.['@context']?.schema === 'https://schema.org/' &&
+        Array.isArray(record?.['@graph']) && record['@graph'].length > 0 &&
+        (def.evidenceKind !== 'editorial-graph' || record['@type'] === 'schema:Dataset');
+    if (!valid) return { ...result, outcome: 'fail', reason: 'invalid-public-evidence-identity' };
+    result.qualification = 'public JSON shape and identity only; no upstream proof, fact check or federation receipt';
+  }
   if (def.type === 'plain' && !media.includes('text/plain'))
     return { ...result, outcome: 'fail', reason: 'wrong-media-type' };
   if (def.mustContain && (!sample.body.includes(def.mustContain) || !sample.body.includes('data-tufte')))
@@ -166,6 +206,43 @@ function evaluateSimple(def, sample) {
   if (def.type === 'html' && (!sample.nosniff || !sample.hsts))
     return { ...result, outcome: 'fail', reason: 'missing-security-headers', nosniff: sample.nosniff, hsts: sample.hsts };
   return { ...result, outcome: 'pass' };
+}
+
+/** Independently fetch each published evidence artifact and bind its actual
+ * response-body SHA-256 to the self-described release manifest. This is a
+ * public consistency check, not provider authentication or research assent.
+ * The original source/editorial semantic assays remain in the release lane. */
+function evaluatePublicEvidenceManifest(revision,checks) {
+  // A missing or unreadable manifest cannot qualify the three public
+  // provenance documents, even without an operator-selected source SHA.
+  // Record absence/uncertainty without mislabeling it a provider outage.
+  const base={name:'published-evidence-byte-identity',
+    url:ORIGIN+'/source-revision.json',required:true};
+  if(revision.unknown)
+    return {...base,outcome:'unknown',reason:'revision-manifest-unreadable'};
+  if(revision.status===404)
+    return {...base,outcome:'not-published',reason:'no-public-revision-manifest'};
+  if(revision.status!==200)
+    return {...base,outcome:'fail',reason:'revision-manifest-not-served'};
+  let manifest;
+  try { manifest=JSON.parse(revision.body); }
+  catch { return {...base,outcome:'fail',reason:'invalid-public-revision-manifest'}; }
+  const evidence=SIMPLE_CHECKS.filter(def=>def.evidenceKind);
+  for(const def of evidence) {
+    const read=checks.find(check=>check.name===def.name);
+    if(read?.outcome==='unknown')
+      return {...base,outcome:'unknown',reason:'public-evidence-unreadable',
+        artifact:def.path.slice(1)};
+    if(read?.outcome!=='pass' || !/^[a-f0-9]{64}$/u.test(read.contentSha256??''))
+      return {...base,outcome:'fail',reason:'public-evidence-unreceived',artifact:def.path.slice(1)};
+    const expected=manifest?.artifactDigests?.[def.path.slice(1)];
+    if(!/^sha256:[a-f0-9]{64}$/u.test(expected??'') ||
+       expected!=='sha256:'+read.contentSha256)
+      return {...base,outcome:'fail',reason:'published-evidence-digest-mismatch',
+        artifact:def.path.slice(1)};
+  }
+  return {...base,outcome:'pass',artifacts:evidence.length,
+    qualification:'observed public bytes match the public self-declared artifact digests; provider and source custody not independently proven'};
 }
 
 function evaluateAlias(sample) {
@@ -339,6 +416,7 @@ export async function observeProduction({ fetchImpl = fetch, expectedSourceSha =
   const research = researchRaw.reason === 'missing-useful-visitor-page'
     ? { ...researchRaw, reason: 'missing-research-discovery-link' } : researchRaw;
   const checks = [simple[0], research, ...simple.slice(1),
+    evaluatePublicEvidenceManifest(revision,simple),
     evaluateEstateHead(estateHead, simpleSamples[SIMPLE_CHECKS.findIndex(def => def.name === 'estate')]),
     ...searchChecks, evaluateAlias(alias), evaluateRevision(revision, expectedSourceSha)];
   const requiredChecks = checks.filter(check => check.required);
