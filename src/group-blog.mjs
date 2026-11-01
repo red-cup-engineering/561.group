@@ -133,6 +133,22 @@ export function admitGroupBlogCoverage(home,feed,receipt){
      receipt.emittedItems!==Math.min(admitted,GROUP_BLOG_LIMIT)||
      admitted-receipt.emittedItems!==receipt.omittedByAggregateLimit)
     throw new TypeError("Blog received and selected article counts disagree");
+  // A source admission receipt is not merely a total: a selected feed item
+  // must belong to an actually received company source, and a source cannot
+  // contribute more selected entries than its observed input count.
+  // This includes homepage feed entries (which the human blog hides).
+  const receivedLimits=new Map(sources.filter(s=>s.state==="received")
+    .map(s=>[new URL(s.company.url).origin,s.inputItems]));
+  const selectedCounts=new Map();
+  for(const item of feed.items){
+    const origin=validPublicUrl(item?.url,"Selected Group feed item").origin;
+    if(!receivedLimits.has(origin))
+      throw new TypeError("Blog selection contains an entry from an unreceived source feed");
+    const selected=(selectedCounts.get(origin)??0)+1;
+    if(selected>receivedLimits.get(origin))
+      throw new TypeError("Blog selection exceeds the received source item count");
+    selectedCounts.set(origin,selected);
+  }
   const complete=received===4;
   if(receipt.completeness!==(complete?"all-sources-received":"partial-source-coverage"))
     throw new TypeError("Blog source snapshot claims unwitnessed completeness");

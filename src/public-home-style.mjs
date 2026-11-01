@@ -92,17 +92,85 @@ a.site-action:hover {outline:2px solid currentColor;outline-offset:3px}
 .site-frontier .site-frontier-boundary {font:.84rem/1.55 var(--house-mono);
   color:var(--house-soft);border-top:1px solid var(--house-rule);padding-top:1rem;margin-top:1rem}
 .site-frontier-throughline {font:700 clamp(1.05rem,1.5vw,1.35rem)/1.4 var(--house-sans);max-width:66ch}
+/* The original public feed receipt becomes an accessible editorial figure.
+ * All values are provided by the source-admitted projection, not by CSS or JS
+ * guesses. House typography, dark palette and renderer remain authoritative. */
+.tufte-grid>#coverage {grid-column:span 12;border-top:8px solid var(--house-witness)}
+.site-edition-kicker {
+  font:700 .78rem/1.5 var(--house-mono);letter-spacing:.11em;
+  color:var(--house-witness);margin:0 0 1.3rem
+}
+.site-edition-metrics {
+  display:grid;grid-template-columns:repeat(4,minmax(0,1fr));
+  gap:clamp(.6rem,1.8vw,1.5rem);margin:0 0 1.7rem;padding:0
+}
+.site-edition-metric {
+  border-top:3px solid var(--house-ink);
+  padding:1rem 0;min-width:0
+}
+.site-edition-metric dt {
+  font:650 .79rem/1.45 var(--house-mono);letter-spacing:.015em;
+  max-width:17ch;color:var(--house-soft)
+}
+.site-edition-metric dd {
+  margin:.45rem 0 0;font:700 clamp(2rem,3.9vw,4.2rem)/1 var(--house-sans);
+  letter-spacing:-.055em;overflow-wrap:anywhere;font-variant-numeric:tabular-nums
+}
+.site-edition-figure {margin:2rem 0 1.45rem;max-width:65rem}
+.site-edition-figure figcaption {
+  font:600 clamp(.93rem,1.2vw,1.09rem)/1.5 var(--house-slab);
+  max-width:72ch;padding:0 0 1rem;border-bottom:1px solid var(--house-rule)
+}
+.site-edition-sources {list-style:none;padding:0!important;margin:0}
+.site-edition-source {
+  padding:1.05rem 0 .85rem;border-bottom:1px solid var(--house-rule);
+  break-inside:avoid
+}
+.site-edition-source-heading {
+  display:flex;flex-wrap:wrap;align-items:baseline;
+  justify-content:space-between;gap:.25rem 1rem;margin:0 0 .65rem
+}
+.site-edition-source-heading strong {
+  font:700 clamp(.98rem,1.45vw,1.22rem)/1.25 var(--house-sans)
+}
+.site-edition-source-heading span {
+  font:600 .8rem/1.5 var(--house-mono);color:var(--house-soft)
+}
+.site-edition-meter {
+  height:.7rem;background:var(--house-rule);overflow:hidden;
+  border:1px solid var(--house-rule)
+}
+.site-edition-meter>span {display:block;height:100%;background:var(--house-witness)}
+.site-edition-meter--unknown {
+  background:transparent;border:1px dashed var(--house-rule)
+}
+.site-edition-source p {margin:.5rem 0 0}
+.site-edition-links {
+  margin:1.35rem 0 0;padding-top:.9rem;border-top:1px solid var(--house-rule);
+  font:600 .85rem/1.8 var(--house-mono)
+}
+#posts .site-card-grid {grid-template-columns:repeat(3,minmax(0,1fr))}
+#posts .site-card {padding:clamp(1.15rem,1.8vw,1.8rem);gap:.8rem}
+#posts .site-card h3 {
+  font:700 clamp(1.23rem,1.8vw,1.85rem)/1.15 var(--house-sans);
+  letter-spacing:-.045em;text-wrap:balance
+}
+#posts .site-card p {max-width:44ch}
 @media(max-width:1050px){
+  #posts .site-card-grid {grid-template-columns:repeat(2,minmax(0,1fr))}
   .site-card-grid {grid-template-columns:repeat(2,minmax(0,1fr))}
   .site-project-grid {grid-template-columns:repeat(2,minmax(0,1fr))}
   .site-steps {grid-template-columns:repeat(2,minmax(0,1fr))}
 }
 @media(max-width:760px){
+  .site-edition-metrics {grid-template-columns:repeat(2,minmax(0,1fr))}
   .tufte-grid>.tufte-tile{grid-column:span 12!important}
   .site-service-grid,.site-house-list,.site-frontier-grid,.site-directory {grid-template-columns:1fr}
   .site-display {font-size:clamp(2.6rem,10vw,4.4rem)}
 }
 @media(max-width:430px){
+  #posts .site-card-grid {grid-template-columns:1fr}
+  .site-edition-metric dd {font-size:clamp(2rem,9.5vw,3.5rem)}
   .site-card-grid,.site-card-grid--three,.site-project-grid,.site-steps{grid-template-columns:1fr}
   .site-actions{flex-direction:column}
   a.site-action{width:100%}
@@ -114,6 +182,7 @@ a.site-action:hover {outline:2px solid currentColor;outline-offset:3px}
   a.site-action{transition:none}
 }
 @media print{
+  .site-edition-metric,.site-edition-source,#posts .site-card {break-inside:avoid}
   .site-frontier,.site-project,.site-card{break-inside:avoid}
   a.site-action{background:transparent!important;color:#000!important}
 }

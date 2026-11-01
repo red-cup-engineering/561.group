@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {qualifyRenderedBrand,visualReviewPacket} from "../scripts/assay-rendered-brand.mjs";
+import {qualifyRenderedBrand,qualifyBrowserBlogEdition,visualReviewPacket} from "../scripts/assay-rendered-brand.mjs";
 
 const good=()=>({
   viewportWidth:1440,houseStyle:true,tufte:true,
@@ -17,11 +17,116 @@ const good=()=>({
     {family:"JetBrains Mono",status:"loaded"}
   ],
   tileCount:11,hasLead:false,hasNavigation:true,hasContact:true,focusWidth:3,
-  overflowX:false,identityAppeal:false
+  overflowX:false,identityAppeal:false,hreflangLinks:0
 });
+const editionFixture=()=>{
+  const companies=["Science","Engineering","Operations","Public services"].map((name,i)=>({
+    id:"company-"+i,name,feeds:{json:"https://company"+i+".example/feed.json"}
+  }));
+  const input=[21,16,20,25];
+  const receipt={expectedSourceCount:4,admittedItems:82,
+    emittedItems:60,omittedByAggregateLimit:22,
+    sources:companies.map((company,i)=>({
+      companyId:company.id,feedUrl:company.feeds.json,
+      state:"received",inputItems:input[i]
+    }))};
+  const metrics=[
+    ["Company feeds received","4 / 4"],
+    ["Source entries admitted","82"],
+    ["Group feed entries selected","60"],
+    ["Admitted beyond 60-item cap","22"]
+  ].map(([label,value])=>({label,value,visible:true}));
+  const sources=companies.map((company,i)=>({
+    company:company.name,status:input[i]+" source entries received",
+    href:company.feeds.json,visible:true,meterVisible:true,
+    meterHidden:true,unknownIndicator:false,
+    barPercent:Math.round(input[i]/25*100)
+  }));
+  return {home:{group:{companies}},receipt,
+    reading:{coverageVisible:true,postsVisible:true,
+      coverageBeforePosts:true,captionVisible:true,captionConnected:true,
+      jumpToPosts:true,leadJumpToPosts:true,leadJumpFirst:true,
+      keyboardJump:true,pointerJump:true,metrics,sources}};
+};
+test("real Chromium edition evidence must match the exact original source receipt",()=>{
+  const {home,receipt,reading}=editionFixture();
+  assert.deepEqual(qualifyBrowserBlogEdition(reading,{home,receipt}),
+    {passed:true,errors:[]});
+  const counterfeit=structuredClone(reading);
+  counterfeit.metrics[1].value="100";
+  counterfeit.sources[3].barPercent=0;
+  counterfeit.coverageBeforePosts=false;
+  const denied=qualifyBrowserBlogEdition(counterfeit,{home,receipt});
+  assert.equal(denied.passed,false);
+  assert.ok(denied.errors.some(x=>x.includes("Source entries admitted")));
+  assert.ok(denied.errors.some(x=>x.includes("Publisher bar")));
+  assert.ok(denied.errors.some(x=>x.includes("before the article")));
+});
+test("a syndication-first blog, missing article shortcut or late anchor refuses original reader receiving",()=>{
+  const {home,receipt,reading}=editionFixture();
+  const hidden=structuredClone(reading);
+  hidden.leadJumpToPosts=false;
+  const reordered=structuredClone(reading);
+  reordered.leadJumpFirst=false;
+  const keyboardFailed=structuredClone(reading);
+  keyboardFailed.keyboardJump=false;
+  const pointerFailed=structuredClone(reading);
+  pointerFailed.pointerJump=false;
+  for(const attempt of [hidden,reordered,keyboardFailed,pointerFailed]) {
+    const result=qualifyBrowserBlogEdition(attempt,{home,receipt});
+    assert.equal(result.passed,false);
+    assert.ok(result.errors.some(message=>
+      message.includes("primary article-reading") ||
+      message.includes("keyboard or pointer")),
+      "A missing, late or nonfunctional reader shortcut must fail browser receiving");
+  }
+});
+
+test("an unreceived publisher remains visibly unknown in the browser",()=>{
+  const {home,receipt,reading}=editionFixture();
+  receipt.sources[3]={companyId:receipt.sources[3].companyId,
+    feedUrl:receipt.sources[3].feedUrl,state:"unavailable"};
+  receipt.admittedItems=57;receipt.emittedItems=57;receipt.omittedByAggregateLimit=0;
+  reading.metrics[0].value="3 / 4";
+  reading.metrics[1].value="57";reading.metrics[2].value="57";
+  reading.metrics[3].value="0";
+  reading.sources[3].status="Feed unavailable to this build";
+  reading.sources[3].barPercent=null;
+  reading.sources[3].unknownIndicator=true;
+  // The measured denominator also changes when the largest source is unread.
+  const largest=Math.max(...receipt.sources.filter(source=>source.state==="received")
+    .map(source=>source.inputItems));
+  for(let i=0;i<3;i++)reading.sources[i].barPercent=
+    Math.round(receipt.sources[i].inputItems/largest*100);
+  assert.equal(qualifyBrowserBlogEdition(reading,{home,receipt}).passed,true);
+  reading.sources[3].barPercent=0;
+  assert.ok(qualifyBrowserBlogEdition(reading,{home,receipt}).errors.some(x=>
+    x.includes("invents missing data")));
+});
+test("hidden captions, metrics, publisher source links and graphical labels refuse visual receiving",()=>{
+  const {home,receipt,reading}=editionFixture();
+  reading.captionConnected=false;
+  reading.metrics[1].visible=false;
+  reading.sources[2].href="https://foreign.example/feed.json";
+  reading.sources[0].meterHidden=false;
+  reading.jumpToPosts=false;
+  const result=qualifyBrowserBlogEdition(reading,{home,receipt});
+  assert.equal(result.passed,false);
+  for(const term of ["accessible caption","Source entries admitted",
+    "source link","graphics","bypass"])
+    assert.ok(result.errors.some(e=>e.includes(term)),term);
+});
+
 test("rendered Chromium observation has a passable explicit conformance shape",()=>{
   assert.deepEqual(qualifyRenderedBrand(good()),{passed:true,errors:[]});
 });
+test("the real TUFTE head must not mislabel untranslated reader pages as homepage translations",()=>{
+  const claimed={...good(),hreflangLinks:4};
+  const result=qualifyRenderedBrand(claimed,{path:"/blog/"});
+  assert.equal(result.passed,false);
+  assert.ok(result.errors.some(message=>message.includes("falsely advertises")));
+});
+
 test("a teal startup stylesheet or lost original 561 numeral fails in the browser",()=>{
   const bad={...good(),bodyBackground:"rgb(244, 244, 238)",
     markContent:"none",markColor:"rgb(0, 107, 100)"};
@@ -47,9 +152,25 @@ test("the original user-visible regression is independently rejected",()=>{
   for(const fragment of ["Lakota-founded","horizontally","Keyboard focus","navigation","content tiles"])
     assert.ok(result.errors.some(x=>x.includes(fragment)),fragment);
 });
-test("a narrow supported viewport with unchanged visual hierarchy is admissible",()=>{
-  const mobile={...good(),viewportWidth:390,markSize:136.5};
-  assert.equal(qualifyRenderedBrand(mobile).passed,true);
+test("a 320 CSS-pixel reflow viewport remains supported but narrower unsupported evidence is refused",()=>{
+  const original={...good(),viewportWidth:320,markSize:112};
+  assert.equal(qualifyRenderedBrand(original).passed,true);
+  const darkBlog={...original,hasLead:true,tileCount:4,
+    bodyBackground:"rgb(18, 12, 2)"};
+  assert.equal(qualifyRenderedBrand(darkBlog,{path:"/blog/",colorScheme:"dark"}).passed,true);
+  const tooNarrow=qualifyRenderedBrand({...original,viewportWidth:319});
+  assert.equal(tooNarrow.passed,false);
+  assert.ok(tooNarrow.errors.some(x=>x.includes("supported width")));
+  assert.equal(qualifyRenderedBrand({...original,overflowX:true}).passed,false);
+});
+
+test("a dark-mode publisher edition uses original house dark roles",()=>{
+  const blog={...good(),tileCount:4,hasLead:true,introBackground:"",
+    bodyBackground:"rgb(18, 12, 2)"};
+  assert.equal(qualifyRenderedBrand(blog,{path:"/blog/",colorScheme:"dark"}).passed,true);
+  const falseLight=qualifyRenderedBrand(blog,{path:"/blog/",colorScheme:"light"});
+  assert.equal(falseLight.passed,false);
+  assert.ok(falseLight.errors.some(message=>message.includes("house bone")));
 });
 
 test("a real secondary visitor page uses its own lead and independent tile count",()=>{

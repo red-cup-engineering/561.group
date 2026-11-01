@@ -52,11 +52,49 @@ deliver a signed ActivityPub update, or demonstrate reader/customer results.
 ## The Group's publication hub
 
 `/blog/` is an original TUFTE + LivingWebServer page of the same Worker,
-not a duplicate CMS or another publisher. The original `scripts/build.mjs`
+not a duplicate CMS or another publisher.
+
+Its reader-first edition summary projects the **original** build receipt before
+up to 60 syndicated records. Four large, text-labelled figures distinguish
+company feeds received, source entries admitted, Group feed entries selected,
+and admitted entries outside the cap. An accessible comparison names each
+company and its original feed. Bars represent only observed input counts;
+an unavailable or refused feed is **unknown, never zero**. The HTML, CSS and
+negative source-custody tests belong to the existing site projection; this is
+not a new analytics source, a claim of current inventory, or an independent
+fact-check. Readers can skip directly to writing and still inspect the source
+receipt and deterministic PROV-O graph. A browser-tested source revision is
+not a deployed or independently received public edition.
+
+**Page-specific language discovery:** The TUFTE application's `headHtml`
+extension is shared by every English-only route, so it must not advertise the
+Chinese and Lakota *homepages* as translations of `/blog/`, `/work/`,
+`/about/` or other untranslated content. The original `/sitemap.xml`
+already projects reciprocal English, Mandarin and Lakota alternates for the
+three actual homepage URLs, and leaves English-only routes without fabricated
+translation links. Their canonical URLs and language labels remain in their
+original page metadata. The original Chromium receiving assay checks that
+global `headHtml` introduces no false `hreflang`; the sitemap regression
+assays the actual homepage cluster. This is a discovery semantics repair, not
+evidence that a crawler has indexed any of these pages.
+
+The original `scripts/build.mjs`
 already reads accepted public JSON Feeds from the four company sites,
 combines them into one capped, build-time `public/feed.json`, and writes
 RSS/Atom feed representations. The Worker now projects **that same** generated
 JSON Feed into human HTML, machine JSON and negotiated Markdown.
+
+**Standards and truthful dates:** Source JSON Feed 1.1 permits entries without
+publication or modification timestamps, and RSS can carry them without a
+`pubDate`. Atom (RFC 4287) requires `updated` for each entry. The original
+Atom exporter therefore retains only source-dated entries, explicitly states
+how many undated entries were excluded, and links to the complete JSON Feed;
+it never assigns a source entry an unrelated article's update time or an
+invented 1970 date. When an Atom edition has no source-dated entries, its
+feed-level `updated` uses the build's source-qualified publication timestamp,
+not an invented original article date. The feed-level author identifies the
+Group as **syndicator**; each entry retains its actual company author.
+
 
 - Every entry retains its original canonical company URL and sole attributable
   company author; the Group never creates an ActivityPub post or signs on the
@@ -169,6 +207,18 @@ JSON Feed into human HTML, machine JSON and negotiated Markdown.
   build*. It is **not** a complete archive, a live crawl, or an observed
   ActivityPub delivery receipt. An empty build-time feed does not mean the
   company archives are empty.
+- The original JSON Feed keeps each publisher's opaque item identifier and
+  author unchanged. JSON Feed 1.1 requires item content even for a link to an
+  external article: this publisher now projects only a bounded, labelled
+  publisher-supplied summary and its original canonical article link as
+  `content_text`, never copied full article HTML. The original post-release
+  read-only assay refuses missing/forged content or unapproved copied HTML.
+  Its corresponding Atom entry uses the **same absolute item IRI as the
+  already published PROV-O `schema:DataFeedItem`**, instead of an illegal
+  relative/opaque `atom:id`. JSON Feed retains the actual source `id`;
+  PROV-O retains that identifier separately from the Group projection IRI.
+  These are cross-format identities, not proof of downstream subscriber
+  delivery, search-index coverage, or independent editorial rights.
 - Original articles, their site-owned publishing and revisions, metadata,
   search and moderation remain with Science/Engineering/Operations/Services.
   Each site's original `site.json` may additionally opt into the upstream

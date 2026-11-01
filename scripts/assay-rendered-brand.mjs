@@ -13,8 +13,15 @@ const readJson=async path=>JSON.parse(await readFile(new URL("../"+path,import.m
 const pages=Object.freeze([
   {name:"home",path:"/",width:1440,height:900},
   {name:"home-mobile",path:"/",width:390,height:844},
+  // WCAG 2.2 reflow target: 320 CSS pixels, not just a 390px phone.
+  // Capture original rendered pages and refuse horizontal overflow.
+  {name:"home-reflow",path:"/",width:320,height:640},
   {name:"work-mobile",path:"/work/",width:390,height:844},
+  {name:"blog",path:"/blog/",width:1440,height:900},
   {name:"blog-mobile",path:"/blog/",width:390,height:844},
+  {name:"blog-reflow",path:"/blog/",width:320,height:640},
+  {name:"blog-dark-mobile",path:"/blog/",width:390,height:844,colorScheme:"dark"},
+  {name:"blog-dark-reflow",path:"/blog/",width:320,height:640,colorScheme:"dark"},
   {name:"about",path:"/about/",width:1440,height:900}
 ]);
 const expectedFontNames=["Space Grotesk","Roboto Slab","JetBrains Mono"];
@@ -26,12 +33,13 @@ const FONT_ROUTE=new Map([
 const rgb=(r,g,b)=>"rgb("+[r,g,b].join(", ")+")";
 const OBSERVER_ROUTE="/__source-owned-color-observation.mjs";
 
-export function qualifyRenderedBrand(value,{path="/"}={}) {
+export function qualifyRenderedBrand(value,{path="/",colorScheme="light"}={}) {
   const errors=[];
   const need=(truth,claim)=>{if(!truth)errors.push(claim)};
   need(value?.houseStyle===true,"Original Group CSS not emitted into real TUFTE head");
   need(value?.tufte===true,"Real TUFTE shell is absent");
-  need(value?.bodyBackground===rgb(242,234,216),"Visible body background lost house bone");
+  need(value?.bodyBackground===(colorScheme==="dark"?rgb(18,12,2):rgb(242,234,216)),
+    "Visible body background lost house "+(colorScheme==="dark"?"dark":"bone")+" role");
   need(value?.mastheadTop==="8px","Institutional masthead lost eight-pixel ink rule");
   need(value?.markContent==='"561"', "Giant original typographic 561 mark is absent");
   need(value?.markColor===rgb(255,69,48),"561 mark lost reserved alarm-red role");
@@ -42,7 +50,8 @@ export function qualifyRenderedBrand(value,{path="/"}={}) {
   need(value?.fontFaces?.every(x=>x.status==="loaded") &&
        expectedFontNames.every(name=>value.fontFaces.some(x=>x.family===name)),
        "A local required font was not loaded");
-  if(path==="/")need(value?.introBackground===rgb(10,10,10),"Homepage introduction lost black-ink mass");
+  if(path==="/")need(value?.introBackground===(colorScheme==="dark"?rgb(242,234,216):rgb(10,10,10)),
+    "Homepage introduction lost contrasting ink mass");
   else need(value?.hasLead===true,"Non-home visitor page lost its own lead section");
   need(value?.tileCount>=(path==="/"?5:3),"A real public visitor route lost its content tiles");
   need(value?.hasNavigation===true,"Useful public navigation disappeared");
@@ -50,7 +59,74 @@ export function qualifyRenderedBrand(value,{path="/"}={}) {
   need(value?.focusWidth>=3,"Keyboard focus has no sufficiently visible outline");
   need(value?.overflowX===false,"Layout overflows viewport horizontally");
   need(value?.identityAppeal===false,"Rejected Lakota-founded appeal is visible again");
+  need(value?.hreflangLinks===0,
+    "Shared English-only TUFTE head falsely advertises other routes as homepage translations");
   need(value?.viewportWidth>=320,"Visual assay viewport is not a supported width");
+  return Object.freeze({passed:errors.length===0,errors});
+}
+
+/** Browser receipt for the original blog edition, compared to the exact
+ * build-produced source artifact. A source-model test cannot show that a
+ * figure was hidden, reordered, stripped of labels or mis-sized by CSS.
+ * This checks rendered communication, not independent publisher custody. */
+export function qualifyBrowserBlogEdition(reading,{home,receipt}={}) {
+  const errors=[];
+  const require=(ok,claim)=>{if(!ok)errors.push(claim)};
+  if(!home?.group?.companies || !Array.isArray(receipt?.sources) ||
+      receipt.sources.length!==home.group.companies.length)
+    return Object.freeze({passed:false,errors:["Original edition source receipt is unavailable"]});
+  require(reading?.coverageVisible===true && reading?.postsVisible===true &&
+    reading?.coverageBeforePosts===true,
+    "The source receipt must be visible before the article listing");
+  require(reading?.captionVisible===true && reading?.captionConnected===true,
+    "The source comparison has lost its accessible caption");
+  require(reading?.jumpToPosts===true,
+    "Readers cannot bypass the source comparison to the writing");
+  require(reading?.leadJumpToPosts===true && reading?.leadJumpFirst===true,
+    "The primary article-reading action is missing or hidden behind subscriptions");
+  require(reading?.keyboardJump===true && reading?.pointerJump===true,
+    "The actual reader shortcut failed keyboard or pointer navigation");
+  const received=receipt.sources.filter(source=>source.state==="received").length;
+  const values=[
+    ["Company feeds received",received+" / "+receipt.expectedSourceCount],
+    ["Source entries admitted",String(receipt.admittedItems)],
+    ["Group feed entries selected",String(receipt.emittedItems)],
+    ["Admitted beyond 60-item cap",String(receipt.omittedByAggregateLimit)]
+  ];
+  require(reading?.metrics?.length===values.length,
+    "The original source-to-edition metric count changed");
+  values.forEach(([label,value],i)=>{
+    const metric=reading?.metrics?.[i];
+    require(metric?.label===label && metric?.value===value &&
+      metric?.visible===true,"Rendered edition count disagrees with build receipt: "+label);
+  });
+  require(reading?.sources?.length===receipt.sources.length,
+    "The original publisher comparison is incomplete");
+  const maxObserved=Math.max(1,...receipt.sources.filter(s=>s.state==="received")
+    .map(s=>s.inputItems));
+  receipt.sources.forEach((source,i)=>{
+    const row=reading?.sources?.[i];
+    const company=home.group.companies[i];
+    const measured=source.state==="received";
+    const status=measured?source.inputItems+" source entries received":
+      source.state==="refused"?"Feed refused by input admission":
+      "Feed unavailable to this build";
+    require(row?.company===company.name && row?.status===status &&
+      row?.href===source.feedUrl && row?.visible===true,
+      "A publisher name, source link or status is not visible: "+company.id);
+    require(row?.meterVisible===true && row?.meterHidden===true &&
+      row?.unknownIndicator===!measured,
+      "Observed and unreceived publisher graphics became indistinguishable: "+company.id);
+    // Read painted geometry rather than serialized styles; the TUFTE/HTML
+    // renderer may normalize or drop inline style attributes. An actual
+    // visible bar must represent the admitted source count within one point.
+    const expectedPercent=Math.round(100*source.inputItems/maxObserved);
+    require(measured ?
+      typeof row?.barPercent==="number" &&
+        Math.abs(row.barPercent-expectedPercent)<=1 :
+      row?.barPercent===null,
+      "Publisher bar differs from the source count or invents missing data: "+company.id);
+  });
   return Object.freeze({passed:errors.length===0,errors});
 }
 
@@ -297,7 +373,7 @@ export function visualReviewPacket(witness){
     "",
     "| Route | Viewport | Computed result | Image | SHA-256 |",
     "| --- | --- | --- | --- | --- |",
-    ...witness.cases.map(c=>"| "+c.path+" | "+c.viewport.width+"x"+
+    ...witness.cases.map(c=>"| "+c.path+" ("+(c.colorScheme??"light")+") | "+c.viewport.width+"x"+
       c.viewport.height+" | "+(c.passed?"pass":"REFUSED: "+c.errors.join("; "))+ 
       " | ["+c.screenshot+"]("+c.screenshot+") | "+c.sha256+" |"),
     "",
@@ -313,7 +389,7 @@ export function visualReviewPacket(witness){
       const alarm=r.colors.find(v=>v.id==="alarm");
       const blue=r.colors.find(v=>v.id==="witness");
       const val=v=>v?(100*v.fraction).toFixed(3)+"%":"not measured";
-      return "| "+c.path+" "+c.viewport.width+"x"+c.viewport.height+
+      return "| "+c.path+" ("+(c.colorScheme??"light")+") "+c.viewport.width+"x"+c.viewport.height+
         " | "+r.region.id+" | "+(alarm?.matchedPixels??"?")+"/"+r.areaPixels+
         " | "+val(alarm)+" | "+(blue?.matchedPixels??"?")+"/"+r.areaPixels+
         " | "+val(blue)+" |";
@@ -330,6 +406,9 @@ export function visualReviewPacket(witness){
     "mobile readability and any rejected identity-led persuasion.",
     "The historical v0.3 6% alarm and 3% witness bounding-box color budgets",
     "require a separate measured image proof; CSS declaration is insufficient.",
+    "The 320 CSS-pixel homepage and light/dark blog specimens assay horizontal",
+    "reflow only. They do not certify all of WCAG 2.2, browser zoom, screen",
+    "readers, or independent human design and accessibility acceptance.",
     "Keyboard focus and reduced-motion settings were checked, but full WCAG",
     "or screen-reader accessibility audits were not performed by this job.",
     "",
@@ -353,6 +432,9 @@ export async function receiveBrowserVisuals({output="artifacts/brand-visual",sou
     {encoding:"utf8",timeout:10000}).trim();
   if(mounted!==observer.commit)throw Error("Rendered color instrument differs from selected Engineering source");
   const host=await servedOriginalApplication();
+  const [editionHome,editionReceipt]=await Promise.all([
+    readJson("data/home.json"),readJson("public/feed-input-receipt.json")
+  ]);
   let browser;
   try{
     browser=await chromium.launch({headless:true,...(process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH?
@@ -362,7 +444,7 @@ export async function receiveBrowserVisuals({output="artifacts/brand-visual",sou
     for(const item of pages){
       const context=await browser.newContext({
         viewport:{width:item.width,height:item.height},deviceScaleFactor:1,
-        colorScheme:"light",reducedMotion:"reduce",javaScriptEnabled:true
+        colorScheme:item.colorScheme??"light",reducedMotion:"reduce",javaScriptEnabled:true
       });
       try{
         // Avoid third-party network dependencies. Local fonts are from this exact source.
@@ -396,6 +478,7 @@ export async function receiveBrowserVisuals({output="artifacts/brand-visual",sou
             metadataFamily:meta?getComputedStyle(meta).fontFamily:style(".tufte-eyebrow").fontFamily,
             introBackground:intro?getComputedStyle(intro).backgroundColor:"",
             houseStyle:!!el('style[data-561-house="visual-design-bible-v0.4-candidate"]'),
+            hreflangLinks:document.head.querySelectorAll('link[rel="alternate"][hreflang]').length,
             tufte:!!el(".tufte-shell[data-tufte]"),
             tileCount:tileElements.length,hasLead:!!el("#lead"),
             hasNavigation:!!el("[data-tufte-navigation] a"),
@@ -407,7 +490,77 @@ export async function receiveBrowserVisuals({output="artifacts/brand-visual",sou
             title:document.title
           };
         });
-        const result=qualifyRenderedBrand(reading,{path:item.path});
+        const brand=qualifyRenderedBrand(reading,{path:item.path,
+          colorScheme:item.colorScheme??"light"});
+        const editionReading=item.path==="/blog/"?await page.evaluate(()=>{
+          const visible=element=>!!element && element.getClientRects().length>0 &&
+            getComputedStyle(element).visibility!=="hidden" &&
+            getComputedStyle(element).display!=="none";
+          const lead=document.getElementById("lead");
+          const leadActions=[...lead?.querySelectorAll("a.site-action")??[]];
+          const coverage=document.getElementById("coverage");
+          const posts=document.getElementById("posts");
+          const figure=coverage?.querySelector("figure.site-edition-figure");
+          const caption=figure?.querySelector("figcaption");
+          return {
+            coverageVisible:visible(coverage),postsVisible:visible(posts),
+            coverageBeforePosts:!!(coverage && posts &&
+              (coverage.compareDocumentPosition(posts)&Node.DOCUMENT_POSITION_FOLLOWING) &&
+              coverage.getBoundingClientRect().top<posts.getBoundingClientRect().top),
+            captionVisible:visible(caption),
+            captionConnected:!!caption && figure.querySelector("ol")?.getAttribute("aria-labelledby")===caption.id,
+            jumpToPosts:!!coverage?.querySelector('a[href="#posts"]') && !!posts,
+            leadJumpToPosts:!!leadActions.find(a=>a.getAttribute("href")==="#posts" &&
+              a.textContent.includes("Read recent writing") && visible(a)) && !!posts,
+            leadJumpFirst:leadActions[0]?.getAttribute("href")==="#posts" &&
+              !!lead && !!coverage &&
+              !!(lead.compareDocumentPosition(coverage)&Node.DOCUMENT_POSITION_FOLLOWING),
+            metrics:[...coverage.querySelectorAll(".site-edition-metric")].map(element=>{
+              const dt=element.querySelector("dt"),dd=element.querySelector("dd");
+              return {label:dt?.textContent.trim(),value:dd?.textContent.trim(),
+                visible:visible(dt)&&visible(dd)};
+            }),
+            sources:[...coverage.querySelectorAll(".site-edition-source")].map(element=>{
+              const meter=element.querySelector(".site-edition-meter");
+              return {company:element.querySelector("strong")?.textContent.trim(),
+                status:element.querySelector(".site-edition-source-heading span")?.textContent.trim(),
+                href:element.querySelector("a")?.getAttribute("href"),
+                visible:visible(element),meterVisible:visible(meter),
+                meterHidden:meter?.getAttribute("aria-hidden")==="true",
+                unknownIndicator:meter?.classList.contains("site-edition-meter--unknown"),
+                barPercent:meter?.querySelector("span") && meter.getBoundingClientRect().width>0
+                  ? 100*meter.querySelector("span").getBoundingClientRect().width/
+                    meter.getBoundingClientRect().width:null};
+            })
+          };
+        }):null;
+        // Test the SAME primary reader link using keyboard and pointer
+        // interaction in actual Chromium. An anchor present in HTML is not
+        // evidence that anyone can activate it and reach original articles.
+        if(editionReading) {
+          const action=page.locator('#lead a.site-action[href="#posts"]');
+          const reachedArticles=()=>page.evaluate(()=>{
+            const posts=document.getElementById("posts");
+            const top=posts?.getBoundingClientRect().top;
+            return location.hash==="#posts" && typeof top==="number" &&
+              top>=-1 && top<innerHeight;
+          });
+          const resetLocation=()=>page.evaluate(()=>{
+            history.replaceState(null,"",location.pathname);
+            window.scrollTo({top:0,behavior:"instant"});
+          });
+          await action.focus();
+          await page.keyboard.press("Enter");
+          editionReading.keyboardJump=await reachedArticles();
+          await resetLocation();
+          await action.click();
+          editionReading.pointerJump=await reachedArticles();
+          await resetLocation();
+        }
+        const edition=editionReading?qualifyBrowserBlogEdition(editionReading,{
+          home:editionHome,receipt:editionReceipt}):{passed:true,errors:[]};
+        const result={passed:brand.passed&&edition.passed,
+          errors:[...brand.errors,...edition.errors]};
         const screenshot=join(output,item.name+".png");
         // Keep keyboard-focus evidence in the JSON, but collect the visual
         // specimen without the test harness leaving a skip-link focus box.
@@ -443,8 +596,10 @@ export async function receiveBrowserVisuals({output="artifacts/brand-visual",sou
            colorObservation.reports.length!==2)
           throw Error("Rendered visual instrument invented authority or omitted the comparison");
         const hash=createHash("sha256").update(png).digest("hex");
-        cases.push({name:item.name,path:item.path,viewport:{width:item.width,height:item.height},
-          ...result,reading,screenshot:item.name+".png",sha256:hash,colorObservation});
+        cases.push({name:item.name,path:item.path,colorScheme:item.colorScheme??"light",
+          viewport:{width:item.width,height:item.height},
+          ...result,reading,...(editionReading?{editionReading}:{}),
+          screenshot:item.name+".png",sha256:hash,colorObservation});
       }finally{await context.close()}
     }
     const workPreview=await receiveBrowserWorkPreview(browser,host,output);
