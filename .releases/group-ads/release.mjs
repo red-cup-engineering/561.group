@@ -7,8 +7,8 @@ import {fileURLToPath} from 'node:url';
 
 const releaseRoot = fileURLToPath(new URL('.', import.meta.url));
 const release = JSON.parse(readFileSync(new URL('./release.json', import.meta.url), 'utf8'));
-const host = resolve('house-ads');
-const work = resolve(process.env.RUNNER_TEMP ?? '.', 'house-ads-release');
+const host = resolve('group-ads');
+const work = resolve(process.env.RUNNER_TEMP ?? '.', 'group-ads-release');
 const supplier = '@red-cup-engineering/web-advertising-system-engineering-services-section';
 const digest = bytes => createHash('sha256').update(bytes).digest('hex');
 const json = path => JSON.parse(readFileSync(path, 'utf8'));

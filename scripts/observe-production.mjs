@@ -280,20 +280,20 @@ function evaluateRevision(sample, expectedSourceSha) {
 // The original Public Web issue #23 already owns these source-accepted
 // articles. This samples external reader visibility ONLY: it does not create
 // a site, source license, provider receipt, indexing record, or correction.
-export const HOUSE_CLIMATE_ARTICLES = Object.freeze([
-  Object.freeze({house:'science',domain:'science.561.group',
+export const GROUP_CLIMATE_ARTICLES = Object.freeze([
+  Object.freeze({group:'science',domain:'science.561.group',
     sourceRepository:'lenticule-science/science-services-section',
     slug:'climate-breakdown-ergodicity-and-water-governance',
     title:'Climate breakdown changes the baseline'}),
-  Object.freeze({house:'engineering',domain:'engineering.561.group',
+  Object.freeze({group:'engineering',domain:'engineering.561.group',
     sourceRepository:'red-cup-engineering/engineering-services-section',
     slug:'engineering-nonstationary-water-decisions',
     title:'From watershed observations to warranted decisions'}),
-  Object.freeze({house:'operations',domain:'operations.561.group',
+  Object.freeze({group:'operations',domain:'operations.561.group',
     sourceRepository:'coesite-operations/operations-services-section',
     slug:'operating-with-changing-baselines',
     title:'Operating with changing baselines'}),
-  Object.freeze({house:'services',domain:'services.561.group',
+  Object.freeze({group:'services',domain:'services.561.group',
     sourceRepository:'causeway-services/public-services-section',
     slug:'climate-water-and-energy-exposure-worksheet',
     title:'Free worksheet: where changing water and energy conditions affect your work'}),
@@ -305,7 +305,7 @@ function canonicalLinkInBody(body,url) {
     /\brel\s*=\s*["']canonical["']/iu.test(tag) &&
     (tag.includes('href="'+url+'"') || tag.includes("href='"+url+"'")));
 }
-function publicHouseSample(sample,url) {
+function publicGroupSample(sample,url) {
   if(sample.unknown)return {url,state:'unknown',reason:sample.errorKind};
   return {url,state:'observed',httpStatus:sample.status,
     bytes:sample.bytes,contentSha256:sample.contentSha256,
@@ -317,13 +317,13 @@ function publicHouseSample(sample,url) {
  * 200 with an expected title and canonical address remains an HTTP
  * observation, NEVER a source->build->provider custody or readership proof.
  * Unreachable, missing and changed content are preserved distinctly. */
-export function qualifyHouseClimateVisibility(def,article,homepage) {
+export function qualifyGroupClimateVisibility(def,article,homepage) {
   const origin='https://'+def.domain;
   const articleUrl=origin+'/'+def.slug+'/';
   const homeUrl=origin+'/';
-  const articleResult=publicHouseSample(article,articleUrl);
-  const homeResult=publicHouseSample(homepage,homeUrl);
-  const base={house:def.house,sourceRepository:def.sourceRepository,
+  const articleResult=publicGroupSample(article,articleUrl);
+  const homeResult=publicGroupSample(homepage,homeUrl);
+  const base={group:def.group,sourceRepository:def.sourceRepository,
     articleUrl,homepageUrl:homeUrl,article:articleResult,homepage:homeResult,
     providerReceiptAuthenticated:false,sourceByteEquivalenceVerified:false,
     externallyIndexed:null,independentHumanAcceptance:null};
@@ -352,17 +352,17 @@ export function qualifyHouseClimateVisibility(def,article,homepage) {
   return {...base,status:'public-page-and-home-link-observed',
     qualification:'independent HTTP title/canonical/navigation only; original publisher source, provider release, exact article bytes and human receiving still require separate evidence'};
 }
-export async function observeHouseClimateVisibility({fetchImpl,timeoutMs,clock}) {
-  const pages=await Promise.all(HOUSE_CLIMATE_ARTICLES.map(async def=>{
+export async function observeGroupClimateVisibility({fetchImpl,timeoutMs,clock}) {
+  const pages=await Promise.all(GROUP_CLIMATE_ARTICLES.map(async def=>{
     const origin='https://'+def.domain;
     const [article,homepage]=await Promise.all([
       observe(origin+'/'+def.slug+'/', 'text/html',fetchImpl,timeoutMs,clock),
       observe(origin+'/', 'text/html',fetchImpl,timeoutMs,clock),
     ]);
-    return qualifyHouseClimateVisibility(def,article,homepage);
+    return qualifyGroupClimateVisibility(def,article,homepage);
   }));
   return {
-    schema:'561.group.house-climate-reader-observations/v1',
+    schema:'561.group.group-climate-reader-observations/v1',
     scope:'Four source-authorized climate article routes: independent bounded public GET only; does not establish exact source build, Cloudflare version, published claims, search inclusion, remote federation or human results',
     observedVisible:pages.filter(p=>p.status==='public-page-and-home-link-observed').length,
     missing:pages.filter(p=>p.status==='article-not-found-on-observed-origin').length,
@@ -383,13 +383,13 @@ export async function observeProduction({ fetchImpl = fetch, expectedSourceSha =
     throw new TypeError('expected source must be a 40-character hexadecimal commit');
   if (!Number.isSafeInteger(timeoutMs) || timeoutMs < 500 || timeoutMs > 60000)
     throw new RangeError('timeout must be between 500 and 60000ms');
-  const [simpleSamples, estateHead, alias, revision, houseClimateVisibility] = await Promise.all([
+  const [simpleSamples, estateHead, alias, revision, groupClimateVisibility] = await Promise.all([
     Promise.all(SIMPLE_CHECKS.map(def =>
       observe(`${ORIGIN}${def.path}`, def.accept, fetchImpl, timeoutMs, now))),
     observe(`${ORIGIN}/estate.json`, 'application/json', fetchImpl, timeoutMs, now, 'HEAD'),
     observe('https://www.561.group/contact/?witness=1', 'text/html', fetchImpl, timeoutMs, now),
     observe(`${ORIGIN}/source-revision.json`, 'application/json', fetchImpl, timeoutMs, now),
-    observeHouseClimateVisibility({fetchImpl,timeoutMs,clock:now}),
+    observeGroupClimateVisibility({fetchImpl,timeoutMs,clock:now}),
   ]);
   const observedAt = now();
   // The same exact HTTP responses feed the original conformance engine. This
@@ -428,7 +428,7 @@ export async function observeProduction({ fetchImpl = fetch, expectedSourceSha =
     selectedReleaseSource: expectedSourceSha, sourceSelection: expectedSourceSha ? 'operator-supplied' : 'not-selected',
     overall: failed ? 'public-checks-failed' : passed ? 'public-checks-passed' : 'receiving-incomplete',
     providerDeploymentVerified: false, independentHumanAcceptance: false,
-    checks, searchConformance, houseClimateVisibility,
+    checks, searchConformance, groupClimateVisibility,
     providerNoticeCoverage: searchConsole === null ? 'not-supplied' : 'source-selected-notices',
   };
 }
@@ -441,14 +441,14 @@ export function markdownSummary(result) {
     'Provider-native deployment and independent human acceptance are **not** established by these HTTP checks.',
     `Search evidence: ${result.searchConformance.summary.routes} declared entrypoints; ${result.searchConformance.summary.findings} findings; provider notices ${result.providerNoticeCoverage}. Google indexing and unresolved provider notices remain separate from current HTTP checks.`,
     '',
-    '**Four house climate article routes — independent public HTTP visibility, not original source/provider-release qualification:** ' +
-      result.houseClimateVisibility.observedVisible + '/4 article-and-home paths sampled as recognizable; ' +
-      result.houseClimateVisibility.missing + ' observed HTTP 404; ' +
-      result.houseClimateVisibility.incomplete + ' transport/reader observations incomplete.',
-    '', '| House | Public route observation | Article HTTP | Qualification |',
+    '**Four Group climate article routes — independent public HTTP visibility, not original source/provider-release qualification:** ' +
+      result.groupClimateVisibility.observedVisible + '/4 article-and-home paths sampled as recognizable; ' +
+      result.groupClimateVisibility.missing + ' observed HTTP 404; ' +
+      result.groupClimateVisibility.incomplete + ' transport/reader observations incomplete.',
+    '', '| Group | Public route observation | Article HTTP | Qualification |',
     '|---|---|---:|---|',
-    ...result.houseClimateVisibility.pages.map(p =>
-      '| ' + escape(p.house) + ' | ' + escape(p.status) + ' | ' +
+    ...result.groupClimateVisibility.pages.map(p =>
+      '| ' + escape(p.group) + ' | ' + escape(p.status) + ' | ' +
       (p.article.httpStatus ?? '—') + ' | ' + escape(p.reason ??
         'No provider/source-byte, indexing, corrected-claim or reader-acceptance receipt') + ' |'),
     '', '| Check | Outcome | HTTP | Read ms | Notes |', '|---|---|---:|---:|---|',

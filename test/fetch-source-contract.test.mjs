@@ -24,7 +24,7 @@ test("standalone 561.group imports only the real upstream TUFTE/LivingWebServer 
   assert.ok(npm.includes("registry=https://registry.npmjs.org/"));
   for(const scope of ["@561-group","@emsweb","@harmonious-union","@koios-news","@lenticule-science","@red-cup-engineering","@rsc-quiescent","@union-officer-academy","@coesite-operations","@causeway-services","@emsenn"]) {
     assert.ok(npm.includes(scope+":registry=https://registry.561.group/"),
-      "no internal house package should incorrectly escape to public npm: "+scope);
+      "no internal Group package should incorrectly escape to public npm: "+scope);
   }
 });
 

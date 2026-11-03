@@ -2,7 +2,7 @@
 // The original TUFTE engine owns document layout, accessibility, HTML and JSON.
 // LivingWebServer owns public-read admission; this module owns only site words,
 // selected links and page-specific models, never another renderer or router.
-import { HOUSE_STYLES } from "./apex-house-style.mjs";
+import { GROUP_STYLES } from "./apex-group-style.mjs";
 import { SITE_STYLES } from "./public-home-style.mjs";
 import { admitGroupBlogFeed, admitGroupBlogCoverage } from "./group-blog.mjs";
 
@@ -259,8 +259,8 @@ function navigation(pathname) {
     {href:"/contact/",label:"Contact"}
   ].map(item => ({...item,...(item.href === pathname ? {current:true} : {})}));
 }
-function houses(home) {
-  return '<ul class="site-house-list">' + home.group.companies.map(company =>
+function companyList(home) {
+  return '<ul class="site-group-list">' + home.group.companies.map(company =>
     '<li><strong>' + esc(company.name) + '</strong>' + para(company.role) +
     anchor(company.url, "Visit " + company.name) + "</li>"
   ).join("") + "</ul>";
@@ -418,7 +418,7 @@ function homepage(home, estate, frontdoor, source) {
       actions([{href:"/projects/",label:"Browse the full public estate"},
                {href:"/blog/",label:"Read our published writing"}]),12),
     panel("trade","Choose how to buy or use",trade(home),12),
-    panel("companies","Four companies with distinct responsibilities",houses(home),12),
+    panel("companies","Four companies with distinct responsibilities",companyList(home),12),
     panel("agents","Interfaces for software agents",
       para("A readable endpoint does not grant permission to purchase, publish or run a private action.") +
       endpoints(estate,3) +
@@ -613,7 +613,7 @@ function aboutPage(home, frontdoor) {
       technologyAndPower(frontdoor),12),
     panel("ecology-and-adaptation",frontdoor.ecologicalDiscovery.headline,
       ecologicalReaders(frontdoor),12),
-    panel("companies","The four accountable companies",houses(home),12),
+    panel("companies","The four accountable companies",companyList(home),12),
     panel("process","How work moves",processSteps(frontdoor) +
       note("An accepted outcome is checked independently of supplier activity."),12),
     panel("principles","What our claims mean",
@@ -723,6 +723,6 @@ export function project561GroupHead(home) {
     // here would falsely declare different content to be alternate versions.
     // The existing source-owned sitemap advertises only the actual homepage
     // translation cluster; localized homepage HTML retains its own links.
-    '<style data-561-house="visual-design-bible-v0.4-candidate">' + HOUSE_STYLES + "\n" + SITE_STYLES + "</style>"
+    '<style data-561-group="visual-design-bible-v0.4-candidate">' + GROUP_STYLES + "\n" + SITE_STYLES + "</style>"
   ].join("");
 }

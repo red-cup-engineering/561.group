@@ -36,10 +36,10 @@ const OBSERVER_ROUTE="/__source-owned-color-observation.mjs";
 export function qualifyRenderedBrand(value,{path="/",colorScheme="light"}={}) {
   const errors=[];
   const need=(truth,claim)=>{if(!truth)errors.push(claim)};
-  need(value?.houseStyle===true,"Original Group CSS not emitted into real TUFTE head");
+  need(value?.groupStyle===true,"Original Group CSS not emitted into real TUFTE head");
   need(value?.tufte===true,"Real TUFTE shell is absent");
   need(value?.bodyBackground===(colorScheme==="dark"?rgb(18,12,2):rgb(242,234,216)),
-    "Visible body background lost house "+(colorScheme==="dark"?"dark":"bone")+" role");
+    "Visible body background lost group "+(colorScheme==="dark"?"dark":"bone")+" role");
   need(value?.mastheadTop==="8px","Institutional masthead lost eight-pixel ink rule");
   need(value?.markContent==='"561"', "Giant original typographic 561 mark is absent");
   need(value?.markColor===rgb(255,69,48),"561 mark lost reserved alarm-red role");
@@ -477,7 +477,7 @@ export async function receiveBrowserVisuals({output="artifacts/brand-visual",sou
             readingFamily:style(".tufte-tile-body").fontFamily,
             metadataFamily:meta?getComputedStyle(meta).fontFamily:style(".tufte-eyebrow").fontFamily,
             introBackground:intro?getComputedStyle(intro).backgroundColor:"",
-            houseStyle:!!el('style[data-561-house="visual-design-bible-v0.4-candidate"]'),
+            groupStyle:!!el('style[data-561-group="visual-design-bible-v0.4-candidate"]'),
             hreflangLinks:document.head.querySelectorAll('link[rel="alternate"][hreflang]').length,
             tufte:!!el(".tufte-shell[data-tufte]"),
             tileCount:tileElements.length,hasLead:!!el("#lead"),
@@ -578,7 +578,7 @@ export async function receiveBrowserVisuals({output="artifacts/brand-visual",sou
             const pixelBytes=new Uint8Array(rgba.buffer,rgba.byteOffset,rgba.byteLength);
             const css=getComputedStyle(document.documentElement);
             const colors=["alarm","witness"].map(id=>({
-              id,hex:css.getPropertyValue("--house-"+id).trim()
+              id,hex:css.getPropertyValue("--group-"+id).trim()
             }));
             const observer=await import("/__source-owned-color-observation.mjs");
             return observer.measureColorCoverage({
@@ -614,7 +614,7 @@ export async function receiveBrowserVisuals({output="artifacts/brand-visual",sou
       schema:"561.group/rendered-visual-witness/v1",
       sourceCommit,sourceRole,originalPrHead,
       kind:"actual-original-LivingWebServer-TUFTE-in-headless-Chromium",
-      houseSource:"data/brand-source.json",
+      groupSource:"data/brand-source.json",
       pixelInstrument:{owner:observer.owner,commit:observer.commit,entry:observer.entry},
       empiricalScope:"full-raster versus first-viewport; no automatic color-budget policy",
       acceptance:"CANDIDATE: machine browser conformance; golden-baseline and independent human approval NOT established",

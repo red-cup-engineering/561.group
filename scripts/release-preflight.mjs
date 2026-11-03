@@ -23,7 +23,7 @@ const required=[
  * does not claim installation or substitute a Git source for a publication.
  */
 export function qualifySuppliers({manifest,lock,registry}) {
-  if(registry!=="https://registry.561.group/") throw new Error("Original house registry is required");
+  if(registry!=="https://registry.561.group/") throw new Error("Original Group registry is required");
   const version=/^\d+\.\d+\.\d+(?:-[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*)?$/u;
   const integrity=/^sha512-[A-Za-z0-9+/]+={0,2}$/u;
   const name=leaf=>"@red-cup-engineering/"+leaf;

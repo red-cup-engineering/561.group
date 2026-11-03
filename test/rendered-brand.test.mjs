@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import {qualifyRenderedBrand,qualifyBrowserBlogEdition,visualReviewPacket} from "../scripts/assay-rendered-brand.mjs";
 
 const good=()=>({
-  viewportWidth:1440,houseStyle:true,tufte:true,
+  viewportWidth:1440,groupStyle:true,tufte:true,
   bodyBackground:"rgb(242, 234, 216)",
   mastheadTop:"8px",markContent:'"561"',
   markColor:"rgb(255, 69, 48)",markSize:416,
@@ -132,7 +132,7 @@ test("a teal startup stylesheet or lost original 561 numeral fails in the browse
     markContent:"none",markColor:"rgb(0, 107, 100)"};
   const result=qualifyRenderedBrand(bad);
   assert.equal(result.passed,false);
-  assert.ok(result.errors.some(x=>x.includes("house bone")));
+  assert.ok(result.errors.some(x=>x.includes("group bone")));
   assert.ok(result.errors.some(x=>x.includes("mark is absent")));
 });
 test("a CSS string in HTML is not enough: computed type, local fonts and reading matter",()=>{
@@ -164,13 +164,13 @@ test("a 320 CSS-pixel reflow viewport remains supported but narrower unsupported
   assert.equal(qualifyRenderedBrand({...original,overflowX:true}).passed,false);
 });
 
-test("a dark-mode publisher edition uses original house dark roles",()=>{
+test("a dark-mode publisher edition uses original group dark roles",()=>{
   const blog={...good(),tileCount:4,hasLead:true,introBackground:"",
     bodyBackground:"rgb(18, 12, 2)"};
   assert.equal(qualifyRenderedBrand(blog,{path:"/blog/",colorScheme:"dark"}).passed,true);
   const falseLight=qualifyRenderedBrand(blog,{path:"/blog/",colorScheme:"light"});
   assert.equal(falseLight.passed,false);
-  assert.ok(falseLight.errors.some(message=>message.includes("house bone")));
+  assert.ok(falseLight.errors.some(message=>message.includes("group bone")));
 });
 
 test("a real secondary visitor page uses its own lead and independent tile count",()=>{
