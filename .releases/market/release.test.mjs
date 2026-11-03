@@ -300,24 +300,37 @@ test('the reviewed selection binds the exact forward native fabrication work ord
   assert.equal(selected.ready, true);
   assert.ok(['observe', 'release'].includes(selected.operation), `operation must be supported: ${selected.operation}`);
   assert.equal(selected.repository, '561-group/561-group-frontdoor-services-section');
-  assert.equal(selected.revision, 'ee620c373d62a6ba04a54942e119737459535d83');
-  assert.equal(selected.directory, '.service-releases/market/20261027-operational-readings-e4c4f49');
-  assert.equal(selected.manifestSha256, '56096719d0bc2b4c36b08e70dad69da9f37b8db3c80439a3773031c5ff426e16');
+  assert.equal(selected.revision, '55f6acb95782ad6d99f0141aba6e5888d9fd7379');
+  assert.equal(selected.directory, '.service-releases/market/20261028-bounded-source-6e5dec1');
+  assert.equal(selected.manifestSha256, '79139faa073d12010e5768082a0df12880760307306b7e139be01d79f65b30d9');
   assert.equal(selected.workOrder, '.releases/market/work-order.json');
-  assert.equal(selected.workOrderSha256, 'f26b1ceb9901a3655a9ca5515b9eb62e5e681742af6ee3e5110825a7110c320a');
+  assert.equal(selected.workOrderSha256, '2decc835ec643f88cb2c9cd708c839281c5c8f381f168ed1138c359dca2c2ad1');
 
   const { workOrder, workOrderSha256 } = await readMarketFabricationWorkOrder(workOrderPath, selected.workOrderSha256);
   assert.equal(workOrderSha256, selected.workOrderSha256);
-  assert.equal(workOrder.source.market.revision, '8302e18be89e2ab1e96a8ca6d5aa4e61d3e03aff');
-  assert.equal(workOrder.source.market.tree, '22c30484f2bd2f0a4110f0e507c67fd64bf0cd30');
-  assert.equal(workOrder.source.public.revision, 'cd0fdd91b14ec2a08b844c0794502501d36036f9');
-  assert.equal(workOrder.source.public.gitlink, 'cd0fdd91b14ec2a08b844c0794502501d36036f9');
+  assert.equal(workOrder.source.market.revision, 'cb766e1a552f35ce2eba0bb4c66c76fd593c9463');
+  assert.equal(workOrder.source.market.tree, '5eaff94ebf60c21f83869a8133ee80d1bc9db926');
+  assert.equal(workOrder.source.receiver.revision, workOrder.source.market.revision);
+  assert.equal(workOrder.source.public.revision, 'e954fc7b670ea20d1fabc9a5570bbf87d9abaaaf');
+  assert.equal(workOrder.source.public.gitlink, 'e954fc7b670ea20d1fabc9a5570bbf87d9abaaaf');
   assert.equal(workOrder.source.public.tree, 'cb559cdf232be39cb45bb042b5d4157c29985ace');
-  assert.equal(workOrder.baseline.versionId, '30536c25-af94-4382-a1ae-4b3bac858658');
-  assert.equal(workOrder.baseline.sourceRevision, 'e4c4f49b8559cb96e53d132458e8b326554895d1');
+  assert.equal(workOrder.baseline.versionId, 'd75303e5-53b4-471a-9ada-93aedf7046f9');
+  assert.equal(workOrder.baseline.deploymentId, 'f4f600f9-9559-4270-9724-9981e077a849');
+  assert.equal(workOrder.baseline.latestVersionId, workOrder.baseline.versionId);
+  assert.equal(workOrder.baseline.sourceRevision, '6e5dec1576b0ba6701ad218a7131d4e1f1aeb06f');
   assert.equal(workOrder.suppliers.length, 1);
   assert.equal(workOrder.suppliers[0].name, '@red-cup-engineering/mcp-engineering-services-section');
   assert.equal(workOrder.suppliers[0].version, '0.1.9');
+  assert.equal(workOrder.packageTests.kind, '561.market-source-package-test-selection/v1');
+  assert.equal(workOrder.packageTests.script, 'node --test test/*.test.mjs');
+  assert.equal(workOrder.packageTests.files.length, 54);
+  assert.equal(workOrder.packageTests.sourceManifestSha256, workOrder.sourceInputs.sourceManifest.sha256);
+  assert.equal(workOrder.packageTests.lockfileSha256, workOrder.sourceInputs.lockfile.sha256);
+  assert.equal(workOrder.packageTests.installedSuppliersSha256, sha(JSON.stringify(workOrder.suppliers)));
+  assert.equal(sha(JSON.stringify(workOrder.packageTests)), '36647a633dc1028e9eab4f39df41e50f26c556a632d5e612f5c45e972b60f208');
+  assert.equal(workOrder.packageTests.skipDisposition.kind, 'source-declared-counts');
+  assert.equal(workOrder.packageTests.skipDisposition.skipped, 0);
+  assert.equal(workOrder.packageTests.skipDisposition.todo, 0);
 
   const root = await mkdtemp(join(tmpdir(), 'market-work-order-selection-'));
   try {
