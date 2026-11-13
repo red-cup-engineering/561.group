@@ -79,7 +79,7 @@ const SOURCE_AUTH_ENV_KEYS = [
   'SITE_CONTENT_DEPLOY_KEY',
 ];
 const PACKAGE_TEST_SCRIPT = 'node --test test/*.test.mjs';
-const PACKAGE_TEST_SUMMARY = '@red-cup-engineering/npm-workspace-publication-service';
+const PACKAGE_TEST_SUMMARY = '@red-cup-engineering/npm-workspace-publication-computer-code-development-systems-engineering-services-section';
 
 const hash = bytes => createHash('sha256').update(bytes).digest('hex');
 const equal = isDeepStrictEqual;

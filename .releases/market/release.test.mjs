@@ -1572,7 +1572,7 @@ async function selectFixturePackageTests(fixture) {
   const manifest = JSON.parse(fixture.files['package.json']);
   manifest.packageManager = 'pnpm@11.28.5';
   manifest.scripts = { test: 'node --test test/*.test.mjs' };
-  manifest.devDependencies['@red-cup-engineering/npm-workspace-publication-service'] = '0.14.18';
+  manifest.devDependencies['@red-cup-engineering/npm-workspace-publication-computer-code-development-systems-engineering-services-section'] = '0.14.18';
   fixture.files['package.json'] = Buffer.from(`${JSON.stringify(manifest, null, 2)}\n`);
   await writeFile(join(fixture.sourceRoot, 'package.json'), fixture.files['package.json']);
   fixture.git(fixture.sourceRoot, 'add', 'package.json');
@@ -1828,13 +1828,13 @@ test('selected profile completes the existing fabrication path with raw evidence
     order.source.market.tree = fixture.git(fixture.sourceRoot, 'rev-parse', 'HEAD^{tree}');
     order.source.receiver.revision = order.source.market.revision;
     order.sourceInputs.nativeReceiver = { path: 'ops/receive-native-worker.mjs', bytes: receiverBytes.length, sha256: sha(receiverBytes) };
-    const summaryRoot = join(fixture.sourceRoot, 'node_modules/@red-cup-engineering/npm-workspace-publication-service');
+    const summaryRoot = join(fixture.sourceRoot, 'node_modules/@red-cup-engineering/npm-workspace-publication-computer-code-development-systems-engineering-services-section');
     await mkdir(summaryRoot, { recursive: true });
     const summaryBytes = Buffer.from('export const parseTestRunSummary = () => ({ tests: 1, pass: 1, fail: 0 });\n');
     const summaryPath = join(summaryRoot, 'test-run-summary.mjs');
     await writeFile(summaryPath, summaryBytes);
     await writeFile(join(summaryRoot, 'package.json'), JSON.stringify({
-      name: '@red-cup-engineering/npm-workspace-publication-service', version: '0.14.18', type: 'module',
+      name: '@red-cup-engineering/npm-workspace-publication-computer-code-development-systems-engineering-services-section', version: '0.14.18', type: 'module',
       exports: { './test-run-summary': './test-run-summary.mjs', './package.json': './package.json' },
     }));
     let selectedEvidence, narrowEnrollment = false;

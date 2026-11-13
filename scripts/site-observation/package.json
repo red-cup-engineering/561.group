@@ -8,6 +8,6 @@
     "node": ">=24.2.0"
   },
   "dependencies": {
-    "@red-cup-engineering/website-administration-reading-service": "0.2.2-dev.21"
+    "@red-cup-engineering/website-administration-reading-computer-systems-publishing-engineering-services-section": "0.2.2-dev.21"
   }
 }
