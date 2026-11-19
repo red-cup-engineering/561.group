@@ -6,8 +6,8 @@ import { fileURLToPath } from "node:url";
 import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
 import { renderHumans, renderSecurity, renderIndex, renderLlms, renderLlmsFull, renderRobots, renderSitemap } from "../src/render.mjs";
-import { readFeedsWithCoverage, mergeItems, renderFeedInputReceipt, renderFeedItemProvenance, renderJsonFeed, renderAtom, renderRss } from "../src/feed.mjs";
-import {renderEditorialQuestionProvenance} from "../src/editorial-question-provenance.mjs";
+import { readFeedsWithCoverage, mergeItems, renderFeedInputRecord, renderFeedItemOrigin, renderJsonFeed, renderAtom, renderRss } from "../src/feed.mjs";
+import {renderEditorialQuestionOrigin} from "../src/editorial-question-provenance.mjs";
 import {renderStaticAssetHeaders} from "../src/public-delivery.mjs";
 import { LOCALES, localePath, siteSpace, speaker } from "../src/locales.mjs";
 
@@ -46,15 +46,15 @@ const marketOffers = await (async () => {
 const facts = { marketOffers, frontdoor };
 // What the Group is publishing: the companies' feeds, merged; any that cannot be read are skipped.
 const { feeds: companyFeeds, sources: feedSources } = await readFeedsWithCoverage(home.group.companies);
-const withheldFeedItems = [];
-const items = mergeItems(companyFeeds, undefined, { onReject: reading => withheldFeedItems.push(reading) });
+const omittedFeedItems = [];
+const items = mergeItems(companyFeeds, undefined, { onReject: reading => omittedFeedItems.push(reading) });
 // Independent release logs can report actual feed source reception without
 // mistaking a skipped source for an empty original archive.
 console.log("feed input observation", JSON.stringify({
   sources: feedSources.map(({companyId,state,inputItems})=>({
     companyId,state,...(inputItems===undefined?{}:{inputItems})
   })),
-  excludedItems:withheldFeedItems.length, emittedItems:items.length
+  excludedItems:omittedFeedItems.length, emittedItems:items.length
 }));
 
 const estate = { ...authored, nodes: [...authored.nodes] };
@@ -106,9 +106,9 @@ const files = {
   "public/estate-records.json": JSON.stringify(estate, null, 2) + "\n",
   // English / is served by TUFTE + LivingWebServer, never by a competing static index.
   ...Object.fromEntries(LOCALES.filter(tag => tag !== "en").map((tag) => [`public${localePath(tag)}index.html`, renderIndex(home, estate, speakers[tag], items)])),
-  "public/feed-input-receipt.json": renderFeedInputReceipt(home, feedSources, items, withheldFeedItems),
-  "public/feed-provenance.jsonld": renderFeedItemProvenance(home, feedSources, items),
-  "public/editorial-question-provenance.jsonld": renderEditorialQuestionProvenance(home,frontdoor,frontdoorSha256),
+  "public/feed-input-receipt.json": renderFeedInputRecord(home, feedSources, items, omittedFeedItems),
+  "public/feed-provenance.jsonld": renderFeedItemOrigin(home, feedSources, items),
+  "public/editorial-question-provenance.jsonld": renderEditorialQuestionOrigin(home,frontdoor,frontdoorSha256),
   "public/feed.json": renderJsonFeed(home, items),
   "public/feed.atom.xml": renderAtom(home, items, `${updated}T00:00:00Z`),
   "public/feed.rss.xml": renderRss(home, items),

@@ -4,7 +4,7 @@
 // selected links and page-specific models, never another renderer or router.
 import { GROUP_STYLES } from "./apex-group-style.mjs";
 import { SITE_STYLES } from "./public-home-style.mjs";
-import { admitGroupBlogFeed, admitGroupBlogCoverage } from "./group-blog.mjs";
+import { validateGroupBlogFeed, validateGroupBlogCoverage } from "./group-blog.mjs";
 
 const ORIGIN = "https://561.group";
 export const PUBLIC_ROUTES = Object.freeze(["/", "/work/", "/work/audit/", "/projects/", "/blog/", "/about/", "/for-agents/"]);
@@ -674,12 +674,12 @@ function agentPage(home, estate, frontdoor) {
       actions([{href:home.group.marketGuide,label:"Current merchant guide"},{href:"/work/",label:"Human scoping and contact"}]),12)
   ];
 }
-export function project561GroupPage({home,estate,frontdoor,feed,feedReceipt,path = "/"}) {
+export function project561GroupPage({home,estate,frontdoor,feed,feedReceipt: feedRecord,path = "/"}) {
   if (!PUBLIC_ROUTES.includes(path)) throw new RangeError("Unadmitted Group public route");
   const source = checkedSources(home,estate,frontdoor);
   const blog = path === "/blog/" ? Object.freeze({
-    ...admitGroupBlogFeed(home,feed),
-    coverage:admitGroupBlogCoverage(home,feed,feedReceipt)
+    ...validateGroupBlogFeed(home,feed),
+    coverage:validateGroupBlogCoverage(home,feed,feedRecord)
   }) : null;
   const page = {
     "/": {title:home.name,subtitle:"Indigenous-grounded governance · Artificial abiogenesis · Practical services"},

@@ -131,13 +131,13 @@ export function qualifyBrowserBlogEdition(reading,{home,receipt}={}) {
 }
 
 async function servedOriginalApplication() {
-  const [home,estate,frontdoor,feed,feedReceipt]=await Promise.all([
+  const [home,estate,frontdoor,feed,feedRecord]=await Promise.all([
     readJson("data/home.json"),readJson("data/estate.json"),readJson("data/frontdoor.json"),
     readJson("public/feed.json"),readJson("public/feed-input-receipt.json")
   ]);
   const application=create561GroupLivingApplication({
     readHome:async()=>home,readEstate:async()=>estate,readFrontdoor:async()=>frontdoor,
-    readFeed:async()=>feed,readFeedReceipt:async()=>feedReceipt,releaseHome:home
+    readFeed:async()=>feed,readFeedReceipt:async()=>feedRecord,releaseHome:home
   });
   const server=createServer(async(req,res)=>{
     try{
@@ -432,7 +432,7 @@ export async function receiveBrowserVisuals({output="artifacts/brand-visual",sou
     {encoding:"utf8",timeout:10000}).trim();
   if(mounted!==observer.commit)throw Error("Rendered color instrument differs from selected Engineering source");
   const host=await servedOriginalApplication();
-  const [editionHome,editionReceipt]=await Promise.all([
+  const [editionHome,editionRecord]=await Promise.all([
     readJson("data/home.json"),readJson("public/feed-input-receipt.json")
   ]);
   let browser;
@@ -558,7 +558,7 @@ export async function receiveBrowserVisuals({output="artifacts/brand-visual",sou
           await resetLocation();
         }
         const edition=editionReading?qualifyBrowserBlogEdition(editionReading,{
-          home:editionHome,receipt:editionReceipt}):{passed:true,errors:[]};
+          home:editionHome,receipt:editionRecord}):{passed:true,errors:[]};
         const result={passed:brand.passed&&edition.passed,
           errors:[...brand.errors,...edition.errors]};
         const screenshot=join(output,item.name+".png");

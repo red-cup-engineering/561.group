@@ -3,7 +3,7 @@
  * JSON evidence, feeds, or arbitrary generated assets. Content authenticity
  * is checked separately against exact public SHA-256 bytes after this check.
  */
-export function qualifyPublicAssetReadPath({origin,path,redirected,responseUrl,contentType}) {
+export function validatePublicAssetReadPath({origin,path,redirected,responseUrl,contentType}) {
   if(origin!=="https://561.group" || typeof path!=="string" || !path ||
      typeof redirected!=="boolean")
     throw new TypeError("Public artifact route requires exact origin, path and redirect reading");
@@ -50,19 +50,19 @@ const typed = (node, kind) => node?.["@type"] === kind ||
 // contentless items. This exception is private to the transition assessor.
 const HISTORICAL_CONTENTLESS_REVISION = "f9d59a82c78136d409dee4286a97d6d9d3142f94";
 
-function assayPublication({ home, feed, receipt, graph }, { historicalContentless = false } = {}) {
+function checkPublication({ home, feed, receipt: record, graph }, { historicalContentless = false } = {}) {
   if (home?.origin !== "https://561.group" ||
       !Array.isArray(home.group?.companies) || home.group.companies.length !== 4)
     fail("original four companies are required");
   const companies = home.group.companies;
-  if (receipt?.schema !== "561.group/feed-input-receipt/v1" ||
-      receipt.origin !== home.origin ||
-      receipt.expectedSourceCount !== companies.length ||
-      !Array.isArray(receipt.sources) || receipt.sources.length !== companies.length)
+  if (record?.schema !== "561.group/feed-input-receipt/v1" ||
+      record.origin !== home.origin ||
+      record.expectedSourceCount !== companies.length ||
+      !Array.isArray(record.sources) || record.sources.length !== companies.length)
     fail("source receipt identity or original source count");
   const received = new Map();
   for (let i = 0; i < companies.length; i++) {
-    const source = receipt.sources[i], company = companies[i];
+    const source = record.sources[i], company = companies[i];
     if (!isRecord(source) || source.companyId !== company.id ||
         source.feedUrl !== company.feeds?.json ||
         !["received", "refused", "unavailable"].includes(source.state))
@@ -79,28 +79,28 @@ function assayPublication({ home, feed, receipt, graph }, { historicalContentles
   }
   const coverage = received.size === companies.length ?
     "all-sources-received" : "partial-source-coverage";
-  if (receipt.completeness !== coverage) fail("false completeness");
+  if (record.completeness !== coverage) fail("false completeness");
   const sourceItemCount = [...received.values()].reduce((n, s) => n + s.inputItems, 0);
-  if (!isRecord(receipt.excludedItemCounts)) fail("missing exclusion accounting");
+  if (!isRecord(record.excludedItemCounts)) fail("missing exclusion accounting");
   let excluded = 0;
-  for (const [kind, count] of Object.entries(receipt.excludedItemCounts)) {
+  for (const [kind, count] of Object.entries(record.excludedItemCounts)) {
     if (!/^[a-z][a-z0-9-]{0,79}$/u.test(kind) ||
         !Number.isSafeInteger(count) || count < 1)
       fail("malformed exclusion accounting");
     excluded += count;
   }
-  const admitted = sourceItemCount - excluded;
-  if (admitted < 0 || receipt.sourceItemCount !== sourceItemCount ||
-      receipt.admittedItems !== admitted ||
-      !Number.isSafeInteger(receipt.emittedItems) ||
-      receipt.emittedItems < 0 || receipt.emittedItems > 60 ||
-      receipt.omittedByAggregateLimit !== admitted - receipt.emittedItems ||
-      receipt.omittedByAggregateLimit < 0)
+  const validated = sourceItemCount - excluded;
+  if (validated < 0 || record.sourceItemCount !== sourceItemCount ||
+      record.admittedItems !== validated ||
+      !Number.isSafeInteger(record.emittedItems) ||
+      record.emittedItems < 0 || record.emittedItems > 60 ||
+      record.omittedByAggregateLimit !== validated - record.emittedItems ||
+      record.omittedByAggregateLimit < 0)
     fail("source, admission, omission and selected counts disagree");
   if (feed?.version !== "https://jsonfeed.org/version/1.1" ||
       feed.home_page_url !== home.origin + "/" ||
       feed.feed_url !== home.origin + "/feed.json" ||
-      !Array.isArray(feed.items) || feed.items.length !== receipt.emittedItems)
+      !Array.isArray(feed.items) || feed.items.length !== record.emittedItems)
     fail("public feed identity or emitted selection disagrees");
 
   if (graph?.["@id"] !== home.origin + "/feed-provenance.jsonld" ||
@@ -188,9 +188,9 @@ function assayPublication({ home, feed, receipt, graph }, { historicalContentles
     origin: home.origin,
     observedSourceFeeds: received.size,
     sourceItems: sourceItemCount,
-    admittedItems: admitted,
+    admittedItems: validated,
     excludedItems: excluded,
-    omittedByAggregateLimit: receipt.omittedByAggregateLimit,
+    omittedByAggregateLimit: record.omittedByAggregateLimit,
     emittedItems: feed.items.length,
     semanticProjectionReceived: true,
     independentlyFactChecked: false,
@@ -201,8 +201,8 @@ function assayPublication({ home, feed, receipt, graph }, { historicalContentles
 
 // Production public-byte receiving always uses the strict contemporary
 // contract. No public caller can set the read-only historical exception.
-export function assayPublicFeedProjection(publication) {
-  return assayPublication(publication);
+export function checkPublicFeedProjection(publication) {
+  return checkPublication(publication);
 }
 
 // This deterministic exact URL identity matches the original build's
@@ -223,7 +223,7 @@ export function comparePublicFeedRevisions({home,previous,proposed,observedAt}){
        snapshot.sourceRevision.origin!==home?.origin ||
        !/^[a-f0-9]{40}$/u.test(snapshot.sourceRevision.sourceCommit??""))
       fail("missing exact "+label+" release identity");
-    assayPublication({home,feed:snapshot.feed,
+    checkPublication({home,feed:snapshot.feed,
       receipt:snapshot.receipt,graph:snapshot.graph}, {
         historicalContentless:label==="previous" &&
           snapshot.sourceRevision.sourceCommit===HISTORICAL_CONTENTLESS_REVISION
