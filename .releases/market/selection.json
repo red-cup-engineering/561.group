@@ -1,0 +1,8 @@
+{
+  "kind": "561.market-worker-carrier-selection/v1",
+  "repository": "561-group/561-group-frontdoor-services-section",
+  "revision": "0634671650faf34f52128c0b89f6d840d16756d5",
+  "directory": ".service-releases/market/20261117-seavt-cutover",
+  "manifestSha256": "30d7718f32116131326579de7a810e6e7fbdf58ae2388d07f530b20398427f0c",
+  "operation": "release"
+}
