@@ -4,10 +4,10 @@
 import {createServer} from "node:http";
 import {readFile,mkdir,writeFile} from "node:fs/promises";
 import {createHash} from "node:crypto";
-import {execFileSync} from "node:child_process";
 import {resolve,join} from "node:path";
 import {pathToFileURL} from "node:url";
 import {create561GroupLivingApplication} from "../src/living-home.mjs";
+import { execGitSync } from '@red-cup-engineering/git-engine/git-process';
 
 const readJson=async path=>JSON.parse(await readFile(new URL("../"+path,import.meta.url),"utf8"));
 const pages=Object.freeze([
@@ -428,7 +428,7 @@ export async function receiveBrowserVisuals({output="artifacts/brand-visual",sou
      !/^[a-f0-9]{40}$/u.test(observer.commit) ||
      observer.entry!=="src/theming-computer/color-coverage.mjs")
     throw Error("Apex lacks qualified original visual observation source");
-  const mounted=execFileSync("git",["-C",".visual-observer-source","rev-parse","HEAD"],
+  const mounted=execGitSync(["-C",".visual-observer-source","rev-parse","HEAD"],
     {encoding:"utf8",timeout:10000}).trim();
   if(mounted!==observer.commit)throw Error("Rendered color instrument differs from selected Engineering source");
   const host=await servedOriginalApplication();
