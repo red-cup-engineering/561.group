@@ -1,9 +1,10 @@
 #!/usr/bin/env node
+import { execGitSync } from "@red-cup-engineering/git-engine/git-process";
 // This is a local/manual release guard for the ONE original 561.group Worker.
 // It never deploys or invents a provider receipt. A successful local CLI exit
 // is not production acceptance; the separate Cloudflare/public readback remains.
 import {readFile,stat} from "node:fs/promises";
-import {execFileSync} from "node:child_process";
+
 import {pathToFileURL} from "node:url";
 
 const SHA=/^[a-f0-9]{40}$/iu;
@@ -118,7 +119,7 @@ const missing=async path=>{try{await stat(path);return false;}catch(error){
   if(error.code==="ENOENT")return true;throw error;
 }};
 async function main(){
-  const run=(...args)=>execFileSync("git",args,{encoding:"utf8"}).trim();
+  const run=(...args)=>execGitSync(args,{encoding:"utf8"}).trim();
   const mainBranch=run("branch","--show-current");
   const checkoutSha=run("rev-parse","HEAD");
   const sourceSha=process.env.GITHUB_SHA;

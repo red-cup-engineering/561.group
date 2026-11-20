@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { execGitSync } from "@red-cup-engineering/git-engine/git-process";
 // Binds the Group front door's Public content into this application's tree.
 //
 // The content (data/, locales/, authored static assets under public/) is Group data held in
@@ -8,7 +9,7 @@
 // data repository out at a pinned commit). Bound files are git-ignored and idempotently rewritten.
 
 import { cpSync, existsSync, statSync } from "node:fs";
-import { execFileSync } from "node:child_process";
+
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
@@ -43,8 +44,7 @@ export function bindContent(source = process.env.SITE_CONTENT_ROOT ?? join(appli
   if (existsSync(join(target, ".git"))) {
     let tracked;
     try {
-      tracked = execFileSync("git",
-        ["ls-files", "-z", "--", "data/", "locales/", "public/"],
+      tracked = execGitSync(["ls-files", "-z", "--", "data/", "locales/", "public/"],
         { cwd: target, encoding: "utf8" })
         .split("\0").filter(Boolean);
     } catch (error) {

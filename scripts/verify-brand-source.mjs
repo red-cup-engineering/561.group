@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { execGitSync } from "@red-cup-engineering/git-engine/git-process";
 /**
  * One 561 Group TUFTE consumer contract against the *original source-owning*
  * Content Design package, not a second design canon, token store, or renderer.
@@ -8,8 +9,8 @@
  * published source revision, and an actual reader's visual acceptance remain
  * separate qualified receivers.
  */
-import {readFileSync} from "node:fs";
-import {execFileSync} from "node:child_process";
+import { readFileSync } from "node:fs";
+
 import {join,resolve} from "node:path";
 import {pathToFileURL} from "node:url";
 import {fileURLToPath} from "node:url";
@@ -124,7 +125,7 @@ export async function readPinnedBrandProfile(sourceRoot,lock=brandSource){
       lock.tokens!=="data/records/design-tokens/561-group.tokens.json")
     throw new Error("Unqualified original Group brand source lock");
   const root=resolve(sourceRoot);
-  const actual=execFileSync("git",["-C",root,"rev-parse","HEAD"],{
+  const actual=execGitSync(["-C",root,"rev-parse","HEAD"],{
     encoding:"utf8",timeout:10000
   }).trim();
   if(actual!==lock.commit)throw new Error("Checkout is not the pinned original brand source commit");

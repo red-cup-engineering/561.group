@@ -1,10 +1,11 @@
 #!/usr/bin/env node
+import { execGitSync } from "@red-cup-engineering/git-engine/git-process";
 // Writes the generated files in public/ from data/. Fonts, favicon and card are sources.
 
 import { mkdir, readFile, writeFile, rename, rm } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { createHash } from "node:crypto";
-import { execFileSync } from "node:child_process";
+
 import { renderHumans, renderSecurity, renderIndex, renderLlms, renderLlmsFull, renderRobots, renderSitemap } from "../src/render.mjs";
 import { readFeedsWithCoverage, mergeItems, renderFeedInputReceipt, renderFeedItemProvenance, renderJsonFeed, renderAtom, renderRss } from "../src/feed.mjs";
 import {renderEditorialQuestionProvenance} from "../src/editorial-question-provenance.mjs";
@@ -77,7 +78,7 @@ const MATH_SOURCE_REVISION="767ab0c3bdaccc05f425f8ac1ca465f306203cb8";
 const mathSourceRoot=new URL(".math-source/",root);
 let mathHead;
 try {
-  mathHead=execFileSync("git",["-C",fileURLToPath(mathSourceRoot),"rev-parse","HEAD"],{
+  mathHead=execGitSync(["-C",fileURLToPath(mathSourceRoot),"rev-parse","HEAD"],{
     encoding:"utf8",timeout:10000,
   }).trim();
 }catch{
