@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { sha256Hex } from "@red-cup-engineering/semiotic-content-address-system";
 // The Group owns only the existing credential/carrier lane. Market owns the
 // release algorithm and Cloudflare owns its effects; both arrive as pinned
 // original source-derived bytes in the already-established private carrier or
@@ -82,7 +83,7 @@ const SOURCE_AUTH_ENV_KEYS = [
 const PACKAGE_TEST_SCRIPT = 'node --test test/*.test.mjs';
 const PACKAGE_TEST_SUMMARY = '@red-cup-engineering/npm-workspace-publication-computer-code-development-systems-engineering-services-section';
 
-const hash = bytes => createHash('sha256').update(bytes).digest('hex');
+
 const equal = isDeepStrictEqual;
 function requireThat(condition, message, code = message) {
   if (!condition) throw Object.assign(new Error(message), { code });
@@ -99,7 +100,7 @@ const canonicalOrigins = repository => [
   `git@github.com:${repository}.git`,
   `ssh://git@github.com/${repository}.git`,
 ];
-const fileIdentity = (path, bytes) => ({ path, bytes: bytes.length, sha256: hash(bytes) });
+const fileIdentity = (path, bytes) => ({ path, bytes: bytes.length, sha256: sha256Hex(bytes) });
 
 function checkDescriptor(descriptor, code = 'EXACT_ARTIFACT_BYTES_REQUIRED', maxBytes = 32 * 1024 * 1024) {
   requireThat(
@@ -118,7 +119,7 @@ function admitMarketPackageTests(selected, workOrder) {
     selected.script === PACKAGE_TEST_SCRIPT, 'PACKAGE_TEST_PROFILE_REQUIRED');
   requireThat(selected.sourceManifestSha256 === workOrder.sourceInputs.sourceManifest.sha256 &&
     selected.lockfileSha256 === workOrder.sourceInputs.lockfile.sha256 &&
-    selected.installedSuppliersSha256 === hash(JSON.stringify(workOrder.suppliers)) &&
+    selected.installedSuppliersSha256 === sha256Hex(JSON.stringify(workOrder.suppliers)) &&
     workOrder.sourceInputs.sourceManifest.path === 'package.json' &&
     workOrder.sourceInputs.lockfile.path === 'pnpm-lock.yaml' &&
     workOrder.compiler.pnpm?.version === '11.28.5', 'PACKAGE_TEST_SELECTION_MISMATCH');
@@ -244,7 +245,7 @@ export function admitMarketFabricationWorkOrder(workOrder) {
 export async function readMarketFabricationWorkOrder(file = '.releases/market/work-order.json', expectedSha256) {
   requireThat(SHA.test(expectedSha256 ?? ''), 'FABRICATION_WORK_ORDER_DIGEST_REQUIRED');
   const bytes = await readFile(resolve(file));
-  requireThat(bytes.length <= 256 * 1024 && hash(bytes) === expectedSha256, 'FABRICATION_WORK_ORDER_BYTES_CHANGED');
+  requireThat(bytes.length <= 256 * 1024 && sha256Hex(bytes) === expectedSha256, 'FABRICATION_WORK_ORDER_BYTES_CHANGED');
   return { workOrder: admitMarketFabricationWorkOrder(JSON.parse(bytes.toString('utf8'))), workOrderSha256: expectedSha256 };
 }
 
@@ -321,7 +322,7 @@ async function selectedMarketManifest(directory, expectedManifestSha256) {
   const info = await stat(resolve(root, 'manifest.json'));
   requireThat(info.isFile() && info.size < 128 * 1024, 'Carrier manifest must be a bounded file', 'CARRIER_MANIFEST_TOO_LARGE');
   const bytes = await readFile(resolve(root, 'manifest.json'));
-  requireThat(hash(bytes) === expectedManifestSha256, 'Selected original carrier manifest changed', 'CARRIER_MANIFEST_BYTES_CHANGED');
+  requireThat(sha256Hex(bytes) === expectedManifestSha256, 'Selected original carrier manifest changed', 'CARRIER_MANIFEST_BYTES_CHANGED');
   const manifest = JSON.parse(bytes);
   requireThat(
     manifest.kind === '561.market-worker-release/v1' &&
@@ -368,7 +369,7 @@ async function containedCarrierPath(root, selectedPath) {
 async function verifyCarrierFile(root, item) {
   const file = await containedCarrierPath(root, item.path), info = await stat(file);
   requireThat(info.isFile() && info.size === item.bytes, 'Carrier file size differs from selected bytes', 'CARRIER_ARTIFACT_SIZE_CHANGED');
-  requireThat(hash(await readFile(file)) === item.sha256, 'Carrier file digest differs from selected bytes', 'CARRIER_ARTIFACT_BYTES_CHANGED');
+  requireThat(sha256Hex(await readFile(file)) === item.sha256, 'Carrier file digest differs from selected bytes', 'CARRIER_ARTIFACT_BYTES_CHANGED');
 }
 
 export async function verifyMarketCarrier(directory, expectedManifestSha256) {
@@ -401,7 +402,7 @@ export async function receiveMarketCarrier(directory, expectedManifestSha256) {
     requireThat(compressed.length === info.size, 'Compressed carrier file changed while receiving', 'COMPRESSED_ARTIFACT_CHANGED');
     const bytes = gunzipSync(compressed, { maxOutputLength: item.bytes });
     requireThat(bytes.length === item.bytes, 'Expanded carrier file size differs from selected bytes', 'COMPRESSED_ARTIFACT_SIZE_CHANGED');
-    requireThat(hash(bytes) === item.sha256, 'Expanded carrier file digest differs from selected bytes', 'COMPRESSED_ARTIFACT_BYTES_CHANGED');
+    requireThat(sha256Hex(bytes) === item.sha256, 'Expanded carrier file digest differs from selected bytes', 'COMPRESSED_ARTIFACT_BYTES_CHANGED');
     // Recheck the parent immediately before an exclusive write. A racing raw
     // file is refused by wx; receiving never replaces pre-existing material.
     requireThat(await realpath(parent) === parent, 'Carrier write parent must not be a symlink', 'SYMLINK_WRITE_PARENT_REFUSED');
@@ -543,7 +544,7 @@ export async function verifyMarketFabricationInputs(sourceRoot, workOrder, {
     const info = await stat(resolvedFile);
     requireThat(info.isFile() && info.size === descriptor.bytes, code);
     const bytes = await readFile(resolvedFile);
-    requireThat(bytes.length === descriptor.bytes && hash(bytes) === descriptor.sha256, code);
+    requireThat(bytes.length === descriptor.bytes && sha256Hex(bytes) === descriptor.sha256, code);
     return { path: resolvedFile, bytes };
   }
 
@@ -691,7 +692,7 @@ export async function installFrozenMarketSuppliers(sourceRoot, workOrder, {
       kind: '561.market-frozen-installation/v1',
       source: { repository: MARKET_REPOSITORY, revision: workOrder.source.market.revision },
       lockfileSha256: workOrder.sourceInputs.lockfile.sha256,
-      installedSuppliersSha256: hash(JSON.stringify(workOrder.suppliers)),
+      installedSuppliersSha256: sha256Hex(JSON.stringify(workOrder.suppliers)),
       nodeModulesRoot: join(resolvedSourceRoot, 'node_modules'),
       packageManager: { name: 'pnpm', version: expectedVersion },
       frozenLockfile: true,
@@ -749,7 +750,7 @@ export async function verifyInstalledMarketSuppliers(sourceRoot, workOrder) {
     wrangler: {
       name: 'wrangler',
       version: wranglerManifest.version,
-      manifestSha256: hash(wranglerManifestBytes),
+      manifestSha256: sha256Hex(wranglerManifestBytes),
     },
   };
   for (const compilerName of ['esbuild', 'workerd']) {
@@ -771,7 +772,7 @@ export async function verifyInstalledMarketSuppliers(sourceRoot, workOrder) {
     compilerIdentities[compilerName] = {
       name: compilerName,
       version: pkg.version,
-      manifestSha256: hash(bytes),
+      manifestSha256: sha256Hex(bytes),
       manifestPath: compilerPkgPath,
     };
   }
@@ -785,7 +786,7 @@ export async function verifyInstalledMarketSuppliers(sourceRoot, workOrder) {
     requireThat(manifestPath !== null && inside(supplierRoot, manifestPath), 'SUPPLIER_MANIFEST_UNRECEIVED');
     const manifestBytes = await readFile(manifestPath);
     requireThat(
-      manifestBytes.length === supplier.manifest.bytes && hash(manifestBytes) === supplier.manifest.sha256,
+      manifestBytes.length === supplier.manifest.bytes && sha256Hex(manifestBytes) === supplier.manifest.sha256,
       'SUPPLIER_MANIFEST_UNRECEIVED',
     );
     const manifestJson = JSON.parse(manifestBytes.toString('utf8'));
@@ -798,7 +799,7 @@ export async function verifyInstalledMarketSuppliers(sourceRoot, workOrder) {
       requireThat(targetReal !== null && inside(supplierRoot, targetReal), 'EXTERNAL_SUPPLIER_PATH_REFUSED');
       const fileBytes = await readFile(targetReal);
       requireThat(
-        fileBytes.length === fileDescriptor.bytes && hash(fileBytes) === fileDescriptor.sha256,
+        fileBytes.length === fileDescriptor.bytes && sha256Hex(fileBytes) === fileDescriptor.sha256,
         'SUPPLIER_BYTES_UNRECEIVED',
       );
     }
@@ -840,7 +841,7 @@ export function receiveMarketPackageTestEvidence(qualification, request, {
     const document = matching[0];
     requireThat(typeof document.text === 'string' && document.bytes === descriptor.bytes &&
       document.sha256 === descriptor.sha256 && Buffer.byteLength(document.text) === descriptor.bytes &&
-      hash(document.text) === descriptor.sha256, 'PACKAGE_TEST_EVIDENCE_BYTES_CHANGED');
+      sha256Hex(document.text) === descriptor.sha256, 'PACKAGE_TEST_EVIDENCE_BYTES_CHANGED');
     return document.text;
   };
   const descriptor = qualification.evidence?.packageTests;
@@ -850,7 +851,7 @@ export function receiveMarketPackageTestEvidence(qualification, request, {
   catch { requireThat(false, 'PACKAGE_TEST_EVIDENCE_INVALID'); }
   requireThat(observation?.kind === '561.market-source-package-tests/v1' &&
     observation.scope === 'original-manifest-source-tests' && equal(observation.source, request.source) &&
-    equal(observation.selection, selected) && observation.selectionSha256 === hash(JSON.stringify(selected)) &&
+    equal(observation.selection, selected) && observation.selectionSha256 === sha256Hex(JSON.stringify(selected)) &&
     equal(observation.frozenInstallation, request.frozenInstallation) &&
     observation.installedRoot === join(request.sourceRoot, 'node_modules') &&
     observation.nativeCompilerManifest === compilerManifest && equal(observation.summaryOwner, summaryOwner) &&
@@ -1052,12 +1053,12 @@ export async function fabricateMarketCarrier(workOrder, {
     requireThat(['worker.js', 'worker.mjs'].includes(workerFileName), 'UNDECLARED_BUILD_OUTPUT_REFUSED');
     const workerPath = join(nativeWorkerOutputRoot, workerFileName);
     const workerBytes = await readFile(workerPath);
-    requireThat(workerBytes.length === parsedBuildReceipt.bytes && hash(workerBytes) === parsedBuildReceipt.sha256, 'WORKER_BYTES_CHANGED');
+    requireThat(workerBytes.length === parsedBuildReceipt.bytes && sha256Hex(workerBytes) === parsedBuildReceipt.sha256, 'WORKER_BYTES_CHANGED');
 
     const sourceInputsBytes = await readFile(join(nativeWorkerOutputRoot, parsedBuildReceipt.sourceInputs.path));
     requireThat(
       sourceInputsBytes.length === parsedBuildReceipt.sourceInputs.bytes &&
-        hash(sourceInputsBytes) === parsedBuildReceipt.sourceInputs.sha256,
+        sha256Hex(sourceInputsBytes) === parsedBuildReceipt.sourceInputs.sha256,
       'NATIVE_PROVENANCE_BYTES_UNRECEIVED',
     );
     const sourceInputsList = JSON.parse(sourceInputsBytes.toString('utf8'));
@@ -1076,7 +1077,7 @@ export async function fabricateMarketCarrier(workOrder, {
     const packageManifestsBytes = await readFile(join(nativeWorkerOutputRoot, parsedBuildReceipt.packageManifests.path));
     requireThat(
       packageManifestsBytes.length === parsedBuildReceipt.packageManifests.bytes &&
-        hash(packageManifestsBytes) === parsedBuildReceipt.packageManifests.sha256,
+        sha256Hex(packageManifestsBytes) === parsedBuildReceipt.packageManifests.sha256,
       'NATIVE_PROVENANCE_BYTES_UNRECEIVED',
     );
     const packageManifestsList = JSON.parse(packageManifestsBytes.toString('utf8'));
@@ -1100,12 +1101,12 @@ export async function fabricateMarketCarrier(workOrder, {
       artifact: {
         path: workerPath,
         bytes: workerBytes.length,
-        sha256: hash(workerBytes),
+        sha256: sha256Hex(workerBytes),
       },
       buildReceipt: {
         path: buildReceiptPath,
         bytes: buildReceiptBytes.length,
-        sha256: hash(buildReceiptBytes),
+        sha256: sha256Hex(buildReceiptBytes),
       },
       configuration: {
         path: join(nativeWorkerOutputRoot, parsedBuildReceipt.configuration.path),
@@ -1197,7 +1198,7 @@ export async function fabricateMarketCarrier(workOrder, {
         parsedReceiverInputs.cloudflare?.repository === CLOUDFLARE_REPOSITORY &&
         parsedReceiverInputs.cloudflare?.revision === workOrder.source.cloudflare.revision &&
         parsedReceiverInputs.output?.bytes === receiverBytes.length &&
-        parsedReceiverInputs.output?.sha256 === hash(receiverBytes),
+        parsedReceiverInputs.output?.sha256 === sha256Hex(receiverBytes),
       'ORIGINAL_RECEIVER_BUILD_UNRECEIVED',
     );
 
@@ -1211,7 +1212,7 @@ export async function fabricateMarketCarrier(workOrder, {
     }
     requireThat(
       candidateDeclarationsBytes.length === workOrder.declarations.candidate.bytes &&
-        hash(candidateDeclarationsBytes) === workOrder.declarations.candidate.sha256,
+        sha256Hex(candidateDeclarationsBytes) === workOrder.declarations.candidate.sha256,
       'CANDIDATE_DECLARATIONS_BYTES_CHANGED',
     );
 
@@ -1220,7 +1221,7 @@ export async function fabricateMarketCarrier(workOrder, {
       const artifactKey = workOrder.incumbentCarrier?.incumbentDeclarationsArtifact ?? 'candidateDeclarations';
       const incumbentManifestBytes = await readFile(join(incumbentCarrierDirectory, 'manifest.json'));
       if (workOrder.incumbentCarrier?.manifestSha256) {
-        requireThat(hash(incumbentManifestBytes) === workOrder.incumbentCarrier.manifestSha256, 'INCUMBENT_CARRIER_MANIFEST_CHANGED');
+        requireThat(sha256Hex(incumbentManifestBytes) === workOrder.incumbentCarrier.manifestSha256, 'INCUMBENT_CARRIER_MANIFEST_CHANGED');
       }
       const incumbentManifest = JSON.parse(incumbentManifestBytes.toString('utf8'));
       const descriptor = incumbentManifest?.artifacts?.[artifactKey];
@@ -1241,7 +1242,7 @@ export async function fabricateMarketCarrier(workOrder, {
     requireThat(
       incumbentDeclarationsBytes instanceof Uint8Array &&
         incumbentDeclarationsBytes.length === workOrder.declarations.incumbent.bytes &&
-        hash(incumbentDeclarationsBytes) === workOrder.declarations.incumbent.sha256,
+        sha256Hex(incumbentDeclarationsBytes) === workOrder.declarations.incumbent.sha256,
       'INCUMBENT_DECLARATIONS_BYTES_CHANGED',
     );
 
@@ -1299,7 +1300,7 @@ export async function fabricateMarketCarrier(workOrder, {
 
     const manifestBytes = Buffer.from(`${JSON.stringify(manifest, null, 2)}\n`);
     await writeFile(join(carrierDirectory, 'manifest.json'), manifestBytes, { mode: 0o600, flag: 'wx' });
-    const manifestSha256 = hash(manifestBytes);
+    const manifestSha256 = sha256Hex(manifestBytes);
     await verifyMarketCarrier(carrierDirectory, manifestSha256);
 
     if (!retainWorkspace) {

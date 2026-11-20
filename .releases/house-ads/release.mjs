@@ -1,3 +1,4 @@
+import { sha256Hex } from "@red-cup-engineering/semiotic-content-address-system";
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
 import {execFileSync} from 'node:child_process';
@@ -10,7 +11,7 @@ const release = JSON.parse(readFileSync(new URL('./release.json', import.meta.ur
 const host = resolve('house-ads');
 const work = resolve(process.env.RUNNER_TEMP ?? '.', 'house-ads-release');
 const supplier = '@red-cup-engineering/web-advertising-systems-engineering-services-section';
-const digest = bytes => createHash('sha256').update(bytes).digest('hex');
+
 const json = path => JSON.parse(readFileSync(path, 'utf8'));
 const save = (name, value) => writeFileSync(resolve(work, name), JSON.stringify(value, null, 2) + '\n');
 const uuid = /^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/iu;
@@ -20,10 +21,10 @@ function verifyArchive() {
   const encoded = readFileSync(resolve(releaseRoot, 'advertising-0.3.0-dev.2.tgz.base64'), 'ascii').trim();
   const archive = Buffer.from(encoded, 'base64');
   assert.equal(archive.toString('base64'), encoded, 'Advertising carrier is not canonical base64');
-  assert.equal(digest(archive), release.advertisingArchiveSha256, 'Advertising archive changed');
+  assert.equal(sha256Hex(archive), release.advertisingArchiveSha256, 'Advertising archive changed');
   assert.equal('sha512-' + createHash('sha512').update(archive).digest('base64'), release.advertisingArchiveIntegrity);
   const lockBytes = readFileSync(resolve(releaseRoot, 'package-lock.json'));
-  assert.equal(digest(lockBytes), release.lockSha256, 'Dependency lock changed');
+  assert.equal(sha256Hex(lockBytes), release.lockSha256, 'Dependency lock changed');
   const lock = JSON.parse(lockBytes);
   assert.equal(lock.packages[''].dependencies[supplier], release.advertisingVersion);
   assert.equal(lock.packages['node_modules/' + supplier].integrity, release.advertisingArchiveIntegrity);
@@ -106,11 +107,11 @@ if (mode === 'prepare') {
 } else if (mode === 'built') {
   const bytes = readFileSync(resolve(work, 'worker/index.js'));
   assert.equal(bytes.length, release.workerBytes);
-  assert.equal(digest(bytes), release.workerSha256, 'Worker differs from qualified original release');
+  assert.equal(sha256Hex(bytes), release.workerSha256, 'Worker differs from qualified original release');
   const site = (await import(resolve(host, 'src/index.mjs'))).default;
   const response = await site.fetch(new Request(release.target.origin + '/catalog'), {});
   assert.equal(response.status, 200);
-  assert.equal(digest(await response.text()), release.catalogSha256);
+  assert.equal(sha256Hex(await response.text()), release.catalogSha256);
   console.log('Qualified original Worker: ' + release.workerSha256);
 } else if (mode === 'before') {
   const deployment = await currentDeployment();
@@ -136,10 +137,10 @@ if (mode === 'prepare') {
       ]);
       assert.equal(catalog.status, 200); assert.equal(health.status, 200);
       const text = await catalog.text(), rows = JSON.parse(text).catalog;
-      assert.equal(digest(text), release.catalogSha256, 'Public catalog still differs');
+      assert.equal(sha256Hex(text), release.catalogSha256, 'Public catalog still differs');
       assert.equal(rows.length, release.catalogSize);
       assert.deepEqual(await health.json(), {ok:true, service:'advertising-services-section', catalogSize:release.catalogSize});
-      observed = {catalogSha256:digest(text), catalogSize:rows.length, receivedAt:new Date().toISOString()};
+      observed = {catalogSha256:sha256Hex(text), catalogSize:rows.length, receivedAt:new Date().toISOString()};
       break;
     } catch (error) {
       if (attempt === 11) throw error;

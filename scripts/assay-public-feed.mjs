@@ -1,3 +1,4 @@
+import { sha256Hex } from "@red-cup-engineering/semiotic-content-address-system";
 import { isRecord } from "@red-cup-engineering/signcell/values";
 /** A localized authored HTML file may have a same-origin canonical slash
  * redirect at the Cloudflare assets layer. That is not permission to redirect
@@ -168,7 +169,7 @@ function assayPublication({ home, feed, receipt, graph }, { historicalContentles
         new URL(item.url).origin !== new URL(company.url).origin)
       fail("syndicated author or article not admitted by original company");
     const entryId = feed.feed_url + "#item-" +
-      createHashOfUrl(item.url);
+      sha256Hex(item.url);
     const entity = entries.find(x => x["@id"] === entryId);
     if (!entity || entity["schema:item"]?.["@id"] !== item.url ||
         entity["schema:identifier"] !== item.id ||
@@ -209,9 +210,7 @@ export function assayPublicFeedProjection(publication) {
 // This deterministic exact URL identity matches the original build's
 // createHash('sha256').update(item.url).digest('hex'), without any network I/O.
 import { createHash } from "node:crypto";
-function createHashOfUrl(url) {
-  return createHash("sha256").update(url).digest("hex");
-}
+
 
 
 /** Compare two separately attested Group feed snapshots. This is NOT an

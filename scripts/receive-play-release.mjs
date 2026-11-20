@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { sha256Hex } from "@red-cup-engineering/semiotic-content-address-system";
 // Receive the original Play build through the existing private content carrier.
 // The application, publisher, and tiling engine remain in their source owners.
 import { readFile, lstat, readdir, mkdir, writeFile } from 'node:fs/promises';
@@ -13,7 +14,7 @@ if (!['verify', 'target', 'receive'].includes(mode) || !directory || !/^[a-f0-9]
 const root = resolve(directory);
 const origin = 'https://play.561.group';
 const target = 'play-561-group';
-const digest = bytes => createHash('sha256').update(bytes).digest('hex');
+
 const ni = bytes => 'ni:///sha-256;' + createHash('sha256').update(bytes).digest('base64url');
 const gitId = value => /^[a-f0-9]{40}$/.test(value ?? '');
 const safePath = value => typeof value === 'string' && value.length > 0 && value.length < 512 &&
@@ -58,7 +59,7 @@ async function fileSet(directory, prefix = '') {
   return files.sort();
 }
 const raw = await bytes('manifest.json', 131072);
-if (digest(raw) !== expectedManifest) throw new Error('Play release manifest changed');
+if (sha256Hex(raw) !== expectedManifest) throw new Error('Play release manifest changed');
 const manifest = JSON.parse(raw);
 const sourceOwners = ['red-cup-engineering/play', 'red-cup-engineering/static-site-publisher', 'red-cup-engineering/web-page-tiling-engine'];
 const supplierNames = ['@red-cup-engineering/static-site-publisher', '@red-cup-engineering/web-page-tiling-engine'];
@@ -83,7 +84,7 @@ let totalBytes = 0;
 const content = new Map();
 for (const name of names) {
   const value = await bytes(name), declared = manifest.files[name];
-  if (value.length !== declared.bytes || digest(value) !== declared.sha256) throw new Error('Play release file changed: ' + name);
+  if (value.length !== declared.bytes || sha256Hex(value) !== declared.sha256) throw new Error('Play release file changed: ' + name);
   totalBytes += value.length;
   if (totalBytes > 16777216) throw new Error('Play release byte limit exceeded');
   content.set(name, value);
@@ -250,7 +251,7 @@ for (let attempt = 0; attempt < 18 && Date.now() < deadline; attempt++) {
           (name.endsWith('.txt') && result.mediaType !== 'text/plain') ||
           (name.endsWith('.xml') && !['application/xml', 'text/xml'].includes(result.mediaType))) throw new Error('Public artifact differs: ' + path);
       return { path, finalUrl: result.url, status: result.status, mediaType: result.mediaType, comparison,
-        observedSha256: digest(result.body), expectedSha256: digest(expected) };
+        observedSha256: sha256Hex(result.body), expectedSha256: sha256Hex(expected) };
     }));
     const dailyAliases = await Promise.all(['/today', '/today.html'].map(receiveDailyAlias));
     const absentFeeds = await Promise.all(feedPaths.map(async path => {
@@ -260,7 +261,7 @@ for (let attempt = 0; attempt < 18 && Date.now() < deadline; attempt++) {
           /<rss\b|<feed\b|https?:\/\/jsonfeed\.org\/version\//i.test(result.body.toString('utf8')))
         throw new Error('Feed absence not received: HTTP ' + result.status + ' ' + result.mediaType + ' at ' + path);
       const comparison = nativeEmpty404 ? 'native-empty-404' : htmlReceived(result.body, content.get('public/404.html'));
-      return { path, status: result.status, mediaType: result.mediaType, comparison, observedSha256: digest(result.body) };
+      return { path, status: result.status, mediaType: result.mediaType, comparison, observedSha256: sha256Hex(result.body) };
     }));
     if (await activeVersion() !== version) throw new Error('Play active version changed during public receiving');
     Object.assign(receipt, { received: true, version, publishedAt: details.metadata?.created_on,

@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { sha256Hex } from "@red-cup-engineering/semiotic-content-address-system";
 // Receive a generated release from the original Production Outcome Watch.
 // The private content carrier supplies bytes; this application supplies its
 // existing production runner. Canonical service code stays with its owner.
@@ -11,7 +12,7 @@ const [mode, directory, expectedManifest] = process.argv.slice(2);
 if (!['verify', 'receive'].includes(mode) || !directory || !/^[a-f0-9]{64}$/.test(expectedManifest ?? ''))
   throw new Error('Usage: receive-production-watch.mjs verify|receive DIRECTORY MANIFEST_SHA256');
 const root = resolve(directory);
-const digest = bytes => createHash('sha256').update(bytes).digest('hex');
+
 const fixedConfig = {
   name: 'production-outcome-watch',
   main: 'outcome-watch.js',
@@ -30,7 +31,7 @@ async function bytes(name, maximum) {
   return readFile(path);
 }
 const raw = await bytes('manifest.json', 131072);
-if (digest(raw) !== expectedManifest) throw new Error('Release manifest changed');
+if (sha256Hex(raw) !== expectedManifest) throw new Error('Release manifest changed');
 const manifest = JSON.parse(raw);
 if (manifest.kind !== '561-group.production-outcome-watch-release/v1' ||
     manifest.target !== fixedConfig.name || manifest.wranglerVersion !== '4.149.0' ||
@@ -41,7 +42,7 @@ if (manifest.kind !== '561-group.production-outcome-watch-release/v1' ||
   throw new Error('Incomplete original watcher release');
 for (const [name, declared] of Object.entries(manifest.files)) {
   const value = await bytes(name, 2097152);
-  if (value.length !== declared.bytes || digest(value) !== declared.sha256)
+  if (value.length !== declared.bytes || sha256Hex(value) !== declared.sha256)
     throw new Error('Generated release file changed: ' + name);
 }
 const config = JSON.parse(await bytes('wrangler.json', 16384));

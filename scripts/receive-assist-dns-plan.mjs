@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { sha256Hex } from "@red-cup-engineering/semiotic-content-address-system";
 import { createHash } from 'node:crypto';
 import { execFile } from 'node:child_process';
 import { lstat, mkdir, readFile, realpath, writeFile } from 'node:fs/promises';
@@ -16,7 +17,7 @@ const FILES = ['bindings.json', 'service/LICENSE', 'service/src/reconcile-cloudf
 const SHA256 = /^[a-f0-9]{64}$/;
 const COMMIT = /^(?!0{40}$)[a-f0-9]{40}$/;
 const PROVIDER_ID = /^[a-f0-9]{32}$/;
-const sha256 = bytes => createHash('sha256').update(bytes).digest('hex');
+
 const fail = message => { throw new Error(message); };
 
 async function readRegular(root, relative, limit = 32768) {
@@ -31,7 +32,7 @@ async function verify(directory, expectedManifest) {
   if (!SHA256.test(expectedManifest ?? '')) fail('A pinned manifest SHA256 is required');
   const root = await realpath(directory);
   const bytes = await readRegular(root, 'manifest.json');
-  if (sha256(bytes) !== expectedManifest) fail('Release manifest digest mismatch');
+  if (sha256Hex(bytes) !== expectedManifest) fail('Release manifest digest mismatch');
   const manifest = JSON.parse(bytes);
   if (manifest.kind !== '561-group.assist-dns-plan-release/v1' || manifest.mode !== 'plan-only' ||
       manifest.projectId !== PROJECT || manifest.zone !== '561.group' ||
@@ -45,7 +46,7 @@ async function verify(directory, expectedManifest) {
   }
   for (const entry of manifest.files) {
     const content = await readRegular(root, entry.path);
-    if (!SHA256.test(entry.sha256) || sha256(content) !== entry.sha256 || content.length !== entry.bytes) {
+    if (!SHA256.test(entry.sha256) || sha256Hex(content) !== entry.sha256 || content.length !== entry.bytes) {
       fail(`Release file digest or size mismatch: ${entry.path}`);
     }
     if (entry.path.startsWith('service/')) {

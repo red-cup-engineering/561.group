@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { sha256Hex } from "@red-cup-engineering/semiotic-content-address-system";
 // Unpack a privately carried output of the original section publisher.
 import {createHash} from 'node:crypto';
 import {execFileSync} from 'node:child_process';
@@ -6,13 +7,13 @@ import {mkdir,readFile,writeFile} from 'node:fs/promises';
 import {dirname,isAbsolute,join,resolve} from 'node:path';
 import {gunzipSync} from 'node:zlib';
 const [archive,archiveSha,output,manifestSha]=process.argv.slice(2);
-const digest=b=>createHash('sha256').update(b).digest('hex');
+
 if(!archive||!isAbsolute(output??'')||!/^[a-f0-9]{64}$/u.test(archiveSha??'')||!/^[a-f0-9]{64}$/u.test(manifestSha??''))
   throw Error('Expected archive, exact archive SHA256, absolute new output directory and exact manifest SHA256');
 const bytes=await readFile(archive);
-if(bytes.length>32*1024*1024||digest(bytes)!==archiveSha)throw Error('Section release archive differs from selected source');
+if(bytes.length>32*1024*1024||sha256Hex(bytes)!==archiveSha)throw Error('Section release archive differs from selected source');
 const payload=JSON.parse(gunzipSync(bytes,{maxOutputLength:192*1024*1024}));
-if(payload.format!=='561.section-release-bundle/v1'||typeof payload.manifest!=='string'||digest(payload.manifest)!==manifestSha||!Array.isArray(payload.files))
+if(payload.format!=='561.section-release-bundle/v1'||typeof payload.manifest!=='string'||sha256Hex(payload.manifest)!==manifestSha||!Array.isArray(payload.files))
   throw Error('Invalid selected section release payload');
 const manifest=JSON.parse(payload.manifest);
 if(manifest.format!==payload.format||!Array.isArray(manifest.files)||manifest.files.length>50000||manifest.files.length!==payload.files.length)
@@ -27,7 +28,7 @@ for(const file of payload.files){
   const record=expected.get(path);
   if(!record||!Number.isSafeInteger(record.bytes)||record.bytes<0||typeof file.base64!=='string'||file.base64.length!==4*Math.ceil(record.bytes/3))throw Error('Unexpected release payload');
   const b=Buffer.from(file.base64,'base64');total+=b.length;
-  if(total>128*1024*1024||b.toString('base64')!==file.base64||b.length!==record.bytes||digest(b)!==record.sha256)throw Error('Release payload differs from manifest');
+  if(total>128*1024*1024||b.toString('base64')!==file.base64||b.length!==record.bytes||sha256Hex(b)!==record.sha256)throw Error('Release payload differs from manifest');
   entries.set(path,b);
 }
 await mkdir(output); // An existing directory belongs to another attempt.
