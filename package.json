@@ -17,7 +17,7 @@
     "source-catalog": "node scripts/source-catalog.mjs",
     "precheck:brand-source": "npm run bind",
     "check:brand-source": "node scripts/verify-brand-source.mjs .brand-source",
-    "install:observation": "npm ci --prefix scripts/site-observation --ignore-scripts --no-audit --no-fund"
+    "install:observation": "npm ci --prefix scripts/site-observation --ignore-scripts --no-audit --no-fund --cache ./data/state/package-cache-state"
   },
   "engines": {
     "node": ">=24.2.0"
