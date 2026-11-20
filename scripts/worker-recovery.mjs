@@ -7,7 +7,7 @@ import {pathToFileURL} from 'node:url';
 const WORKER = '561-group-site';
 const UUID = /^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/iu;
 const ACCOUNT = /^[a-f0-9]{32}$/iu;
-const RECEIPT = 'observations/561.group-worker-recovery-preflight.json';
+const RECORD = 'observations/561.group-worker-recovery-preflight.json';
 const RESULT = 'observations/561.group-worker-recovery-result.json';
 
 function exactUuid(value, name) {
@@ -39,7 +39,7 @@ export function deploymentsOf(payload) {
 }
 
 /** An independently selected historical 100%-traffic version, not a guessed previous upload. */
-export function qualifyRollback(payload, {expectedDeploymentId, targetVersionId}) {
+export function validateRollback(payload, {expectedDeploymentId, targetVersionId}) {
   const expected = exactUuid(expectedDeploymentId, 'expected active deployment');
   const target = exactUuid(targetVersionId, 'target version');
   const entries = deploymentsOf(payload);
@@ -64,7 +64,7 @@ export function qualifyRollback(payload, {expectedDeploymentId, targetVersionId}
     historicalDeploymentId: historical.id.toLowerCase(),
     targetVersionId: target,
     inspectionScope: 'Cloudflare provider-native deployment history (first 100 entries)',
-    providerReceiptAuthenticated: 'API-token-accepted',
+    providerRecordAuthenticated: 'API-token-accepted',
     rollbackPerformed: false,
   });
 }
@@ -128,16 +128,16 @@ async function main() {
   });
   await mkdir('observations',{recursive:true});
   if (mode === 'preflight') {
-    const receipt = qualifyRollback(provider,{
+    const record = validateRollback(provider,{
       expectedDeploymentId: process.env.EXPECTED_DEPLOYMENT_ID,
       targetVersionId: process.env.TARGET_VERSION_ID,
     });
-    await writeFile(RECEIPT,JSON.stringify(receipt,null,2)+'\n');
-    console.log('Provider preflight: active '+receipt.activeDeploymentId+
-      ', exact historical version '+receipt.targetVersionId+'; no change made');
+    await writeFile(RECORD,JSON.stringify(record,null,2)+'\n');
+    console.log('Provider preflight: active '+record.activeDeploymentId+
+      ', exact historical version '+record.targetVersionId+'; no change made');
     return;
   }
-  const before = JSON.parse(await readFile(RECEIPT,'utf8'));
+  const before = JSON.parse(await readFile(RECORD,'utf8'));
   if (before.targetVersionId !== exactUuid(process.env.TARGET_VERSION_ID,'target version') ||
       before.activeDeploymentId !== exactUuid(process.env.EXPECTED_DEPLOYMENT_ID,'expected deployment')) {
     throw new Error('Recovery inputs changed between preflight and verification');

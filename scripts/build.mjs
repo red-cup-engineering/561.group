@@ -7,8 +7,8 @@ import { fileURLToPath } from "node:url";
 import { createHash } from "node:crypto";
 
 import { renderHumans, renderSecurity, renderIndex, renderLlms, renderLlmsFull, renderRobots, renderSitemap } from "../src/render.mjs";
-import { readFeedsWithCoverage, mergeItems, renderFeedInputReceipt, renderFeedItemProvenance, renderJsonFeed, renderAtom, renderRss } from "../src/feed.mjs";
-import {renderEditorialQuestionProvenance} from "../src/editorial-question-provenance.mjs";
+import { readFeedsWithCoverage, mergeItems, renderFeedInputRecord, renderFeedItemOrigin, renderJsonFeed, renderAtom, renderRss } from "../src/feed.mjs";
+import {renderEditorialQuestionOrigin} from "../src/editorial-question-provenance.mjs";
 import {renderStaticAssetHeaders} from "../src/public-delivery.mjs";
 import { LOCALES, localePath, siteSpace, speaker } from "../src/locales.mjs";
 
@@ -107,9 +107,9 @@ const files = {
   "public/estate-records.json": JSON.stringify(estate, null, 2) + "\n",
   // English / is served by TUFTE + LivingWebServer, never by a competing static index.
   ...Object.fromEntries(LOCALES.filter(tag => tag !== "en").map((tag) => [`public${localePath(tag)}index.html`, renderIndex(home, estate, speakers[tag], items)])),
-  "public/feed-input-receipt.json": renderFeedInputReceipt(home, feedSources, items, withheldFeedItems),
-  "public/feed-provenance.jsonld": renderFeedItemProvenance(home, feedSources, items),
-  "public/editorial-question-provenance.jsonld": renderEditorialQuestionProvenance(home,frontdoor,frontdoorSha256),
+  "public/feed-input-record.json": renderFeedInputRecord(home, feedSources, items, withheldFeedItems),
+  "public/feed-origin.jsonld": renderFeedItemOrigin(home, feedSources, items),
+  "public/editorial-question-origin.jsonld": renderEditorialQuestionOrigin(home,frontdoor,frontdoorSha256),
   "public/feed.json": renderJsonFeed(home, items),
   "public/feed.atom.xml": renderAtom(home, items, `${updated}T00:00:00Z`),
   "public/feed.rss.xml": renderRss(home, items),

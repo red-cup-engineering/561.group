@@ -83,19 +83,19 @@ export function admitGroupBlogFeed(home, feed) {
  * This refuses claims of complete coverage that lack all original publisher
  * source observations. It is not a fresh fetch, fact-check, correction
  * acceptance, or a claim that sixty items represent the whole archive. */
-export function admitGroupBlogCoverage(home,feed,receipt){
+export function admitGroupBlogCoverage(home,feed,record){
   if(home?.origin!=="https://561.group"||
      !Array.isArray(home.group?.companies)||home.group.companies.length!==4||
-     !receipt||receipt.schema!=="561.group/feed-input-receipt/v1"||
-     receipt.origin!==home.origin||receipt.expectedSourceCount!==4||
-     !Array.isArray(receipt.sources)||receipt.sources.length!==4)
+     !record||record.schema!=="561.group/feed-input-receipt/v1"||
+     record.origin!==home.origin||record.expectedSourceCount!==4||
+     !Array.isArray(record.sources)||record.sources.length!==4)
     throw new TypeError("Blog source coverage requires the original four-company build receipt");
   const companies=home.group.companies;
   const digest=/^sha256:[a-f0-9]{64}$/u;
   const validCount=n=>Number.isSafeInteger(n)&&n>=0;
   let observedItems=0,received=0;
   const sources=companies.map((company,i)=>{
-    const entry=receipt.sources[i];
+    const entry=record.sources[i];
     if(!entry||entry.companyId!==company.id||
        entry.feedUrl!==company.feeds?.json||
        !["received","unavailable","refused"].includes(entry.state))
@@ -112,26 +112,26 @@ export function admitGroupBlogCoverage(home,feed,receipt){
     return Object.freeze({company,state:entry.state,
       ...(entry.state==="received"?{inputItems:entry.inputItems}:{})});
   });
-  if(!receipt.excludedItemCounts||typeof receipt.excludedItemCounts!=="object"||
-     Array.isArray(receipt.excludedItemCounts))
+  if(!record.excludedItemCounts||typeof record.excludedItemCounts!=="object"||
+     Array.isArray(record.excludedItemCounts))
     throw new TypeError("Blog build cannot hide invalid feed-exclusion counts");
   let rejected=0;
-  for(const [reason,count] of Object.entries(receipt.excludedItemCounts)){
+  for(const [reason,count] of Object.entries(record.excludedItemCounts)){
     if(!/^[a-z][a-z0-9-]{0,79}$/u.test(reason)||!Number.isSafeInteger(count)||count<1)
       throw new TypeError("Blog exclusion accounting is malformed");
     rejected+=count;
   }
   const admitted=observedItems-rejected;
-  if(!validCount(receipt.sourceItemCount)||
-     !validCount(receipt.admittedItems)||
-     !validCount(receipt.emittedItems)||
-     !validCount(receipt.omittedByAggregateLimit)||
+  if(!validCount(record.sourceItemCount)||
+     !validCount(record.admittedItems)||
+     !validCount(record.emittedItems)||
+     !validCount(record.omittedByAggregateLimit)||
      !Array.isArray(feed?.items)||
-     observedItems!==receipt.sourceItemCount||
-     admitted<0||admitted!==receipt.admittedItems||
-     feed.items.length!==receipt.emittedItems||
-     receipt.emittedItems!==Math.min(admitted,GROUP_BLOG_LIMIT)||
-     admitted-receipt.emittedItems!==receipt.omittedByAggregateLimit)
+     observedItems!==record.sourceItemCount||
+     admitted<0||admitted!==record.admittedItems||
+     feed.items.length!==record.emittedItems||
+     record.emittedItems!==Math.min(admitted,GROUP_BLOG_LIMIT)||
+     admitted-record.emittedItems!==record.omittedByAggregateLimit)
     throw new TypeError("Blog received and selected article counts disagree");
   // A source admission receipt is not merely a total: a selected feed item
   // must belong to an actually received company source, and a source cannot
@@ -150,10 +150,10 @@ export function admitGroupBlogCoverage(home,feed,receipt){
     selectedCounts.set(origin,selected);
   }
   const complete=received===4;
-  if(receipt.completeness!==(complete?"all-sources-received":"partial-source-coverage"))
+  if(record.completeness!==(complete?"all-sources-received":"partial-source-coverage"))
     throw new TypeError("Blog source snapshot claims unwitnessed completeness");
   return Object.freeze({sources:Object.freeze(sources),
     received,expected:4,observedItems,admitted,rejected,
-    selected:receipt.emittedItems,omittedByLimit:receipt.omittedByAggregateLimit,
+    selected:record.emittedItems,omittedByLimit:record.omittedByAggregateLimit,
     complete});
 }

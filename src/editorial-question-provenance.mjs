@@ -45,7 +45,7 @@ function sourceQuestions(home,frontdoor) {
 /** Source byte digest identifies the EXACT original frontdoor.json consumed
  * by this site, not a Git SHA of the application and not a scientific proof.
  * Link destinations remain citations chosen by the original editor. */
-export function renderEditorialQuestionProvenance(home,frontdoor,frontdoorSha256){
+export function renderEditorialQuestionOrigin(home,frontdoor,frontdoorSha256){
   if(!SHA256.test(frontdoorSha256??""))fail("immutable original editorial byte digest required");
   const questions=sourceQuestions(home,frontdoor);
   const sourceId="urn:sha256:"+frontdoorSha256;
@@ -91,8 +91,8 @@ export function renderEditorialQuestionProvenance(home,frontdoor,frontdoorSha256
 /** Exact-source semantic assent on the SAME public response bytes.
  * Unknown/extra graph entities and changed answer/citation text are refused.
  * This says only that the readback matches authored editorial bytes. */
-export function assayEditorialQuestionProvenance({home,frontdoor,frontdoorSha256,graph}){
-  const expected=JSON.parse(renderEditorialQuestionProvenance(home,frontdoor,frontdoorSha256));
+export function checkEditorialQuestionOrigin({home,frontdoor,frontdoorSha256,graph}){
+  const expected=JSON.parse(renderEditorialQuestionOrigin(home,frontdoor,frontdoorSha256));
   if(JSON.stringify(graph)!==JSON.stringify(expected))
     fail("public source-backed graph differs from original editorial questions");
   return Object.freeze({

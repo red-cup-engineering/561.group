@@ -54,7 +54,7 @@ export function qualifySuppliers({manifest,lock,registry}) {
   return Object.freeze({living:living.version,tufte:tufte.version,markdown:markdown.version});
 }
 
-export function qualifyRelease({mainBranch,sourceSha,checkoutSha,receipt,
+export function validateRelease({mainBranch,sourceSha,checkoutSha,receipt,
   lockPresent,dependenciesInstalled,requiredAssets,duplicateIndex}){
   if(mainBranch!=="main")throw new Error("Only the original main branch may be released");
   if(!SHA.test(sourceSha??"")||!SHA.test(checkoutSha??"")||
@@ -99,14 +99,14 @@ export async function awaitPublishedRevision({
       });
       if(response.status!==200)last="http-"+response.status;
       else {
-        const receipt=await response.json();
-        if(receipt?.repository==="561-group/561.group"&&
-           receipt?.origin===origin&&receipt?.renderer==="TUFTE"&&
-           receipt?.application==="LivingWebServer"&&
-           receipt?.sourceCommit===sourceSha) {
-          return receipt;
+        const record=await response.json();
+        if(record?.repository==="561-group/561.group"&&
+           record?.origin===origin&&record?.renderer==="TUFTE"&&
+           record?.application==="LivingWebServer"&&
+           record?.sourceCommit===sourceSha) {
+          return record;
         }
-        last=receipt?.sourceCommit?"source-mismatch":"invalid-receipt";
+        last=record?.sourceCommit?"source-mismatch":"invalid-receipt";
       }
     }catch { last="unreadable-public-receipt"; }
     if(step<attempts)await wait(intervalMs);
@@ -134,10 +134,10 @@ async function main(){
   }catch(error){if(error.code!=="ENOENT")throw error;}
   const requiredAssets=[];
   for(const path of required)if(!(await missing(path))&&(await stat(path)).size>50)requiredAssets.push(path);
-  const receiptOf=qualifyRelease({mainBranch,sourceSha,checkoutSha,receipt,
+  const recordOf=validateRelease({mainBranch,sourceSha,checkoutSha,receipt,
     lockPresent,dependenciesInstalled,requiredAssets,
     duplicateIndex:!(await missing("public/index.html"))});
-  console.log("Original public source preflight "+receiptOf.sourceCommit+
+  console.log("Original public source preflight "+recordOf.sourceCommit+
     "; provider deployment and independent reader acceptance NOT claimed");
 }
 if(process.argv[1]&&import.meta.url===pathToFileURL(process.argv[1]).href)await main();

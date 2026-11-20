@@ -5,7 +5,7 @@ import { isRecord } from "@red-cup-engineering/signcell/values";
  * JSON evidence, feeds, or arbitrary generated assets. Content authenticity
  * is checked separately against exact public SHA-256 bytes after this check.
  */
-export function qualifyPublicAssetReadPath({origin,path,redirected,responseUrl,contentType}) {
+export function validatePublicAssetReadPath({origin,path,redirected,responseUrl,contentType}) {
   if(origin!=="https://561.group" || typeof path!=="string" || !path ||
      typeof redirected!=="boolean")
     throw new TypeError("Public artifact route requires exact origin, path and redirect reading");
@@ -52,7 +52,7 @@ const typed = (node, kind) => node?.["@type"] === kind ||
 // contentless items. This exception is private to the transition assessor.
 const HISTORICAL_CONTENTLESS_REVISION = "f9d59a82c78136d409dee4286a97d6d9d3142f94";
 
-function assayPublication({ home, feed, receipt, graph }, { historicalContentless = false } = {}) {
+function checkPublication({ home, feed, receipt, graph }, { historicalContentless = false } = {}) {
   if (home?.origin !== "https://561.group" ||
       !Array.isArray(home.group?.companies) || home.group.companies.length !== 4)
     fail("original four companies are required");
@@ -203,8 +203,8 @@ function assayPublication({ home, feed, receipt, graph }, { historicalContentles
 
 // Production public-byte receiving always uses the strict contemporary
 // contract. No public caller can set the read-only historical exception.
-export function assayPublicFeedProjection(publication) {
-  return assayPublication(publication);
+export function checkPublicFeedProjection(publication) {
+  return checkPublication(publication);
 }
 
 // This deterministic exact URL identity matches the original build's
@@ -223,7 +223,7 @@ export function comparePublicFeedRevisions({home,previous,proposed,observedAt}){
        snapshot.sourceRevision.origin!==home?.origin ||
        !/^[a-f0-9]{40}$/u.test(snapshot.sourceRevision.sourceCommit??""))
       fail("missing exact "+label+" release identity");
-    assayPublication({home,feed:snapshot.feed,
+    checkPublication({home,feed:snapshot.feed,
       receipt:snapshot.receipt,graph:snapshot.graph}, {
         historicalContentless:label==="previous" &&
           snapshot.sourceRevision.sourceCommit===HISTORICAL_CONTENTLESS_REVISION

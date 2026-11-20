@@ -674,12 +674,12 @@ function agentPage(home, estate, frontdoor) {
       actions([{href:home.group.marketGuide,label:"Current merchant guide"},{href:"/work/",label:"Human scoping and contact"}]),12)
   ];
 }
-export function project561GroupPage({home,estate,frontdoor,feed,feedReceipt,path = "/"}) {
+export function project561GroupPage({home,estate,frontdoor,feed,feedRecord,path = "/"}) {
   if (!PUBLIC_ROUTES.includes(path)) throw new RangeError("Unadmitted Group public route");
   const source = checkedSources(home,estate,frontdoor);
   const blog = path === "/blog/" ? Object.freeze({
     ...admitGroupBlogFeed(home,feed),
-    coverage:admitGroupBlogCoverage(home,feed,feedReceipt)
+    coverage:admitGroupBlogCoverage(home,feed,feedRecord)
   }) : null;
   const page = {
     "/": {title:home.name,subtitle:"Indigenous-grounded governance · Artificial abiogenesis · Practical services"},

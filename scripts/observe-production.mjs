@@ -317,7 +317,7 @@ function publicGroupSample(sample,url) {
  * 200 with an expected title and canonical address remains an HTTP
  * observation, NEVER a source->build->provider custody or readership proof.
  * Unreachable, missing and changed content are preserved distinctly. */
-export function qualifyGroupClimateVisibility(def,article,homepage) {
+export function validateGroupClimateVisibility(def,article,homepage) {
   const origin='https://'+def.domain;
   const articleUrl=origin+'/'+def.slug+'/';
   const homeUrl=origin+'/';
@@ -325,7 +325,7 @@ export function qualifyGroupClimateVisibility(def,article,homepage) {
   const homeResult=publicGroupSample(homepage,homeUrl);
   const base={group:def.group,sourceRepository:def.sourceRepository,
     articleUrl,homepageUrl:homeUrl,article:articleResult,homepage:homeResult,
-    providerReceiptAuthenticated:false,sourceByteEquivalenceVerified:false,
+    providerRecordAuthenticated:false,sourceByteEquivalenceVerified:false,
     externallyIndexed:null,independentHumanAcceptance:null};
   if(article.unknown || homepage.unknown)
     return {...base,status:'incomplete-public-observation',
@@ -359,7 +359,7 @@ export async function observeGroupClimateVisibility({fetchImpl,timeoutMs,clock})
       observe(origin+'/'+def.slug+'/', 'text/html',fetchImpl,timeoutMs,clock),
       observe(origin+'/', 'text/html',fetchImpl,timeoutMs,clock),
     ]);
-    return qualifyGroupClimateVisibility(def,article,homepage);
+    return validateGroupClimateVisibility(def,article,homepage);
   }));
   return {
     schema:'561.group.group-climate-reader-observations/v1',

@@ -143,7 +143,7 @@ function admitMarketPackageTests(selected, workOrder) {
 
 export function admitMarketFabricationWorkOrder(workOrder) {
   requireThat(workOrder?.kind === '561.market-worker-fabrication-work-order/v1', 'INVALID_FABRICATION_WORK_ORDER');
-  const { target, source, baseline, payment, incumbentCarrier, compiler, sourceInputs, suppliers, qualificationSuites, declarations } = workOrder;
+  const { target, source, baseline, payment, incumbentCarrier, compiler, sourceInputs, suppliers, validationSuites, declarations } = workOrder;
   requireThat(
     target?.accountId === TARGET_ACCOUNT_ID && target?.scriptName === TARGET_SCRIPT_NAME &&
       target?.origin === TARGET_ORIGIN && equal(target?.aliases, TARGET_ALIASES),
@@ -216,24 +216,24 @@ export function admitMarketFabricationWorkOrder(workOrder) {
     seenInputPaths.add(item.path);
   }
   requireThat(Array.isArray(suppliers) && suppliers.length > 0 && suppliers.length <= 64, 'SUPPLIER_SELECTION_REQUIRED');
-  for (const supplier of suppliers) {
+  for (const provider of suppliers) {
     requireThat(
-      typeof supplier?.name === 'string' && /^@[a-z0-9-]+\/[a-z0-9._-]+$|^[a-z0-9._-]+$/u.test(supplier.name) &&
-        VERSION.test(supplier.version ?? '') && SRI_SHA512.test(supplier.integrity ?? ''),
+      typeof provider?.name === 'string' && /^@[a-z0-9-]+\/[a-z0-9._-]+$|^[a-z0-9._-]+$/u.test(provider.name) &&
+        VERSION.test(provider.version ?? '') && SRI_SHA512.test(provider.integrity ?? ''),
       'SUPPLIER_SELECTION_REQUIRED',
     );
-    checkDescriptor(supplier.manifest, 'SUPPLIER_SELECTION_REQUIRED', 1024 * 1024);
-    requireThat(supplier.manifest.path === 'package.json', 'SUPPLIER_SELECTION_REQUIRED');
-    requireThat(Array.isArray(supplier.files) && supplier.files.length > 0 && supplier.files.length <= 256, 'SUPPLIER_SELECTION_REQUIRED');
-    for (const file of supplier.files) checkDescriptor(file, 'SUPPLIER_SELECTION_REQUIRED');
+    checkDescriptor(provider.manifest, 'SUPPLIER_SELECTION_REQUIRED', 1024 * 1024);
+    requireThat(provider.manifest.path === 'package.json', 'SUPPLIER_SELECTION_REQUIRED');
+    requireThat(Array.isArray(provider.files) && provider.files.length > 0 && provider.files.length <= 256, 'SUPPLIER_SELECTION_REQUIRED');
+    for (const file of provider.files) checkDescriptor(file, 'SUPPLIER_SELECTION_REQUIRED');
   }
-  requireThat(qualificationSuites && typeof qualificationSuites === 'object', 'QUALIFICATION_SUITE_SELECTION_REQUIRED');
-  checkDescriptor(qualificationSuites.sourceSuite, 'QUALIFICATION_SUITE_SELECTION_REQUIRED', 1024 * 1024);
-  if (qualificationSuites.sourceCellSuite !== undefined) {
-    checkDescriptor(qualificationSuites.sourceCellSuite, 'QUALIFICATION_SUITE_SELECTION_REQUIRED', 1024 * 1024);
+  requireThat(validationSuites && typeof validationSuites === 'object', 'QUALIFICATION_SUITE_SELECTION_REQUIRED');
+  checkDescriptor(validationSuites.sourceSuite, 'QUALIFICATION_SUITE_SELECTION_REQUIRED', 1024 * 1024);
+  if (validationSuites.sourceCellSuite !== undefined) {
+    checkDescriptor(validationSuites.sourceCellSuite, 'QUALIFICATION_SUITE_SELECTION_REQUIRED', 1024 * 1024);
   }
-  if (qualificationSuites.workspaceGraphSuite !== undefined) {
-    checkDescriptor(qualificationSuites.workspaceGraphSuite, 'QUALIFICATION_SUITE_SELECTION_REQUIRED', 1024 * 1024);
+  if (validationSuites.workspaceGraphSuite !== undefined) {
+    checkDescriptor(validationSuites.workspaceGraphSuite, 'QUALIFICATION_SUITE_SELECTION_REQUIRED', 1024 * 1024);
   }
   if (workOrder.packageTests !== undefined) admitMarketPackageTests(workOrder.packageTests, workOrder);
   requireThat(declarations && typeof declarations === 'object', 'DECLARATION_SELECTION_REQUIRED');
@@ -331,11 +331,11 @@ async function selectedMarketManifest(directory, expectedManifestSha256) {
     'This credential lane is restricted to the existing original Market target',
     'INVALID_RELEASE_MANIFEST',
   );
-  const hasPriorReceipt = Object.hasOwn(manifest.artifacts ?? {}, 'priorReleaseReceipt');
-  const originalFileCount = Object.keys(manifest.artifacts ?? {}).length - (hasPriorReceipt ? 1 : 0);
+  const hasPriorRecord = Object.hasOwn(manifest.artifacts ?? {}, 'priorReleaseReceipt');
+  const originalFileCount = Object.keys(manifest.artifacts ?? {}).length - (hasPriorRecord ? 1 : 0);
   const keys = Object.keys(manifest.artifacts ?? {}).sort();
-  const retained = [...REQUIRED_FILES, ...(hasPriorReceipt ? ['priorReleaseReceipt'] : [])].sort();
-  const native = [...REQUIRED_FILES, ...NATIVE_FILES, ...(hasPriorReceipt ? ['priorReleaseReceipt'] : [])].sort();
+  const retained = [...REQUIRED_FILES, ...(hasPriorRecord ? ['priorReleaseReceipt'] : [])].sort();
+  const native = [...REQUIRED_FILES, ...NATIVE_FILES, ...(hasPriorRecord ? ['priorReleaseReceipt'] : [])].sort();
   requireThat(
     manifest.artifacts?.receiver && [7, 15].includes(originalFileCount) &&
       (equal(keys, retained) || equal(keys, native)),
@@ -555,7 +555,7 @@ export async function verifyMarketFabricationInputs(sourceRoot, workOrder, {
   for (const descriptor of workOrder.sourceInputs.applicationInputs) {
     await verifyPinnedFile(descriptor);
   }
-  for (const suite of Object.values(workOrder.qualificationSuites)) {
+  for (const suite of Object.values(workOrder.validationSuites)) {
     if (suite !== undefined) await verifyPinnedFile(suite, 'QUALIFICATION_SUITE_BYTES_CHANGED');
   }
 
@@ -779,11 +779,11 @@ export async function verifyInstalledMarketSuppliers(sourceRoot, workOrder) {
 
   const verifiedSuppliers = [];
   for (const supplier of workOrder.suppliers) {
-    const supplierCandidate = join(nodeModulesRoot, ...supplier.name.split('/'));
-    const supplierRoot = await realpath(supplierCandidate).catch(() => null);
-    requireThat(supplierRoot !== null && inside(resolvedSourceRoot, supplierRoot), 'EXTERNAL_SUPPLIER_PATH_REFUSED');
-    const manifestPath = await realpath(join(supplierRoot, 'package.json')).catch(() => null);
-    requireThat(manifestPath !== null && inside(supplierRoot, manifestPath), 'SUPPLIER_MANIFEST_UNRECEIVED');
+    const providerCandidate = join(nodeModulesRoot, ...supplier.name.split('/'));
+    const providerRoot = await realpath(providerCandidate).catch(() => null);
+    requireThat(providerRoot !== null && inside(resolvedSourceRoot, providerRoot), 'EXTERNAL_SUPPLIER_PATH_REFUSED');
+    const manifestPath = await realpath(join(providerRoot, 'package.json')).catch(() => null);
+    requireThat(manifestPath !== null && inside(providerRoot, manifestPath), 'SUPPLIER_MANIFEST_UNRECEIVED');
     const manifestBytes = await readFile(manifestPath);
     requireThat(
       manifestBytes.length === supplier.manifest.bytes && sha256Hex(manifestBytes) === supplier.manifest.sha256,
@@ -793,10 +793,10 @@ export async function verifyInstalledMarketSuppliers(sourceRoot, workOrder) {
     requireThat(manifestJson.name === supplier.name && manifestJson.version === supplier.version, 'SUPPLIER_VERSION_UNRECEIVED');
 
     for (const fileDescriptor of supplier.files) {
-      const targetCandidate = resolve(supplierRoot, fileDescriptor.path);
-      requireThat(inside(supplierRoot, targetCandidate), 'EXTERNAL_SUPPLIER_PATH_REFUSED');
+      const targetCandidate = resolve(providerRoot, fileDescriptor.path);
+      requireThat(inside(providerRoot, targetCandidate), 'EXTERNAL_SUPPLIER_PATH_REFUSED');
       const targetReal = await realpath(targetCandidate).catch(() => null);
-      requireThat(targetReal !== null && inside(supplierRoot, targetReal), 'EXTERNAL_SUPPLIER_PATH_REFUSED');
+      requireThat(targetReal !== null && inside(providerRoot, targetReal), 'EXTERNAL_SUPPLIER_PATH_REFUSED');
       const fileBytes = await readFile(targetReal);
       requireThat(
         fileBytes.length === fileDescriptor.bytes && sha256Hex(fileBytes) === fileDescriptor.sha256,
@@ -821,16 +821,16 @@ export async function verifyInstalledMarketSuppliers(sourceRoot, workOrder) {
 /** Receive the original owner's embedded bytes, not a public TAP interpretation.
  * The caller binds both interpreting functions to the exact private source and
  * locked installed supplier. No raw text or private path is returned here. */
-export function receiveMarketPackageTestEvidence(qualification, request, {
+export function receiveMarketPackageTestEvidence(validation, request, {
   receiveResult, parseTestRunSummary, summaryOwner, compilerManifest,
 }) {
   const selected = request.packageTests;
-  requireThat(selected && equal(qualification.source, request.source) &&
-    qualification.sourceRevision === request.source.revision &&
-    qualification.workerSha256 === request.artifact.sha256 && qualification.workerBytes === request.artifact.bytes &&
-    qualification.buildReceiptSha256 === request.buildReceipt.sha256 &&
-    qualification.configurationSha256 === request.configuration.sha256, 'PACKAGE_TEST_QUALIFICATION_MISMATCH');
-  const documents = qualification.evidenceDocuments;
+  requireThat(selected && equal(validation.source, request.source) &&
+    validation.sourceRevision === request.source.revision &&
+    validation.workerSha256 === request.artifact.sha256 && validation.workerBytes === request.artifact.bytes &&
+    validation.buildReceiptSha256 === request.buildReceipt.sha256 &&
+    validation.configurationSha256 === request.configuration.sha256, 'PACKAGE_TEST_QUALIFICATION_MISMATCH');
+  const documents = validation.evidenceDocuments;
   requireThat(Array.isArray(documents), 'PACKAGE_TEST_EVIDENCE_REQUIRED');
   const receiveDocument = (descriptor, expectedPath, maximum, empty = false) => {
     requireThat(descriptor?.path === expectedPath && SHA.test(descriptor.sha256 ?? '') &&
@@ -844,7 +844,7 @@ export function receiveMarketPackageTestEvidence(qualification, request, {
       sha256Hex(document.text) === descriptor.sha256, 'PACKAGE_TEST_EVIDENCE_BYTES_CHANGED');
     return document.text;
   };
-  const descriptor = qualification.evidence?.packageTests;
+  const descriptor = validation.evidence?.packageTests;
   let observation;
   const text = receiveDocument(descriptor, 'package-tests-observations.json', 1024 * 1024);
   try { observation = JSON.parse(text); }
@@ -986,7 +986,7 @@ export async function fabricateMarketCarrier(workOrder, {
       delete process.env[key];
     }
 
-    const supplierVerification = installSuppliers
+    const providerVerification = installSuppliers
       ? await installFrozenMarketSuppliers(sourceRoot, workOrder, {
         storeDir: join(workspaceRoot, 'pnpm-store'),
         cacheDir: join(workspaceRoot, 'pnpm-cache'),
@@ -1033,36 +1033,36 @@ export async function fabricateMarketCarrier(workOrder, {
     const buildOutputEntries = await readdir(nativeWorkerOutputRoot);
     requireThat(buildOutputEntries.every(name => ADMITTED_BUILD_OUTPUT_NAMES.has(name)), 'UNDECLARED_BUILD_OUTPUT_REFUSED');
 
-    const buildReceiptPath = join(nativeWorkerOutputRoot, 'build-receipt.json');
-    const buildReceiptBytes = await readFile(buildReceiptPath);
-    const parsedBuildReceipt = JSON.parse(buildReceiptBytes.toString('utf8'));
+    const buildRecordPath = join(nativeWorkerOutputRoot, 'build-receipt.json');
+    const buildRecordBytes = await readFile(buildRecordPath);
+    const parsedBuildRecord = JSON.parse(buildRecordBytes.toString('utf8'));
     requireThat(
-      parsedBuildReceipt?.kind === 'native-market-worker-build' &&
-        parsedBuildReceipt.source?.repository === MARKET_REPOSITORY &&
-        parsedBuildReceipt.source?.revision === workOrder.source.market.revision &&
-        parsedBuildReceipt.deploymentBindings?.MARKET_BUILD_SHA === workOrder.source.market.revision &&
-        parsedBuildReceipt.sourceBindings?.parameters?.repository === PARAMETERS_REPOSITORY &&
-        parsedBuildReceipt.sourceBindings?.parameters?.revision === workOrder.source.public.revision &&
-        parsedBuildReceipt.sourceBindings?.parameters?.gitlink === workOrder.source.public.gitlink &&
-        parsedBuildReceipt.predecessorClosureReplayed === false &&
-        parsedBuildReceipt.nativeMetadataComplete === true,
+      parsedBuildRecord?.kind === 'native-market-worker-build' &&
+        parsedBuildRecord.source?.repository === MARKET_REPOSITORY &&
+        parsedBuildRecord.source?.revision === workOrder.source.market.revision &&
+        parsedBuildRecord.deploymentBindings?.MARKET_BUILD_SHA === workOrder.source.market.revision &&
+        parsedBuildRecord.sourceBindings?.parameters?.repository === PARAMETERS_REPOSITORY &&
+        parsedBuildRecord.sourceBindings?.parameters?.revision === workOrder.source.public.revision &&
+        parsedBuildRecord.sourceBindings?.parameters?.gitlink === workOrder.source.public.gitlink &&
+        parsedBuildRecord.predecessorClosureReplayed === false &&
+        parsedBuildRecord.nativeMetadataComplete === true,
       'ORIGINAL_WORKER_BUILD_UNRECEIVED',
     );
 
-    const workerFileName = basename(parsedBuildReceipt.output ?? 'worker.js');
+    const workerFileName = basename(parsedBuildRecord.output ?? 'worker.js');
     requireThat(['worker.js', 'worker.mjs'].includes(workerFileName), 'UNDECLARED_BUILD_OUTPUT_REFUSED');
     const workerPath = join(nativeWorkerOutputRoot, workerFileName);
     const workerBytes = await readFile(workerPath);
-    requireThat(workerBytes.length === parsedBuildReceipt.bytes && sha256Hex(workerBytes) === parsedBuildReceipt.sha256, 'WORKER_BYTES_CHANGED');
+    requireThat(workerBytes.length === parsedBuildRecord.bytes && sha256Hex(workerBytes) === parsedBuildRecord.sha256, 'WORKER_BYTES_CHANGED');
 
-    const sourceInputsBytes = await readFile(join(nativeWorkerOutputRoot, parsedBuildReceipt.sourceInputs.path));
+    const sourceInputsBytes = await readFile(join(nativeWorkerOutputRoot, parsedBuildRecord.sourceInputs.path));
     requireThat(
-      sourceInputsBytes.length === parsedBuildReceipt.sourceInputs.bytes &&
-        sha256Hex(sourceInputsBytes) === parsedBuildReceipt.sourceInputs.sha256,
+      sourceInputsBytes.length === parsedBuildRecord.sourceInputs.bytes &&
+        sha256Hex(sourceInputsBytes) === parsedBuildRecord.sourceInputs.sha256,
       'NATIVE_PROVENANCE_BYTES_UNRECEIVED',
     );
     const sourceInputsList = JSON.parse(sourceInputsBytes.toString('utf8'));
-    requireThat(Array.isArray(sourceInputsList) && sourceInputsList.length === parsedBuildReceipt.inputs, 'NATIVE_PROVENANCE_BYTES_UNRECEIVED');
+    requireThat(Array.isArray(sourceInputsList) && sourceInputsList.length === parsedBuildRecord.inputs, 'NATIVE_PROVENANCE_BYTES_UNRECEIVED');
     for (const inputRow of sourceInputsList) {
       if (inputRow.kind === 'physical') {
         requireThat(
@@ -1074,10 +1074,10 @@ export async function fabricateMarketCarrier(workOrder, {
       }
     }
 
-    const packageManifestsBytes = await readFile(join(nativeWorkerOutputRoot, parsedBuildReceipt.packageManifests.path));
+    const packageManifestsBytes = await readFile(join(nativeWorkerOutputRoot, parsedBuildRecord.packageManifests.path));
     requireThat(
-      packageManifestsBytes.length === parsedBuildReceipt.packageManifests.bytes &&
-        sha256Hex(packageManifestsBytes) === parsedBuildReceipt.packageManifests.sha256,
+      packageManifestsBytes.length === parsedBuildRecord.packageManifests.bytes &&
+        sha256Hex(packageManifestsBytes) === parsedBuildRecord.packageManifests.sha256,
       'NATIVE_PROVENANCE_BYTES_UNRECEIVED',
     );
     const packageManifestsList = JSON.parse(packageManifestsBytes.toString('utf8'));
@@ -1104,25 +1104,25 @@ export async function fabricateMarketCarrier(workOrder, {
         sha256: sha256Hex(workerBytes),
       },
       buildReceipt: {
-        path: buildReceiptPath,
-        bytes: buildReceiptBytes.length,
-        sha256: sha256Hex(buildReceiptBytes),
+        path: buildRecordPath,
+        bytes: buildRecordBytes.length,
+        sha256: sha256Hex(buildRecordBytes),
       },
       configuration: {
-        path: join(nativeWorkerOutputRoot, parsedBuildReceipt.configuration.path),
-        bytes: parsedBuildReceipt.configuration.bytes,
-        sha256: parsedBuildReceipt.configuration.sha256,
+        path: join(nativeWorkerOutputRoot, parsedBuildRecord.configuration.path),
+        bytes: parsedBuildRecord.configuration.bytes,
+        sha256: parsedBuildRecord.configuration.sha256,
       },
-      sourceSuiteSha256: workOrder.qualificationSuites.sourceSuite.sha256,
-      ...(workOrder.qualificationSuites.sourceCellSuite
-        ? { sourceCellSuiteSha256: workOrder.qualificationSuites.sourceCellSuite.sha256 }
+      sourceSuiteSha256: workOrder.validationSuites.sourceSuite.sha256,
+      ...(workOrder.validationSuites.sourceCellSuite
+        ? { sourceCellSuiteSha256: workOrder.validationSuites.sourceCellSuite.sha256 }
         : {}),
-      ...(workOrder.qualificationSuites.workspaceGraphSuite
-        ? { workspaceGraphSuiteSha256: workOrder.qualificationSuites.workspaceGraphSuite.sha256 }
+      ...(workOrder.validationSuites.workspaceGraphSuite
+        ? { workspaceGraphSuiteSha256: workOrder.validationSuites.workspaceGraphSuite.sha256 }
         : {}),
       ...(workOrder.packageTests !== undefined ? {
         packageTests: structuredClone(workOrder.packageTests),
-        frozenInstallation: structuredClone(supplierVerification.frozenInstallation),
+        frozenInstallation: structuredClone(providerVerification.frozenInstallation),
       } : {}),
       timeoutMs: workOrder.timeoutMs ?? 180_000,
     };
@@ -1136,22 +1136,22 @@ export async function fabricateMarketCarrier(workOrder, {
     // request object, so it cannot narrow enrollment in the receiving comparison.
     await runReceiveWorker(structuredClone(receivingRequest));
 
-    const qualificationPath = join(nativeReceivingOutputRoot, 'native-qualification.json');
-    const qualificationBytes = await readFile(qualificationPath);
-    const parsedQualification = JSON.parse(qualificationBytes.toString('utf8'));
+    const validationPath = join(nativeReceivingOutputRoot, 'native-qualification.json');
+    const validationBytes = await readFile(validationPath);
+    const parsedValidation = JSON.parse(validationBytes.toString('utf8'));
     requireThat(
-      parsedQualification?.kind === '561.market-worker-native-qualification/v1' &&
-        parsedQualification.sourceRevision === workOrder.source.market.revision &&
-        parsedQualification.workerSha256 === parsedBuildReceipt.sha256 &&
-        parsedQualification.outsidePaymentReceived === false &&
-        parsedQualification.artifactInternalComputationInstrumented === false &&
-        Object.values(parsedQualification.checks ?? {}).every(item => item?.passed === true),
+      parsedValidation?.kind === '561.market-worker-native-qualification/v1' &&
+        parsedValidation.sourceRevision === workOrder.source.market.revision &&
+        parsedValidation.workerSha256 === parsedBuildRecord.sha256 &&
+        parsedValidation.outsidePaymentReceived === false &&
+        parsedValidation.artifactInternalComputationInstrumented === false &&
+        Object.values(parsedValidation.checks ?? {}).every(item => item?.passed === true),
       'NATIVE_WORKER_RECEIVING_REQUIRED',
     );
 
     let packageTestReceiving;
     if (workOrder.packageTests !== undefined) {
-      requireThat(parsedQualification.evidence?.packageTests, 'PACKAGE_TEST_EVIDENCE_REQUIRED');
+      requireThat(parsedValidation.evidence?.packageTests, 'PACKAGE_TEST_EVIDENCE_REQUIRED');
       // Re-receive the exact native result owner before importing it. The
       // original receiver owns pre/post execution; source movement is refused.
       await verifyMarketFabricationInputs(sourceRoot, workOrder, { exec });
@@ -1167,9 +1167,9 @@ export async function fabricateMarketCarrier(workOrder, {
       const summaryOwner = fileIdentity(summaryPath, await readFile(summaryPath));
       const nativeReceiver = await import(pathToFileURL(receiverModulePath).href);
       const { parseTestRunSummary } = await import(pathToFileURL(summaryPath).href);
-      packageTestReceiving = receiveMarketPackageTestEvidence(parsedQualification, receivingRequest, {
+      packageTestReceiving = receiveMarketPackageTestEvidence(parsedValidation, receivingRequest, {
         receiveResult: nativeReceiver.receiveNativeMarketPackageTestResult, parseTestRunSummary,
-        summaryOwner, compilerManifest: supplierVerification.compiler.esbuild.manifestPath,
+        summaryOwner, compilerManifest: providerVerification.compiler.esbuild.manifestPath,
       });
     }
 
@@ -1182,7 +1182,7 @@ export async function fabricateMarketCarrier(workOrder, {
     await runBuildReceiver({
       sourceRevision: receiverSourceRevision,
       cloudflareRevision: workOrder.source.cloudflare.revision,
-      compilerManifest: supplierVerification.compiler.esbuild.manifestPath,
+      compilerManifest: providerVerification.compiler.esbuild.manifestPath,
       outputRoot: nativeReceiverOutputRoot,
     });
 
@@ -1249,18 +1249,18 @@ export async function fabricateMarketCarrier(workOrder, {
     await mkdir(carrierDirectory, { recursive: true, mode: 0o700 });
     const nativeArtifactFiles = [
       ['worker', workerFileName, workerBytes],
-      ['buildReceipt', 'build-receipt.json', buildReceiptBytes],
-      ['sourceInputs', parsedBuildReceipt.sourceInputs.path, sourceInputsBytes],
-      ['packageManifests', parsedBuildReceipt.packageManifests.path, packageManifestsBytes],
-      ['sourceManifest', parsedBuildReceipt.sourceManifest.path, await readFile(join(nativeWorkerOutputRoot, parsedBuildReceipt.sourceManifest.path))],
-      ['lockfile', parsedBuildReceipt.lockfile.path, await readFile(join(nativeWorkerOutputRoot, parsedBuildReceipt.lockfile.path))],
-      ['configuration', parsedBuildReceipt.configuration.path, await readFile(join(nativeWorkerOutputRoot, parsedBuildReceipt.configuration.path))],
-      ['metafile', parsedBuildReceipt.metafile.path, await readFile(join(nativeWorkerOutputRoot, parsedBuildReceipt.metafile.path))],
-      ['sourceMap', parsedBuildReceipt.sourceMap.path, await readFile(join(nativeWorkerOutputRoot, parsedBuildReceipt.sourceMap.path))],
-      ['parameterSourceManifest', parsedBuildReceipt.parameterSourceManifest.path, await readFile(join(nativeWorkerOutputRoot, parsedBuildReceipt.parameterSourceManifest.path))],
+      ['buildReceipt', 'build-receipt.json', buildRecordBytes],
+      ['sourceInputs', parsedBuildRecord.sourceInputs.path, sourceInputsBytes],
+      ['packageManifests', parsedBuildRecord.packageManifests.path, packageManifestsBytes],
+      ['sourceManifest', parsedBuildRecord.sourceManifest.path, await readFile(join(nativeWorkerOutputRoot, parsedBuildRecord.sourceManifest.path))],
+      ['lockfile', parsedBuildRecord.lockfile.path, await readFile(join(nativeWorkerOutputRoot, parsedBuildRecord.lockfile.path))],
+      ['configuration', parsedBuildRecord.configuration.path, await readFile(join(nativeWorkerOutputRoot, parsedBuildRecord.configuration.path))],
+      ['metafile', parsedBuildRecord.metafile.path, await readFile(join(nativeWorkerOutputRoot, parsedBuildRecord.metafile.path))],
+      ['sourceMap', parsedBuildRecord.sourceMap.path, await readFile(join(nativeWorkerOutputRoot, parsedBuildRecord.sourceMap.path))],
+      ['parameterSourceManifest', parsedBuildRecord.parameterSourceManifest.path, await readFile(join(nativeWorkerOutputRoot, parsedBuildRecord.parameterSourceManifest.path))],
       ['candidateDeclarations', workOrder.declarations.candidate.path, candidateDeclarationsBytes],
       ['incumbentDeclarations', workOrder.declarations.incumbent.path, incumbentDeclarationsBytes],
-      ['nativeQualification', 'native-qualification.json', qualificationBytes],
+      ['nativeQualification', 'native-qualification.json', validationBytes],
       ['receiver', 'receiver.cjs', receiverBytes],
       ['receiverInputs', 'receiver-inputs.json', receiverInputsBytes],
     ];
@@ -1308,7 +1308,7 @@ export async function fabricateMarketCarrier(workOrder, {
       workspaceDisposed = true;
     }
 
-    const fabricationReceipt = {
+    const fabricationRecord = {
       kind: '561.market-worker-native-fabrication/v1',
       at: now(),
       operation,
@@ -1321,12 +1321,12 @@ export async function fabricateMarketCarrier(workOrder, {
         platform: process.platform,
         arch: process.arch,
       },
-      compiler: supplierVerification.compiler,
-      suppliers: supplierVerification.suppliers,
+      compiler: providerVerification.compiler,
+      suppliers: providerVerification.suppliers,
       inputs: {
-        total: parsedBuildReceipt.inputs,
-        physical: parsedBuildReceipt.physicalInputs,
-        generated: parsedBuildReceipt.generatedInputs,
+        total: parsedBuildRecord.inputs,
+        physical: parsedBuildRecord.physicalInputs,
+        generated: parsedBuildRecord.generatedInputs,
       },
       artifacts: {
         worker: artifacts.worker,
@@ -1341,13 +1341,13 @@ export async function fabricateMarketCarrier(workOrder, {
         ...packageTestReceiving, privateCarrierReceived: true,
       } } : {}),
     };
-    await writeFile(receiptFile, `${JSON.stringify(fabricationReceipt, null, 2)}\n`, { mode: 0o600 });
+    await writeFile(receiptFile, `${JSON.stringify(fabricationRecord, null, 2)}\n`, { mode: 0o600 });
 
     return {
       carrierDirectory,
       manifest,
       manifestSha256,
-      fabricationReceipt,
+      fabricationRecord,
       receiptFile,
     };
   } finally {
@@ -1365,23 +1365,23 @@ export async function fabricateMarketCarrier(workOrder, {
   }
 }
 
-async function verifySelectedManifestOrFabricationReceipt(selected, carrierRoot, expectedManifestSha256, command) {
+async function verifySelectedManifestOrFabricationRecord(selected, carrierRoot, expectedManifestSha256, command) {
   if (selected.manifestSha256 === expectedManifestSha256 && !selected.workOrderSha256) return;
   if (selected.workOrderSha256) {
-    const receiptPath = resolve(dirname(carrierRoot), 'fabrication-receipt.json');
-    let receipt;
+    const recordPath = resolve(dirname(carrierRoot), 'fabrication-receipt.json');
+    let record;
     try {
-      receipt = JSON.parse(await readFile(receiptPath, 'utf8'));
+      record = JSON.parse(await readFile(recordPath, 'utf8'));
     } catch {
       requireThat(false, 'The original Group selection must name this exact Market operation and manifest', 'FABRICATION_RECEIPT_REQUIRED');
     }
     requireThat(
-      receipt?.kind === '561.market-worker-native-fabrication/v1' &&
-        receipt.workOrderSha256 === selected.workOrderSha256 &&
-        receipt.incumbentManifestSha256 === selected.manifestSha256 &&
-        receipt.manifestSha256 === expectedManifestSha256 &&
-        receipt.operation === command &&
-        receipt.workspaceDisposed === true,
+      record?.kind === '561.market-worker-native-fabrication/v1' &&
+        record.workOrderSha256 === selected.workOrderSha256 &&
+        record.incumbentManifestSha256 === selected.manifestSha256 &&
+        record.manifestSha256 === expectedManifestSha256 &&
+        record.operation === command &&
+        record.workspaceDisposed === true,
       'The original Group selection must name this exact Market operation and manifest',
       'FABRICATION_RECEIPT_UNRECEIVED',
     );
@@ -1462,7 +1462,7 @@ if (import.meta.main) {
         carrierDirectory: fabricated.carrierDirectory,
         manifestSha256: fabricated.manifestSha256,
         workOrderSha256: selected.workOrderSha256,
-        workspaceDisposed: fabricated.fabricationReceipt.workspaceDisposed,
+        workspaceDisposed: fabricated.fabricationRecord.workspaceDisposed,
         providerAccess: false,
       }));
     } else {
@@ -1510,7 +1510,7 @@ if (import.meta.main) {
         selected.ready && selected.operation === command,
         'The original Group selection must name this exact Market operation and manifest',
       );
-      await verifySelectedManifestOrFabricationReceipt(selected, received.root, expectedManifestSha256, command);
+      await verifySelectedManifestOrFabricationRecord(selected, received.root, expectedManifestSha256, command);
       execFileSync(
         process.execPath,
         [

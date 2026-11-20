@@ -147,11 +147,11 @@ if (mode === 'prepare') {
       await new Promise(resolve => setTimeout(resolve, 2000));
     }
   }
-  const receipt = {hostCommit:release.hostCommit, advertisingCommit:release.advertisingCommit,
+  const record = {hostCommit:release.hostCommit, advertisingCommit:release.advertisingCommit,
     advertisingVersion:release.advertisingVersion, advertisingArchiveSha256:release.advertisingArchiveSha256,
     workerSha256:release.workerSha256, target:release.target, before, deployment, bindings, public:observed};
-  save('receipt.json', receipt);
-  console.log(JSON.stringify(receipt, null, 2));
+  save('receipt.json', record);
+  console.log(JSON.stringify(record, null, 2));
 } else {
   throw Error('Expected prepare, built, before or after');
 }

@@ -190,7 +190,7 @@ export function mergeItems(feeds, limit = FEED_LIMIT, { onReject = () => {} } = 
 
 /** Build-time admission evidence only: no crawl, index, federation delivery or
  * completeness claim beyond the four named source read attempts. */
-export function renderFeedInputReceipt(home, sources, items, excluded = []) {
+export function renderFeedInputRecord(home, sources, items, excluded = []) {
   const counts = {};
   for (const { reason } of excluded) counts[reason] = (counts[reason] ?? 0) + 1;
   for (const source of sources) {
@@ -226,7 +226,7 @@ export function renderFeedInputReceipt(home, sources, items, excluded = []) {
  * This does not independently verify the articles or their individual claims,
  * assert ownership of source writing, or serve as a correction ledger.
  */
-export function renderFeedItemProvenance(home, sources, items) {
+export function renderFeedItemOrigin(home, sources, items) {
   if (!Array.isArray(home?.group?.companies) || !Array.isArray(sources) ||
       !Array.isArray(items))
     throw new TypeError("Provenance requires actual source and publication inventories");

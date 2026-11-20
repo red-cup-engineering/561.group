@@ -7,9 +7,9 @@ import { resolve, join, dirname } from 'node:path';
 import { createHash } from 'node:crypto';
 import { setTimeout as delay } from 'node:timers/promises';
 
-const [mode, directory, expectedManifest, receiptPath] = process.argv.slice(2);
+const [mode, directory, expectedManifest, recordPath] = process.argv.slice(2);
 if (!['verify', 'target', 'receive'].includes(mode) || !directory || !/^[a-f0-9]{64}$/.test(expectedManifest ?? '') ||
-    (mode === 'receive' && !receiptPath))
+    (mode === 'receive' && !recordPath))
   throw new Error('Usage: receive-play-release.mjs verify|target|receive DIRECTORY MANIFEST_SHA256 [RECEIPT_JSON]');
 const root = resolve(directory);
 const origin = 'https://play.561.group';
@@ -62,14 +62,14 @@ const raw = await bytes('manifest.json', 131072);
 if (sha256Hex(raw) !== expectedManifest) throw new Error('Play release manifest changed');
 const manifest = JSON.parse(raw);
 const sourceOwners = ['red-cup-engineering/play', 'red-cup-engineering/static-site-publisher', 'red-cup-engineering/web-page-tiling-engine'];
-const supplierNames = ['@red-cup-engineering/static-site-publisher', '@red-cup-engineering/web-page-tiling-engine'];
+const providerNames = ['@red-cup-engineering/static-site-publisher', '@red-cup-engineering/web-page-tiling-engine'];
 if (manifest.kind !== '561-group.play-release/v1' || manifest.target !== target || manifest.origin !== origin ||
     manifest.wranglerVersion !== '4.123.0' || manifest.feeds !== false ||
     !Array.isArray(manifest.sources) || manifest.sources.length !== 3 ||
     !equal(manifest.sources.map(source => source.repository).sort(), sourceOwners) ||
     manifest.sources.some(source => !gitId(source.commit) || !gitId(source.tree)) ||
     !Array.isArray(manifest.suppliers) || manifest.suppliers.length !== 2 ||
-    !equal(manifest.suppliers.map(supplier => supplier.name).sort(), supplierNames) ||
+    !equal(manifest.suppliers.map(supplier => supplier.name).sort(), providerNames) ||
     manifest.suppliers.some(supplier => !/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(supplier.version ?? '') ||
       !/^sha512-[A-Za-z0-9+/]{86}==$/.test(supplier.integrity ?? '') ||
       !manifest.sources.some(source => source.repository === supplier.repository && source.commit === supplier.commit)) ||
@@ -106,7 +106,7 @@ if (bindings.kind !== 'play-catalog-source-bindings/v1' || !Array.isArray(bindin
         !Number.isSafeInteger(file.bytes) || file.bytes < 0)))
   throw new Error('Incomplete original game source bindings');
 const report = json('build-report.json'), nativeRelease = json('public/release-manifest.json');
-const publisher = manifest.suppliers.find(supplier => supplier.name === supplierNames[0]);
+const publisher = manifest.suppliers.find(supplier => supplier.name === providerNames[0]);
 if (report.releasable !== true || !Array.isArray(report.refusals) || report.refusals.length ||
     report.cellCount !== 0 || report.publishedCount !== 0 || report.victorVersion !== publisher.version ||
     nativeRelease.kind !== 'web-release-manifest' || nativeRelease.version !== 1 || nativeRelease.baseUrl !== origin + '/' ||
@@ -143,11 +143,11 @@ if (mode === 'verify') {
 const account = process.env.CLOUDFLARE_ACCOUNT_ID, token = process.env.CLOUDFLARE_API_TOKEN;
 if (!/^[a-f0-9]{32}$/i.test(account ?? '') || !token) throw new Error('Existing deployment credentials unavailable');
 const tag = 'play-' + expectedManifest.slice(0, 32);
-const receipt = { kind: '561-group.play-production-receipt/v1', target, manifest: expectedManifest,
+const record = { kind: '561-group.play-production-receipt/v1', target, manifest: expectedManifest,
   nativeReleaseDigest: nativeRelease.digest, expectedTag: tag, received: false, observations: [] };
-async function saveReceipt() {
-  await mkdir(dirname(resolve(receiptPath)), { recursive: true });
-  await writeFile(receiptPath, JSON.stringify(receipt, null, 2) + '\n');
+async function saveRecord() {
+  await mkdir(dirname(resolve(recordPath)), { recursive: true });
+  await writeFile(recordPath, JSON.stringify(record, null, 2) + '\n');
 }
 async function responseBytes(response, maximum = 2097152) {
   const chunks = []; let size = 0;
@@ -264,15 +264,15 @@ for (let attempt = 0; attempt < 18 && Date.now() < deadline; attempt++) {
       return { path, status: result.status, mediaType: result.mediaType, comparison, observedSha256: sha256Hex(result.body) };
     }));
     if (await activeVersion() !== version) throw new Error('Play active version changed during public receiving');
-    Object.assign(receipt, { received: true, version, publishedAt: details.metadata?.created_on,
+    Object.assign(record, { received: true, version, publishedAt: details.metadata?.created_on,
       receivedAt: new Date().toISOString(), gameCount: catalog.games.length, pages, dailyAliases, absentFeeds });
-    await saveReceipt();
+    await saveRecord();
     console.log(JSON.stringify({ received: true, worker: target, version, tag, manifest: expectedManifest,
       nativeReleaseDigest: nativeRelease.digest, gameCount: catalog.games.length, publicPages: pages.length, dailyAliases: dailyAliases.length, absentFeeds: absentFeeds.length }));
     process.exit(0);
   } catch (error) {
-    receipt.observations.push({ at: new Date().toISOString(), attempt: attempt + 1, error: error.message });
-    await saveReceipt();
+    record.observations.push({ at: new Date().toISOString(), attempt: attempt + 1, error: error.message });
+    await saveRecord();
     console.log(JSON.stringify({ received: false, worker: target, attempt: attempt + 1, state: error.message }));
     if (error.permanent) throw error;
   }
