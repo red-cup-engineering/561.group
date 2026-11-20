@@ -1,3 +1,4 @@
+import { isRecord } from "@red-cup-engineering/signcell/values";
 /** A localized authored HTML file may have a same-origin canonical slash
  * redirect at the Cloudflare assets layer. That is not permission to redirect
  * JSON evidence, feeds, or arbitrary generated assets. Content authenticity
@@ -40,7 +41,7 @@ const SHA = /^sha256:[a-f0-9]{64}$/u;
 const ID = /^urn:sha256:[a-f0-9]{64}$/u;
 const REF = id => ({ "@id": id });
 const fail = message => { throw new TypeError("Unreceived public feed evidence: " + message); };
-const isRecord = value => Boolean(value) && typeof value === "object" && !Array.isArray(value);
+
 const typed = (node, kind) => node?.["@type"] === kind ||
   (Array.isArray(node?.["@type"]) && node["@type"].includes(kind));
 
