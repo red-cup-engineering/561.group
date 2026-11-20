@@ -22,7 +22,7 @@ const required=[
  * Native npm ci still fetches and verifies these archives; this pure check
  * does not claim installation or substitute a Git source for a publication.
  */
-export function validateProviders({manifest,lock,registry}) {
+export function qualifySuppliers({manifest,lock,registry}) {
   if(registry!=="https://registry.561.group/") throw new Error("Original Group registry is required");
   const version=/^\d+\.\d+\.\d+(?:-[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*)?$/u;
   const integrity=/^sha512-[A-Za-z0-9+/]+={0,2}$/u;
@@ -53,17 +53,17 @@ export function validateProviders({manifest,lock,registry}) {
   return Object.freeze({living:living.version,tufte:tufte.version,markdown:markdown.version});
 }
 
-export function validateRelease({mainBranch,sourceSha,checkoutSha,receipt: record,
+export function qualifyRelease({mainBranch,sourceSha,checkoutSha,receipt,
   lockPresent,dependenciesInstalled,requiredAssets,duplicateIndex}){
   if(mainBranch!=="main")throw new Error("Only the original main branch may be released");
   if(!SHA.test(sourceSha??"")||!SHA.test(checkoutSha??"")||
      sourceSha.toLowerCase()!==checkoutSha.toLowerCase())
     throw new Error("Release must name the exact checked-out source commit");
-  if(record?.repository!=="561-group/561.group"||
-     record?.origin!=="https://561.group"||
-     record?.renderer!=="TUFTE"||
-     record?.application!=="LivingWebServer"||
-     record?.sourceCommit?.toLowerCase()!==sourceSha.toLowerCase())
+  if(receipt?.repository!=="561-group/561.group"||
+     receipt?.origin!=="https://561.group"||
+     receipt?.renderer!=="TUFTE"||
+     receipt?.application!=="LivingWebServer"||
+     receipt?.sourceCommit?.toLowerCase()!==sourceSha.toLowerCase())
     throw new Error("Generated site does not belong to this original source commit");
   if(!lockPresent)throw new Error("No committed immutable dependency lock is available");
   if(!dependenciesInstalled)throw new Error("Actual LivingWebServer Fetch package is not installed");
@@ -98,14 +98,14 @@ export async function awaitPublishedRevision({
       });
       if(response.status!==200)last="http-"+response.status;
       else {
-        const record=await response.json();
-        if(record?.repository==="561-group/561.group"&&
-           record?.origin===origin&&record?.renderer==="TUFTE"&&
-           record?.application==="LivingWebServer"&&
-           record?.sourceCommit===sourceSha) {
-          return record;
+        const receipt=await response.json();
+        if(receipt?.repository==="561-group/561.group"&&
+           receipt?.origin===origin&&receipt?.renderer==="TUFTE"&&
+           receipt?.application==="LivingWebServer"&&
+           receipt?.sourceCommit===sourceSha) {
+          return receipt;
         }
-        last=record?.sourceCommit?"source-mismatch":"invalid-receipt";
+        last=receipt?.sourceCommit?"source-mismatch":"invalid-receipt";
       }
     }catch { last="unreadable-public-receipt"; }
     if(step<attempts)await wait(intervalMs);
@@ -122,9 +122,9 @@ async function main(){
   const mainBranch=run("branch","--show-current");
   const checkoutSha=run("rev-parse","HEAD");
   const sourceSha=process.env.GITHUB_SHA;
-  const record=JSON.parse(await readFile("public/source-revision.json","utf8"));
+  const receipt=JSON.parse(await readFile("public/source-revision.json","utf8"));
   const lockPresent=!(await missing("package-lock.json"));
-  validateProviders({manifest:JSON.parse(await readFile("package.json","utf8")),
+  qualifySuppliers({manifest:JSON.parse(await readFile("package.json","utf8")),
     lock:JSON.parse(await readFile("package-lock.json","utf8")),registry:"https://registry.561.group/"});
   let dependenciesInstalled=false;
   try{
@@ -133,10 +133,10 @@ async function main(){
   }catch(error){if(error.code!=="ENOENT")throw error;}
   const requiredAssets=[];
   for(const path of required)if(!(await missing(path))&&(await stat(path)).size>50)requiredAssets.push(path);
-  const recordOf=validateRelease({mainBranch,sourceSha,checkoutSha,receipt: record,
+  const receiptOf=qualifyRelease({mainBranch,sourceSha,checkoutSha,receipt,
     lockPresent,dependenciesInstalled,requiredAssets,
     duplicateIndex:!(await missing("public/index.html"))});
-  console.log("Original public source preflight "+recordOf.sourceCommit+
+  console.log("Original public source preflight "+receiptOf.sourceCommit+
     "; provider deployment and independent reader acceptance NOT claimed");
 }
 if(process.argv[1]&&import.meta.url===pathToFileURL(process.argv[1]).href)await main();

@@ -16,7 +16,7 @@ function validPublicUrl(value, label) {
   return url;
 }
 
-export function validateGroupBlogFeed(home, feed) {
+export function admitGroupBlogFeed(home, feed) {
   if (home?.origin !== "https://561.group" ||
       !Array.isArray(home.group?.companies) || home.group.companies.length !== 4) {
     throw new TypeError("Group blog needs the original four corporate source identities");
@@ -83,19 +83,19 @@ export function validateGroupBlogFeed(home, feed) {
  * This refuses claims of complete coverage that lack all original publisher
  * source observations. It is not a fresh fetch, fact-check, correction
  * acceptance, or a claim that sixty items represent the whole archive. */
-export function validateGroupBlogCoverage(home,feed,record){
+export function admitGroupBlogCoverage(home,feed,receipt){
   if(home?.origin!=="https://561.group"||
      !Array.isArray(home.group?.companies)||home.group.companies.length!==4||
-     !record||record.schema!=="561.group/feed-input-receipt/v1"||
-     record.origin!==home.origin||record.expectedSourceCount!==4||
-     !Array.isArray(record.sources)||record.sources.length!==4)
+     !receipt||receipt.schema!=="561.group/feed-input-receipt/v1"||
+     receipt.origin!==home.origin||receipt.expectedSourceCount!==4||
+     !Array.isArray(receipt.sources)||receipt.sources.length!==4)
     throw new TypeError("Blog source coverage requires the original four-company build receipt");
   const companies=home.group.companies;
   const digest=/^sha256:[a-f0-9]{64}$/u;
   const validCount=n=>Number.isSafeInteger(n)&&n>=0;
   let observedItems=0,received=0;
   const sources=companies.map((company,i)=>{
-    const entry=record.sources[i];
+    const entry=receipt.sources[i];
     if(!entry||entry.companyId!==company.id||
        entry.feedUrl!==company.feeds?.json||
        !["received","unavailable","refused"].includes(entry.state))
@@ -112,26 +112,26 @@ export function validateGroupBlogCoverage(home,feed,record){
     return Object.freeze({company,state:entry.state,
       ...(entry.state==="received"?{inputItems:entry.inputItems}:{})});
   });
-  if(!record.excludedItemCounts||typeof record.excludedItemCounts!=="object"||
-     Array.isArray(record.excludedItemCounts))
+  if(!receipt.excludedItemCounts||typeof receipt.excludedItemCounts!=="object"||
+     Array.isArray(receipt.excludedItemCounts))
     throw new TypeError("Blog build cannot hide invalid feed-exclusion counts");
   let rejected=0;
-  for(const [reason,count] of Object.entries(record.excludedItemCounts)){
+  for(const [reason,count] of Object.entries(receipt.excludedItemCounts)){
     if(!/^[a-z][a-z0-9-]{0,79}$/u.test(reason)||!Number.isSafeInteger(count)||count<1)
       throw new TypeError("Blog exclusion accounting is malformed");
     rejected+=count;
   }
-  const validated=observedItems-rejected;
-  if(!validCount(record.sourceItemCount)||
-     !validCount(record.admittedItems)||
-     !validCount(record.emittedItems)||
-     !validCount(record.omittedByAggregateLimit)||
+  const admitted=observedItems-rejected;
+  if(!validCount(receipt.sourceItemCount)||
+     !validCount(receipt.admittedItems)||
+     !validCount(receipt.emittedItems)||
+     !validCount(receipt.omittedByAggregateLimit)||
      !Array.isArray(feed?.items)||
-     observedItems!==record.sourceItemCount||
-     validated<0||validated!==record.admittedItems||
-     feed.items.length!==record.emittedItems||
-     record.emittedItems!==Math.min(validated,GROUP_BLOG_LIMIT)||
-     validated-record.emittedItems!==record.omittedByAggregateLimit)
+     observedItems!==receipt.sourceItemCount||
+     admitted<0||admitted!==receipt.admittedItems||
+     feed.items.length!==receipt.emittedItems||
+     receipt.emittedItems!==Math.min(admitted,GROUP_BLOG_LIMIT)||
+     admitted-receipt.emittedItems!==receipt.omittedByAggregateLimit)
     throw new TypeError("Blog received and selected article counts disagree");
   // A source admission receipt is not merely a total: a selected feed item
   // must belong to an actually received company source, and a source cannot
@@ -150,10 +150,10 @@ export function validateGroupBlogCoverage(home,feed,record){
     selectedCounts.set(origin,selected);
   }
   const complete=received===4;
-  if(record.completeness!==(complete?"all-sources-received":"partial-source-coverage"))
+  if(receipt.completeness!==(complete?"all-sources-received":"partial-source-coverage"))
     throw new TypeError("Blog source snapshot claims unwitnessed completeness");
   return Object.freeze({sources:Object.freeze(sources),
-    received,expected:4,observedItems,admitted: validated,rejected,
-    selected:record.emittedItems,omittedByLimit:record.omittedByAggregateLimit,
+    received,expected:4,observedItems,admitted,rejected,
+    selected:receipt.emittedItems,omittedByLimit:receipt.omittedByAggregateLimit,
     complete});
 }

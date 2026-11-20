@@ -28,7 +28,7 @@ function articleUrl(company, value) {
   return article.href;
 }
 
-function validatedDate(value) {
+function admittedDate(value) {
   if (typeof value !== "string" ||
       !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/u.test(value) ||
       !Number.isFinite(Date.parse(value))) return false;
@@ -55,8 +55,8 @@ function sourceItem(company, item, declaredAuthors) {
   if (item.summary !== undefined &&
       (typeof item.summary !== "string" || item.summary.length > MAX_SUMMARY))
     return { reason: "invalid-summary" };
-  if ((item.date_published !== undefined && !validatedDate(item.date_published)) ||
-      (item.date_modified !== undefined && !validatedDate(item.date_modified)))
+  if ((item.date_published !== undefined && !admittedDate(item.date_published)) ||
+      (item.date_modified !== undefined && !admittedDate(item.date_modified)))
     return { reason: "invalid-date" };
   if (item.tags !== undefined &&
       (!Array.isArray(item.tags) || item.tags.length > 30 ||
@@ -190,7 +190,7 @@ export function mergeItems(feeds, limit = FEED_LIMIT, { onReject = () => {} } = 
 
 /** Build-time admission evidence only: no crawl, index, federation delivery or
  * completeness claim beyond the four named source read attempts. */
-export function renderFeedInputRecord(home, sources, items, excluded = []) {
+export function renderFeedInputReceipt(home, sources, items, excluded = []) {
   const counts = {};
   for (const { reason } of excluded) counts[reason] = (counts[reason] ?? 0) + 1;
   for (const source of sources) {
@@ -200,8 +200,8 @@ export function renderFeedInputRecord(home, sources, items, excluded = []) {
   }
   const sourceItemCount = sources.reduce((total, source) =>
     total + (source.state === "received" ? source.inputItems : 0), 0);
-  const validatedItems = sourceItemCount - excluded.length;
-  if (validatedItems < items.length || !Number.isSafeInteger(validatedItems))
+  const admittedItems = sourceItemCount - excluded.length;
+  if (admittedItems < items.length || !Number.isSafeInteger(admittedItems))
     throw new TypeError("Published item counts exceed witnessed admitted source items");
   return JSON.stringify({
     schema: "561.group/feed-input-receipt/v1",
@@ -210,8 +210,8 @@ export function renderFeedInputRecord(home, sources, items, excluded = []) {
     sources,
     excludedItemCounts: Object.fromEntries(Object.entries(counts).sort(([a], [b]) => a.localeCompare(b))),
     sourceItemCount,
-    admittedItems: validatedItems,
-    omittedByAggregateLimit: validatedItems - items.length,
+    admittedItems,
+    omittedByAggregateLimit: admittedItems - items.length,
     selectionPolicy: "newest first by parseable publication timestamp then canonical URL; at most " + FEED_LIMIT + " items",
     emittedItems: items.length,
     expectedSourceCount: home.group.companies.length,
@@ -226,7 +226,7 @@ export function renderFeedInputRecord(home, sources, items, excluded = []) {
  * This does not independently verify the articles or their individual claims,
  * assert ownership of source writing, or serve as a correction ledger.
  */
-export function renderFeedItemOrigin(home, sources, items) {
+export function renderFeedItemProvenance(home, sources, items) {
   if (!Array.isArray(home?.group?.companies) || !Array.isArray(sources) ||
       !Array.isArray(items))
     throw new TypeError("Provenance requires actual source and publication inventories");
@@ -324,7 +324,7 @@ export function renderJsonFeed(home, items) {
 // Retain the source item in the other two formats and disclose Atom omissions.
 const sourceUpdated=(item)=>item.date_modified??item.date_published;
 const latestUpdated=(items)=>{
-  const dated=items.map(sourceUpdated).filter(date=>validatedDate(date));
+  const dated=items.map(sourceUpdated).filter(date=>admittedDate(date));
   return dated.sort((a,b)=>Date.parse(b)-Date.parse(a)||a.localeCompare(b))[0]??null;
 };
 
@@ -336,13 +336,13 @@ export function renderAtom(home, items, publicationTimestamp) {
   const dated=items.filter(item=>{
     const timestamp=sourceUpdated(item);
     if(timestamp===undefined)return false;
-    if(!validatedDate(timestamp))
+    if(!admittedDate(timestamp))
       throw new TypeError("Atom source updated date must be original valid RFC 3339");
     return true;
   });
   const omitted=items.length-dated.length;
   const updated=latestUpdated(dated)??publicationTimestamp;
-  if(!validatedDate(updated))
+  if(!admittedDate(updated))
     throw new TypeError("Empty or undated Atom feed needs the source-qualified publication timestamp");
   const disclosure=omitted
     ? ` ${omitted} undated source ${omitted===1?"entry is":"entries are"} available in JSON Feed and RSS but omitted from Atom rather than assigned a fictional updated date.`
