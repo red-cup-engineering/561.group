@@ -1,0 +1,90 @@
+name: Observe 561.group public delivery (read-only)
+
+# The original deploy.yml now executes the same read-only public probe
+# after its exact-source and Cloudflare release receiving, without depending on
+# a second workflow_run event that was not observed after the real release.
+# This standalone workflow retains only manual/provider diagnostics and PR fixtures.
+on:
+  pull_request:
+    paths:
+      - scripts/observe-production.mjs
+      - scripts/site-observation/**
+      - test/observe-production.test.mjs
+      - scripts/worker-recovery.mjs
+      - test/worker-recovery.test.mjs
+      - scripts/check-delivery-parity.mjs
+      - test/check-delivery-parity.test.mjs
+      - scripts/observe-provider-deployment.mjs
+      - test/observe-provider-deployment.test.mjs
+      - .github/workflows/recover-worker.yml
+      - .github/workflows/public-delivery-witness.yml
+      - package.json
+      - package-lock.json
+      - .npmrc
+  workflow_dispatch:
+    inputs:
+      expected_source_sha:
+        description: "Optional exact 40-hex release commit for strict public readback"
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: public-delivery-observation-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  observer-fixture-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '24'
+          cache: npm
+      - name: Install the locked native observation supplier
+        timeout-minutes: 7
+        run: npm run install:observation
+      - name: Test public observer decision logic (offline fixtures)
+        run: node --test test/observe-production.test.mjs test/worker-recovery.test.mjs test/observe-provider-deployment.test.mjs test/check-delivery-parity.test.mjs
+
+  public-delivery-observation:
+    needs: observer-fixture-tests
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '24'
+          cache: npm
+      - name: Install the locked native observation supplier
+        timeout-minutes: 7
+        run: npm run install:observation
+      - name: Read provider-native active Worker version using dedicated metadata-read token
+        env:
+          CLOUDFLARE_READ_API_TOKEN: ${{ secrets.CLOUDFLARE_READ_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: node scripts/observe-provider-deployment.mjs
+      - name: Observe real external public endpoints independently of the build
+        env:
+          EXPECTED_SOURCE_SHA: ${{ inputs.expected_source_sha || '' }}
+        run: node scripts/observe-production.mjs
+      - name: Reconcile independent public source and active Worker version evidence
+        if: always()
+        run: node scripts/check-delivery-parity.mjs
+      - name: Preserve source-qualified HTTP observations even when checks fail
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: 561-group-public-delivery-observation
+          path: |
+            observations/561.group-public-delivery.json
+            observations/561.group-provider-deployment.json
+            observations/561.group-public-provider-parity.json
+          if-no-files-found: warn
+          retention-days: 30

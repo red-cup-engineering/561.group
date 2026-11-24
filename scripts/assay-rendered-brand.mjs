@@ -1,0 +1,636 @@
+#!/usr/bin/env node
+// Browser-level receiving candidate for the ORIGINAL 561.group LivingWebServer
+// TUFTE projection. Screenshots are review evidence, NOT accepted golden masters.
+import {createServer} from "node:http";
+import {readFile,mkdir,writeFile} from "node:fs/promises";
+import {createHash} from "node:crypto";
+import {resolve,join} from "node:path";
+import {pathToFileURL} from "node:url";
+import {create561GroupLivingApplication} from "../src/living-home.mjs";
+import { execGitSync } from '@red-cup-engineering/git-engine/git-process';
+
+const readJson=async path=>JSON.parse(await readFile(new URL("../"+path,import.meta.url),"utf8"));
+const pages=Object.freeze([
+  {name:"home",path:"/",width:1440,height:900},
+  {name:"home-mobile",path:"/",width:390,height:844},
+  // WCAG 2.2 reflow target: 320 CSS pixels, not just a 390px phone.
+  // Capture original rendered pages and refuse horizontal overflow.
+  {name:"home-reflow",path:"/",width:320,height:640},
+  {name:"work-mobile",path:"/work/",width:390,height:844},
+  {name:"blog",path:"/blog/",width:1440,height:900},
+  {name:"blog-mobile",path:"/blog/",width:390,height:844},
+  {name:"blog-reflow",path:"/blog/",width:320,height:640},
+  {name:"blog-dark-mobile",path:"/blog/",width:390,height:844,colorScheme:"dark"},
+  {name:"blog-dark-reflow",path:"/blog/",width:320,height:640,colorScheme:"dark"},
+  {name:"about",path:"/about/",width:1440,height:900}
+]);
+const expectedFontNames=["Space Grotesk","Roboto Slab","JetBrains Mono"];
+const FONT_ROUTE=new Map([
+  ["/fonts/space-grotesk.woff2","space-grotesk.woff2"],
+  ["/fonts/roboto-slab.woff2","roboto-slab.woff2"],
+  ["/fonts/jetbrains-mono.woff2","jetbrains-mono.woff2"]
+]);
+const rgb=(r,g,b)=>"rgb("+[r,g,b].join(", ")+")";
+const OBSERVER_ROUTE="/__source-owned-color-observation.mjs";
+
+export function qualifyRenderedBrand(value,{path="/",colorScheme="light"}={}) {
+  const errors=[];
+  const need=(truth,claim)=>{if(!truth)errors.push(claim)};
+  need(value?.groupStyle===true,"Original Group CSS not emitted into real TUFTE head");
+  need(value?.tufte===true,"Real TUFTE shell is absent");
+  need(value?.bodyBackground===(colorScheme==="dark"?rgb(18,12,2):rgb(242,234,216)),
+    "Visible body background lost group "+(colorScheme==="dark"?"dark":"bone")+" role");
+  need(value?.mastheadTop==="8px","Institutional masthead lost eight-pixel ink rule");
+  need(value?.markContent==='"561"', "Giant original typographic 561 mark is absent");
+  need(value?.markColor===rgb(255,69,48),"561 mark lost reserved alarm-red role");
+  need(value?.markSize>=105,"561 mark is no longer large enough to carry hierarchy");
+  need(value?.markFamily?.includes("Space Grotesk"),"561 mark lost display type channel");
+  need(value?.readingFamily?.includes("Roboto Slab"),"Main reading type lost slab channel");
+  need(value?.metadataFamily?.includes("JetBrains Mono"),"Evidence labels lost monospaced channel");
+  need(value?.fontFaces?.every(x=>x.status==="loaded") &&
+       expectedFontNames.every(name=>value.fontFaces.some(x=>x.family===name)),
+       "A local required font was not loaded");
+  if(path==="/")need(value?.introBackground===(colorScheme==="dark"?rgb(242,234,216):rgb(10,10,10)),
+    "Homepage introduction lost contrasting ink mass");
+  else need(value?.hasLead===true,"Non-home visitor page lost its own lead section");
+  need(value?.tileCount>=(path==="/"?5:3),"A real public visitor route lost its content tiles");
+  need(value?.hasNavigation===true,"Useful public navigation disappeared");
+  need(value?.hasContact===true,"An actual contact pathway disappeared");
+  need(value?.focusWidth>=3,"Keyboard focus has no sufficiently visible outline");
+  need(value?.overflowX===false,"Layout overflows viewport horizontally");
+  need(value?.identityAppeal===false,"Rejected Lakota-founded appeal is visible again");
+  need(value?.hreflangLinks===0,
+    "Shared English-only TUFTE head falsely advertises other routes as homepage translations");
+  need(value?.viewportWidth>=320,"Visual assay viewport is not a supported width");
+  return Object.freeze({passed:errors.length===0,errors});
+}
+
+/** Browser receipt for the original blog edition, compared to the exact
+ * build-produced source artifact. A source-model test cannot show that a
+ * figure was hidden, reordered, stripped of labels or mis-sized by CSS.
+ * This checks rendered communication, not independent publisher ownership. */
+export function qualifyBrowserBlogEdition(reading,{home,receipt}={}) {
+  const errors=[];
+  const require=(ok,claim)=>{if(!ok)errors.push(claim)};
+  if(!home?.group?.companies || !Array.isArray(receipt?.sources) ||
+      receipt.sources.length!==home.group.companies.length)
+    return Object.freeze({passed:false,errors:["Original edition source receipt is unavailable"]});
+  require(reading?.coverageVisible===true && reading?.postsVisible===true &&
+    reading?.coverageBeforePosts===true,
+    "The source receipt must be visible before the article listing");
+  require(reading?.captionVisible===true && reading?.captionConnected===true,
+    "The source comparison has lost its accessible caption");
+  require(reading?.jumpToPosts===true,
+    "Readers cannot bypass the source comparison to the writing");
+  require(reading?.leadJumpToPosts===true && reading?.leadJumpFirst===true,
+    "The primary article-reading action is missing or hidden behind subscriptions");
+  require(reading?.keyboardJump===true && reading?.pointerJump===true,
+    "The actual reader shortcut failed keyboard or pointer navigation");
+  const received=receipt.sources.filter(source=>source.state==="received").length;
+  const values=[
+    ["Company feeds received",received+" / "+receipt.expectedSourceCount],
+    ["Source entries admitted",String(receipt.admittedItems)],
+    ["Group feed entries selected",String(receipt.emittedItems)],
+    ["Admitted beyond 60-item cap",String(receipt.omittedByAggregateLimit)]
+  ];
+  require(reading?.metrics?.length===values.length,
+    "The original source-to-edition metric count changed");
+  values.forEach(([label,value],i)=>{
+    const metric=reading?.metrics?.[i];
+    require(metric?.label===label && metric?.value===value &&
+      metric?.visible===true,"Rendered edition count disagrees with build receipt: "+label);
+  });
+  require(reading?.sources?.length===receipt.sources.length,
+    "The original publisher comparison is incomplete");
+  const maxObserved=Math.max(1,...receipt.sources.filter(s=>s.state==="received")
+    .map(s=>s.inputItems));
+  receipt.sources.forEach((source,i)=>{
+    const row=reading?.sources?.[i];
+    const company=home.group.companies[i];
+    const measured=source.state==="received";
+    const status=measured?source.inputItems+" source entries received":
+      source.state==="refused"?"Feed refused by input admission":
+      "Feed unavailable to this build";
+    require(row?.company===company.name && row?.status===status &&
+      row?.href===source.feedUrl && row?.visible===true,
+      "A publisher name, source link or status is not visible: "+company.id);
+    require(row?.meterVisible===true && row?.meterHidden===true &&
+      row?.unknownIndicator===!measured,
+      "Observed and unreceived publisher graphics became indistinguishable: "+company.id);
+    // Read painted geometry rather than serialized styles; the TUFTE/HTML
+    // renderer may normalize or drop inline style attributes. An actual
+    // visible bar must represent the admitted source count within one point.
+    const expectedPercent=Math.round(100*source.inputItems/maxObserved);
+    require(measured ?
+      typeof row?.barPercent==="number" &&
+        Math.abs(row.barPercent-expectedPercent)<=1 :
+      row?.barPercent===null,
+      "Publisher bar differs from the source count or invents missing data: "+company.id);
+  });
+  return Object.freeze({passed:errors.length===0,errors});
+}
+
+async function servedOriginalApplication() {
+  const [home,estate,frontdoor,feed,feedRecord]=await Promise.all([
+    readJson("data/home.json"),readJson("data/estate.json"),readJson("data/frontdoor.json"),
+    readJson("public/feed.json"),readJson("public/feed-input-receipt.json")
+  ]);
+  const application=create561GroupLivingApplication({
+    readHome:async()=>home,readEstate:async()=>estate,readFrontdoor:async()=>frontdoor,
+    readFeed:async()=>feed,readFeedRecord:async()=>feedRecord,releaseHome:home
+  });
+  const server=createServer(async(req,res)=>{
+    try{
+      const pathname=new URL(req.url??"/","http://127.0.0.1").pathname;
+      if(pathname===OBSERVER_ROUTE){
+        const bytes=await readFile(new URL("../.visual-observer-source/src/theming-computer/color-coverage.mjs",import.meta.url));
+        res.writeHead(200,{"content-type":"text/javascript; charset=utf-8","cache-control":"no-store"});
+        res.end(bytes);return;
+      }
+      if(pathname==="/contact/" && req.method==="GET"){
+        // The real, source-bound original Group contact HTML: no test substitute.
+        const body=await readFile(new URL("../public/contact/index.html",import.meta.url));
+        res.writeHead(200,{"content-type":"text/html; charset=utf-8",
+          "cache-control":"no-store","x-content-type-options":"nosniff"});
+        res.end(body);return;
+      }
+      if(FONT_ROUTE.has(pathname)){
+        const bytes=await readFile(new URL("../public/fonts/"+FONT_ROUTE.get(pathname),import.meta.url));
+        res.writeHead(200,{"content-type":"font/woff2","cache-control":"no-store"});
+        res.end(bytes);return;
+      }
+      if(pathname==="/work/audit/preview.mjs" && req.method==="GET"){
+        const source=await readFile(new URL("../public/work/audit/preview.mjs",import.meta.url));
+        res.writeHead(200,{"content-type":"text/javascript; charset=utf-8",
+          "cache-control":"no-store","access-control-allow-origin":"*"});
+        res.end(source);return;
+      }
+      if(!["/","/work/","/work/audit/","/blog/","/about/"].includes(pathname)||req.method!=="GET"){
+        res.writeHead(404);res.end();return;
+      }
+      // Same original application as src/worker.mjs, with canonical Request
+      // identity. This browser host is only a test adapter, not a new publisher.
+      const original=new Request("https://561.group"+pathname,{
+        headers:{accept:"text/html"}
+      });
+      const received=await application.fetch(original);
+      const bytes=Buffer.from(await received.arrayBuffer());
+      res.writeHead(received.status,{"content-type":received.headers.get("content-type")??"text/plain",
+        "cache-control":"no-store"});
+      res.end(bytes);
+    }catch(error){
+      res.writeHead(500,{"content-type":"text/plain"});
+      res.end("Original TUFTE projection refused in browser assay");
+      console.error("assay host:",error?.message??String(error));
+    }
+  });
+  await new Promise((resolve,reject)=>{
+    server.once("error",reject);server.listen(0,"127.0.0.1",resolve);
+  });
+  return{origin:"http://127.0.0.1:"+server.address().port,
+    close:()=>new Promise((resolve,reject)=>server.close(error=>error?reject(error):resolve()))};
+}
+
+/**
+ * The original actual Chromium consumer follows the real Work preview page
+ * and the source-generated JS asset. Only GitHub's public read API is mocked;
+ * Work/TUFTE rendering and the generated browser program are source-exact.
+ */
+async function receiveBrowserWorkPreview(browser, host, output) {
+  const context=await browser.newContext({
+    viewport:{width:390,height:844},javaScriptEnabled:true,acceptDownloads:true
+  });
+  await context.grantPermissions(["clipboard-read","clipboard-write"],{origin:host.origin});
+  const seen=[];
+  const target="https://api.github.com/repos/example/public-work";
+  const head="a".repeat(40),merged="b".repeat(40);
+  try{
+    await context.route("**/*",async route=>{
+      const request=route.request(),url=request.url();
+      if(url.startsWith(host.origin+"/")){
+        if(request.method()!=="GET")throw Error("Work preview attempted an unexpected first-party write");
+        return route.continue();
+      }
+      if(request.method()!=="GET" || !url.startsWith(target)){
+        return route.abort("blockedbyclient");
+      }
+      seen.push(url);
+      const value=url.includes("/issues?")?[{number:5,title:"Customer Work still needs acceptance",state:"open",state_reason:null,updated_at:"2026-10-24T13:00:00Z"}]:url.includes("/pulls?")?[{
+        number:7,title:"Concrete source-to-code delivery",state:"closed",draft:false,
+        updated_at:"2026-10-24T12:00:00Z",merged_at:"2026-10-24T12:00:00Z",
+        merge_commit_sha:merged,head:{sha:head}
+      }]:url.includes("/actions/runs?")?{
+        workflow_runs:[{id:70,head_sha:merged,status:"completed",conclusion:"success"}]
+      }:url.includes("/deployments?")?[]:{
+        full_name:"example/public-work",private:false
+      };
+      await route.fulfill({status:200,contentType:"application/json",
+        headers:{"access-control-allow-origin":"*"},
+        body:JSON.stringify(value)});
+    });
+    const page=await context.newPage();
+    const thrown=[];
+    page.on("pageerror",error=>thrown.push(error.message));
+    const response=await page.goto(host.origin+"/work/audit/",{waitUntil:"networkidle"});
+    if(response?.status()!==200)throw Error("Real original Work audit page did not render");
+    await page.locator("#work-audit-repository").fill("example/public-work");
+    await page.locator("#work-audit-form button[type=submit]").click();
+    await page.waitForFunction(()=>
+      document.getElementById("work-audit-status")?.textContent?.includes("Read completed"),null,{
+      timeout:12000
+    });
+    const displayedReport=await page.locator("#work-audit-results").innerText();
+    if(!displayedReport.includes("Concrete source-to-code delivery") ||
+       !displayedReport.includes("Customer Work still needs acceptance") ||
+       !displayedReport.includes("reported-success") ||
+       !displayedReport.includes("independent beneficiary acceptance")){
+      throw Error("Original browser Work report did not deliver the source/recipient distinction");
+    }
+    await page.locator("#work-audit-copy").click();
+    await page.waitForFunction(()=>{
+      const s=document.getElementById("work-audit-status")?.textContent??"";
+      return s.includes("Inquiry scope copied") ||
+        s.includes("Browser clipboard permission unavailable");
+    },null,{timeout:10000});
+    const copyState=await page.locator("#work-audit-status").innerText();
+    const copiedText=copyState.includes("Inquiry scope copied")
+      ? await page.evaluate(()=>navigator.clipboard.readText()).catch(()=>null)
+      : await page.locator("#work-audit-summary").inputValue();
+    if(!copiedText || !copiedText.includes("Request for a scoped Work-continuity audit") ||
+       !copiedText.includes("example/public-work") ||
+       !copiedText.includes("independent acceptance or payment")) {
+      throw Error("The original buyer could not retain a source-specific inquiry scope");
+    }
+    const overflow=await page.evaluate(()=>
+      document.documentElement.scrollWidth>window.innerWidth+1);
+    if(overflow)throw Error("Real 390px Work preview has horizontal overflow");
+    const screenshot=join(output,"work-audit-mobile.png");
+    await page.screenshot({path:screenshot,fullPage:true,animations:"disabled"});
+    const downloadPromise=page.waitForEvent("download",{timeout:10000});
+    await page.locator("#work-audit-download").click();
+    const download=await downloadPromise;
+    const saved=JSON.parse(await readFile(await download.path(),"utf8"));
+    if(saved.kind!=="561.group.work-continuity-public-preview.v1" ||
+       saved.counts.merged!==1 || saved.counts.issuesExamined!==1 ||
+       saved.counts.independentCustomerAcceptance!==null ||
+       saved.records.find(record=>record.workKind==="pull-request")?.actions.source!=="merge-commit") {
+      throw Error("The real exported Work audit is not the independently scoped source reading");
+    }
+    if(seen.length!==5 || thrown.length){
+      throw Error("Work preview failed real browser API/JS boundaries: "+
+        JSON.stringify({seen,thrown}));
+    }
+    return {qualifiedBrowserRead:true,customerReceiving:false,
+      sourceRequests:seen.length,download:download.suggestedFilename(),
+      inquiryScopeCopiedOrSelectable:true,screenshot:"work-audit-mobile.png",
+      screenshotSha256:createHash("sha256").update(await readFile(screenshot)).digest("hex")};
+  }finally{await context.close()}
+}
+
+/** Test the ORIGINAL public contact page in the same source-owned Chromium
+ * receiving run, including buyer-scoped privacy and post-edit consent revision.
+ * No customer email or remote network request is sent. */
+async function receiveBrowserBuyerIntake(browser,host,output){
+  const context=await browser.newContext({
+    viewport:{width:390,height:844},javaScriptEnabled:true
+  });
+  const unexpected=[];const scriptErrors=[];
+  try{
+    await context.route("**/*",route=>{
+      const url=route.request().url();
+      if(url.startsWith(host.origin+"/"))return route.continue();
+      unexpected.push(url);return route.abort("blockedbyclient");
+    });
+    const page=await context.newPage();
+    page.on("pageerror",error=>scriptErrors.push(error.message));
+    const response=await page.goto(host.origin+"/contact/?service=Data%20rights%20and%20stewardship",
+      {waitUntil:"networkidle"});
+    if(response?.status()!==200)throw Error("Original buyer-contact page unavailable");
+    if(await page.locator("#affected").inputValue()!=="Data rights and stewardship" ||
+       await page.locator("#reply-permission").inputValue()!=="not-specified" ||
+       !(await page.locator("#data-stewardship-scope").isVisible()))
+      throw Error("A URL hint granted contact or lost rights-holder scoping");
+    await page.locator("#need").fill("Qualified buyer work: "+"source ".repeat(450));
+    await page.locator("#data-authority").fill("RIGHTS_SCOPE_MARKER_561: ask the original rights holder");
+    await page.locator("#reply-permission").selectOption("inquiry-only");
+    await page.locator("#private-intake button[type=submit]").click();
+    const first=await page.locator("#email-text").inputValue();
+    const link=await page.locator("#open-email").getAttribute("href");
+    if(!(await page.locator("#email-draft").isVisible()) ||
+       !first.includes("inquiry-only") || !first.includes("RIGHTS_SCOPE_MARKER_561") ||
+       !link?.startsWith("mailto:emsenn@561.group?subject=") || link.includes("&body=") ||
+       !(await page.locator("#copy-email").isVisible()))
+      throw Error("Visitor could not retain a full, unsent rights-scoped inquiry");
+    await page.locator("#reply-permission").selectOption("no-contact");
+    if(!(await page.locator("#email-draft").isHidden()) ||
+       (await page.locator("#email-text").inputValue())!=="" ||
+       await page.locator("#open-email").getAttribute("href"))
+      throw Error("Changed reply consent retained a stale buyer draft");
+    await page.locator("#affected").fill("Software engineering");
+    const rights=await page.locator("#data-stewardship-scope").evaluate(fieldset=>({
+      hidden:fieldset.hidden,disabled:fieldset.disabled,
+      inputsEffectivelyDisabled:[...fieldset.querySelectorAll("input,textarea,select")]
+        .every(field=>field.matches(":disabled"))
+    }));
+    if(!rights.hidden || !rights.disabled || !rights.inputsEffectivelyDisabled)
+      throw Error("Unrelated work retained sensitive rights-scoping fields: "+JSON.stringify(rights));
+    await page.locator("#private-intake button[type=submit]").click();
+    const revised=await page.locator("#email-text").inputValue();
+    if(!revised.includes("no-contact") || revised.includes("RIGHTS_SCOPE_MARKER_561"))
+      throw Error("New visitor draft retained obsolete rights fields or contact consent");
+    const overflow=await page.evaluate(()=>
+      document.documentElement.scrollWidth>window.innerWidth+1);
+    if(overflow || scriptErrors.length || unexpected.length)
+      throw Error("Real buyer contact page failed mobile/layout/private network admission: "+
+        JSON.stringify({overflow,scriptErrors,unexpected}));
+    const path=join(output,"contact-mobile.png");
+    await page.screenshot({path,fullPage:true,animations:"disabled"});
+    return {qualifiedBrowserRead:true,source:"original-Group-frontdoor-public-contact",
+      externalContactSent:false,rightsScopedDraftReceived:true,
+      stalePermissionRefused:true,nonRightsDraftExcludesProtectedFields:true,
+      viewport:{width:390,height:844},screenshot:"contact-mobile.png",
+      sha256:createHash("sha256").update(await readFile(path)).digest("hex")};
+  }finally{await context.close()}
+}
+
+/**
+ * A candidate reviewer packet; never an automatically accepted golden master.
+ */
+export function visualReviewPacket(witness){
+  if(!witness||!Array.isArray(witness.cases)||!witness.cases.length)
+    throw new TypeError("A real multi-viewport visual witness is required");
+  return [
+    "# 561 Group visual receiving — REVIEW CANDIDATE",
+    "",
+    "**Status: NOT INDEPENDENTLY RECEIVED.** Screenshots and computed-style tests",
+    "do not appoint the builder as a human visual assayer.",
+    "",
+    "Tested revision: "+(witness.sourceCommit??"unknown")+" ("+
+      (witness.sourceRole??"unknown role")+").",
+    "Original PR head: "+(witness.originalPrHead??"not applicable")+".",
+    "Brand source: data/brand-source.json (v0.3 DTCG).",
+    "The illustrated v0.4 Bible remains candidate evidence, not an adopted edition.",
+    "",
+    "| Route | Viewport | Computed result | Image | SHA-256 |",
+    "| --- | --- | --- | --- | --- |",
+    ...witness.cases.map(c=>"| "+c.path+" ("+(c.colorScheme??"light")+") | "+c.viewport.width+"x"+
+      c.viewport.height+" | "+(c.passed?"pass":"REFUSED: "+c.errors.join("; "))+ 
+      " | ["+c.screenshot+"]("+c.screenshot+") | "+c.sha256+" |"),
+    "",
+    "## Measured color use across distinct observation windows",
+    "",
+    "These are reproducible pixel-mask observations, NOT a normative design",
+    "budget verdict, a test of visual attention, or an automatic acceptance.",
+    "The original v0.3 source specifies mark bounding boxes per page/spread.",
+    "",
+    "| Route | Window | Red pixels / area | Red % | Blue pixels / area | Blue % |",
+    "| --- | --- | --- | ---: | --- | ---: |",
+    ...witness.cases.flatMap(c=>(c.colorObservation?.reports??[]).map(r=>{
+      const alarm=r.colors.find(v=>v.id==="alarm");
+      const blue=r.colors.find(v=>v.id==="witness");
+      const val=v=>v?(100*v.fraction).toFixed(3)+"%":"not measured";
+      return "| "+c.path+" ("+(c.colorScheme??"light")+") "+c.viewport.width+"x"+c.viewport.height+
+        " | "+r.region.id+" | "+(alarm?.matchedPixels??"?")+"/"+r.areaPixels+
+        " | "+val(alarm)+" | "+(blue?.matchedPixels??"?")+"/"+r.areaPixels+
+        " | "+val(blue)+" |";
+    })),
+    "",
+    "## Independent reader/visual-review task",
+    "",
+    "Inspect each image without treating implementation tickets as evidence",
+    "of aesthetic fit. Compare to the approved original Group works and the",
+    "source-owned Design Bible:",
+    "https://github.com/561-group/561-group-content-design-services-section",
+    "Review hierarchy, typography, giant numeral, bone/ink, the semantically",
+    "restrained witness/alarm accents, hard grid/rules, useful navigation,",
+    "mobile readability and any rejected identity-led persuasion.",
+    "The historical v0.3 6% alarm and 3% witness bounding-box color budgets",
+    "require a separate measured image proof; CSS declaration is insufficient.",
+    "The 320 CSS-pixel homepage and light/dark blog specimens assay horizontal",
+    "reflow only. They do not certify all of WCAG 2.2, browser zoom, screen",
+    "readers, or independent human design and accessibility acceptance.",
+    "Keyboard focus and reduced-motion settings were checked, but full WCAG",
+    "or screen-reader accessibility audits were not performed by this job.",
+    "",
+    "Record accept/reject/contested/not-observed for the EXACT SOURCE and",
+    "screen specimen with reviewer authority, reasons and original Work",
+    "through existing independent receiving. Do not treat this document",
+    "or a passing CI as its own independent customer-acceptance record.",
+    ""
+  ].join("\n");
+}
+
+export async function receiveBrowserVisuals({output="artifacts/brand-visual",sourceCommit=process.env.GITHUB_SHA??null}={}) {
+  const {chromium}=await import("playwright");
+  const observer=await readJson("specifications/visual-observation-source.json");
+  if(observer.schema!=="561.group/visual-observation-source/v1" ||
+     observer.owner!=="red-cup-engineering/web-theming-service" ||
+     !/^[a-f0-9]{40}$/u.test(observer.commit) ||
+     observer.entry!=="src/theming-computer/color-coverage.mjs")
+    throw Error("Apex lacks qualified original visual observation source");
+  const mounted=execGitSync(["-C",".visual-observer-source","rev-parse","HEAD"],
+    {encoding:"utf8",timeout:10000}).trim();
+  if(mounted!==observer.commit)throw Error("Rendered color instrument differs from selected Engineering source");
+  const host=await servedOriginalApplication();
+  const [editionHome,editionRecord]=await Promise.all([
+    readJson("data/home.json"),readJson("public/feed-input-receipt.json")
+  ]);
+  let browser;
+  try{
+    browser=await chromium.launch({headless:true,...(process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH?
+      {executablePath:process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH}:{})});
+    await mkdir(output,{recursive:true});
+    const cases=[];
+    for(const item of pages){
+      const context=await browser.newContext({
+        viewport:{width:item.width,height:item.height},deviceScaleFactor:1,
+        colorScheme:item.colorScheme??"light",reducedMotion:"reduce",javaScriptEnabled:true
+      });
+      try{
+        // Avoid third-party network dependencies. Local fonts are from this exact source.
+        await context.route("**/*",async route=>{
+          const target=new URL(route.request().url());
+          if(target.origin===host.origin)await route.continue();
+          else await route.abort("blockedbyclient");
+        });
+        const page=await context.newPage();
+        const response=await page.goto(host.origin+item.path,{waitUntil:"networkidle"});
+        if(!response || response.status()!==200 ||
+          !(response.headers()["content-type"]??"").includes("text/html"))
+          throw Error(item.name+" did not render authentic original TUFTE HTML");
+        await page.evaluate(()=>document.fonts.ready);
+        await page.keyboard.press("Tab");
+        const reading=await page.evaluate(()=>{
+          const el=(sel)=>document.querySelector(sel);
+          const style=(sel,pseudo)=>getComputedStyle(el(sel),pseudo);
+          const pseudo=style(".tufte-masthead","::before");
+          const root=el("html"),active=document.activeElement;
+          const intro=el("#introduction");
+          const meta=el(".tufte-eyebrow");
+          const tileElements=[...document.querySelectorAll(".tufte-grid>.tufte-tile")];
+          const focusWidth=active?parseFloat(getComputedStyle(active).outlineWidth):0;
+          return{
+            viewportWidth:innerWidth,bodyBackground:style("body").backgroundColor,
+            mastheadTop:style(".tufte-masthead").borderTopWidth,
+            markContent:pseudo.content,markColor:pseudo.color,markSize:parseFloat(pseudo.fontSize),
+            markFamily:pseudo.fontFamily,
+            readingFamily:style(".tufte-tile-body").fontFamily,
+            metadataFamily:meta?getComputedStyle(meta).fontFamily:style(".tufte-eyebrow").fontFamily,
+            introBackground:intro?getComputedStyle(intro).backgroundColor:"",
+            groupStyle:!!el('style[data-561-group="visual-design-bible-v0.4-candidate"]'),
+            hreflangLinks:document.head.querySelectorAll('link[rel="alternate"][hreflang]').length,
+            tufte:!!el(".tufte-shell[data-tufte]"),
+            tileCount:tileElements.length,hasLead:!!el("#lead"),
+            hasNavigation:!!el("[data-tufte-navigation] a"),
+            hasContact:!![...document.querySelectorAll("a")].find(a=>a.getAttribute("href")==="/contact/"),
+            focusWidth:Number.isFinite(focusWidth)?focusWidth:0,
+            overflowX:root.scrollWidth>innerWidth+1,
+            identityAppeal:/Lakota-founded/i.test(document.body.innerText),
+            fontFaces:[...document.fonts].map(f=>({family:f.family,status:f.status})),
+            title:document.title
+          };
+        });
+        const brand=qualifyRenderedBrand(reading,{path:item.path,
+          colorScheme:item.colorScheme??"light"});
+        const editionReading=item.path==="/blog/"?await page.evaluate(()=>{
+          const visible=element=>!!element && element.getClientRects().length>0 &&
+            getComputedStyle(element).visibility!=="hidden" &&
+            getComputedStyle(element).display!=="none";
+          const lead=document.getElementById("lead");
+          const leadActions=[...lead?.querySelectorAll("a.site-action")??[]];
+          const coverage=document.getElementById("coverage");
+          const posts=document.getElementById("posts");
+          const figure=coverage?.querySelector("figure.site-edition-figure");
+          const caption=figure?.querySelector("figcaption");
+          return {
+            coverageVisible:visible(coverage),postsVisible:visible(posts),
+            coverageBeforePosts:!!(coverage && posts &&
+              (coverage.compareDocumentPosition(posts)&Node.DOCUMENT_POSITION_FOLLOWING) &&
+              coverage.getBoundingClientRect().top<posts.getBoundingClientRect().top),
+            captionVisible:visible(caption),
+            captionConnected:!!caption && figure.querySelector("ol")?.getAttribute("aria-labelledby")===caption.id,
+            jumpToPosts:!!coverage?.querySelector('a[href="#posts"]') && !!posts,
+            leadJumpToPosts:!!leadActions.find(a=>a.getAttribute("href")==="#posts" &&
+              a.textContent.includes("Read recent writing") && visible(a)) && !!posts,
+            leadJumpFirst:leadActions[0]?.getAttribute("href")==="#posts" &&
+              !!lead && !!coverage &&
+              !!(lead.compareDocumentPosition(coverage)&Node.DOCUMENT_POSITION_FOLLOWING),
+            metrics:[...coverage.querySelectorAll(".site-edition-metric")].map(element=>{
+              const dt=element.querySelector("dt"),dd=element.querySelector("dd");
+              return {label:dt?.textContent.trim(),value:dd?.textContent.trim(),
+                visible:visible(dt)&&visible(dd)};
+            }),
+            sources:[...coverage.querySelectorAll(".site-edition-source")].map(element=>{
+              const meter=element.querySelector(".site-edition-meter");
+              return {company:element.querySelector("strong")?.textContent.trim(),
+                status:element.querySelector(".site-edition-source-heading span")?.textContent.trim(),
+                href:element.querySelector("a")?.getAttribute("href"),
+                visible:visible(element),meterVisible:visible(meter),
+                meterHidden:meter?.getAttribute("aria-hidden")==="true",
+                unknownIndicator:meter?.classList.contains("site-edition-meter--unknown"),
+                barPercent:meter?.querySelector("span") && meter.getBoundingClientRect().width>0
+                  ? 100*meter.querySelector("span").getBoundingClientRect().width/
+                    meter.getBoundingClientRect().width:null};
+            })
+          };
+        }):null;
+        // Test the SAME primary reader link using keyboard and pointer
+        // interaction in actual Chromium. An anchor present in HTML is not
+        // evidence that anyone can activate it and reach original articles.
+        if(editionReading) {
+          const action=page.locator('#lead a.site-action[href="#posts"]');
+          const reachedArticles=()=>page.evaluate(()=>{
+            const posts=document.getElementById("posts");
+            const top=posts?.getBoundingClientRect().top;
+            return location.hash==="#posts" && typeof top==="number" &&
+              top>=-1 && top<innerHeight;
+          });
+          const resetLocation=()=>page.evaluate(()=>{
+            history.replaceState(null,"",location.pathname);
+            window.scrollTo({top:0,behavior:"instant"});
+          });
+          await action.focus();
+          await page.keyboard.press("Enter");
+          editionReading.keyboardJump=await reachedArticles();
+          await resetLocation();
+          await action.click();
+          editionReading.pointerJump=await reachedArticles();
+          await resetLocation();
+        }
+        const edition=editionReading?qualifyBrowserBlogEdition(editionReading,{
+          home:editionHome,receipt:editionRecord}):{passed:true,errors:[]};
+        const result={passed:brand.passed&&edition.passed,
+          errors:[...brand.errors,...edition.errors]};
+        const screenshot=join(output,item.name+".png");
+        // Keep keyboard-focus evidence in the JSON, but collect the visual
+        // specimen without the test harness leaving a skip-link focus box.
+        await page.evaluate(()=>document.activeElement?.blur());
+        const png=await page.screenshot({path:screenshot,fullPage:true,animations:"disabled"});
+        const colorObservation=await page.evaluate(async base64=>{
+          const bytes=Uint8Array.from(atob(base64),letter=>letter.charCodeAt(0));
+          const image=await createImageBitmap(new Blob([bytes],{type:"image/png"}));
+          try{
+            const canvas=new OffscreenCanvas(image.width,image.height);
+            const context=canvas.getContext("2d",{willReadFrequently:true});
+            if(!context)throw Error("Chromium cannot read rendered color pixels");
+            context.drawImage(image,0,0);
+            const rgba=context.getImageData(0,0,image.width,image.height).data;
+            const pixelBytes=new Uint8Array(rgba.buffer,rgba.byteOffset,rgba.byteLength);
+            const css=getComputedStyle(document.documentElement);
+            const colors=["alarm","witness"].map(id=>({
+              id,hex:css.getPropertyValue("--group-"+id).trim()
+            }));
+            const observer=await import("/__source-owned-color-observation.mjs");
+            return observer.measureColorCoverage({
+              pixels:pixelBytes,width:image.width,height:image.height,
+              regions:[
+                {id:"full-raster",x:0,y:0,width:image.width,height:image.height},
+                {id:"first-viewport",x:0,y:0,width:Math.min(innerWidth,image.width),
+                  height:Math.min(innerHeight,image.height)}
+              ],colors,radius:20
+            });
+          }finally{image.close();}
+        },png.toString("base64"));
+        if(colorObservation.policyEvaluated!==false ||
+           colorObservation.independentlyAccepted!==false ||
+           colorObservation.reports.length!==2)
+          throw Error("Rendered visual instrument invented authority or omitted the comparison");
+        const hash=createHash("sha256").update(png).digest("hex");
+        cases.push({name:item.name,path:item.path,colorScheme:item.colorScheme??"light",
+          viewport:{width:item.width,height:item.height},
+          ...result,reading,...(editionReading?{editionReading}:{}),
+          screenshot:item.name+".png",sha256:hash,colorObservation});
+      }finally{await context.close()}
+    }
+    const workPreview=await receiveBrowserWorkPreview(browser,host,output);
+    const buyerContact=await receiveBrowserBuyerIntake(browser,host,output);
+    const sourceRole=process.env.GITHUB_EVENT_NAME==="pull_request"?
+      "pull-request-merge-evaluation":"source-commit";
+    const originalPrHead=process.env.ORIGINAL_PR_HEAD_SHA??null;
+    if(sourceRole==="pull-request-merge-evaluation" &&
+      !/^[a-f0-9]{40}$/u.test(originalPrHead??""))
+      throw Error("A PR visual witness must distinguish its real head from the evaluated merge ref");
+    const witness={
+      schema:"561.group/rendered-visual-witness/v1",
+      sourceCommit,sourceRole,originalPrHead,
+      kind:"actual-original-LivingWebServer-TUFTE-in-headless-Chromium",
+      groupSource:"data/brand-source.json",
+      pixelInstrument:{owner:observer.owner,commit:observer.commit,entry:observer.entry},
+      empiricalScope:"full-raster versus first-viewport; no automatic color-budget policy",
+      acceptance:"CANDIDATE: machine browser conformance; golden-baseline and independent human approval NOT established",
+      playwrightVersion:"1.62.1",recordedAt:new Date().toISOString(),workPreview,buyerContact,cases
+    };
+    await writeFile(join(output,"witness.json"),JSON.stringify(witness,null,2)+"\n");
+    await writeFile(join(output,"REVIEW.md"),visualReviewPacket(witness));
+    const failing=cases.filter(x=>!x.passed);
+    if(failing.length)throw Error("Rendered brand did not conform: "+
+      failing.map(x=>x.name+": "+x.errors.join("; ")).join(" | "));
+    console.log(JSON.stringify({result:"browser-style-conformant",cases:cases.length,
+      screenshots:cases.map(x=>x.screenshot),independentHumanAccepted:false}));
+    return witness;
+  }finally{await browser?.close();await host.close()}
+}
+
+if(process.argv[1]&&import.meta.url===pathToFileURL(resolve(process.argv[1])).href){
+  await receiveBrowserVisuals();
+}

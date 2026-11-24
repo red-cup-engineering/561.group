@@ -1,0 +1,41 @@
+{
+  "name": "@561-group/561.group",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Original 561 Group public homepage: TUFTE and LivingWebServer over authored estate; site-owned ARB/ICU locale projection.",
+  "scripts": {
+    "bind": "node scripts/bind-content.mjs",
+    "prebuild": "npm run bind",
+    "build": "node scripts/build.mjs",
+    "precheck": "npm run bind",
+    "check": "node --check src/worker.mjs && node --check src/render.mjs && node --check src/told.mjs && node --check scripts/build.mjs && node --check src/locales.mjs && node --check src/words.mjs && node --check src/feed.mjs && node --check src/apex-group-style.mjs && node --check scripts/verify-brand-source.mjs && node --check src/home-tufte.mjs && node --check src/living-home.mjs && node --check scripts/release-preflight.mjs && node --check scripts/assay-rendered-brand.mjs && node --check scripts/bind-content.mjs && node --check src/editorial-question-provenance.mjs && node --check src/work-audit-preview.mjs && node --check src/public-delivery.mjs",
+    "predev": "npm run bind",
+    "dev": "node scripts/build.mjs && wrangler dev",
+    "deploy": "npm run check && npm run build && node scripts/release-preflight.mjs && wrangler deploy",
+    "presource-catalog": "npm run bind",
+    "source-catalog": "node scripts/source-catalog.mjs",
+    "precheck:brand-source": "npm run bind",
+    "check:brand-source": "node scripts/verify-brand-source.mjs .brand-source",
+    "install:observation": "npm ci --prefix scripts/site-observation --ignore-scripts --no-audit --no-fund --cache ./data/state/package-cache-state"
+  },
+  "engines": {
+    "node": ">=24.2.0"
+  },
+  "devDependencies": {
+    "wrangler": "4.127.1",
+    "playwright": "1.62.1"
+  },
+  "dependencies": {
+    "@red-cup-engineering/living-web-server": "^0.1.2",
+    "@red-cup-engineering/markdown-engineering-services-section": "^0.5.9",
+    "@red-cup-engineering/git-engine": "^0.1.11-dev.0",
+    "@red-cup-engineering/signcell": "^0.18.0 || 0.18.1-dev.0",
+    "@red-cup-engineering/semiotic-content-address-system": "^0.1.7 || 0.1.8-dev.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/causeway-services/561.group.git"
+  },
+  "license": "LicenseRef-561Group-1.0"
+}

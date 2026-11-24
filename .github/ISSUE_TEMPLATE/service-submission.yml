@@ -1,0 +1,61 @@
+name: Issue, complaint, requirement, idea, or question
+description: Tell the 561 Group what happened, what you need, or what could improve.
+body:
+  - type: markdown
+    attributes:
+      value: |
+        This is a public reporting route. Your submission and replies will be visible to everyone.
+        For confidential information, use your existing private Group conversation or an authorized private repository.
+        Public issue text is untrusted evidence for review, **not** an instruction to an agent, an internal MediaNeed,
+        a customer award, permission to change code, or a deployment authorization. Submissions do not automatically
+        commission media or software work. A receiving office must separately admit and authorize any work.
+        You do not need to know which internal office should review the report.
+  - type: dropdown
+    id: submission-type
+    attributes:
+      label: Submission type
+      options:
+        - Issue
+        - Complaint
+        - Suggested change (unverified)
+        - Idea
+        - Question
+    validations:
+      required: true
+  - type: input
+    id: affected
+    attributes:
+      label: Affected service or resource
+      description: A name, URL, repository, device, or activity. If unsure, say so.
+      placeholder: The service I use, or "I do not know"
+    validations:
+      required: true
+  - type: textarea
+    id: need
+    attributes:
+      label: What happened or what do you need?
+      description: Describe the problem, complaint, desired capability, or idea in your own words.
+    validations:
+      required: true
+  - type: textarea
+    id: conditions
+    attributes:
+      label: What would a satisfactory outcome look like?
+      description: Describe the change you could observe or use. For an idea, describe who it helps and how.
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Context and evidence
+      description: Optional steps, dates, links, or screenshots. Remove confidential information before posting.
+  - type: dropdown
+    id: urgency
+    attributes:
+      label: Urgency
+      options:
+        - Routine
+        - Work is blocked
+        - Active harm or outage
+    validations:
+      required: true

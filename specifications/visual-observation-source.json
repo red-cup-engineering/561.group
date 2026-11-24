@@ -1,0 +1,9 @@
+{
+  "schema": "561.group/visual-observation-source/v1",
+  "owner": "red-cup-engineering/web-theming-service",
+  "commit": "cf11977ce1c06148ea31103656efe31ee4628b5e",
+  "entry": "src/theming-computer/color-coverage.mjs",
+  "science": "https://github.com/lenticule-science/561-theory/pull/29",
+  "purpose": "Measured screenshot pixel fractions with explicit page and viewport windows. No color-budget or perception verdict.",
+  "policyEvaluated": false
+}
