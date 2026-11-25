@@ -1,10 +1,9 @@
 #!/usr/bin/env node
-import { sha256Hex } from "@red-cup-engineering/semiotic-content-address-system";
+import { canonicalEqual, niUriFromDigest, sha256, sha256Hex } from "@red-cup-engineering/semiotic-content-address-system";
 // Receive the original Play build through the existing private content carrier.
 // The application, publisher, and tiling engine remain in their source owners.
 import { readFile, lstat, readdir, mkdir, writeFile } from 'node:fs/promises';
 import { resolve, join, dirname } from 'node:path';
-import { createHash } from 'node:crypto';
 import { setTimeout as delay } from 'node:timers/promises';
 
 const [mode, directory, expectedManifest, recordPath] = process.argv.slice(2);
@@ -15,16 +14,10 @@ const root = resolve(directory);
 const origin = 'https://play.561.group';
 const target = 'play-561-group';
 
-const ni = bytes => 'ni:///sha-256;' + createHash('sha256').update(bytes).digest('base64url');
+const ni = bytes => niUriFromDigest(sha256(bytes));
 const gitId = value => /^[a-f0-9]{40}$/.test(value ?? '');
 const safePath = value => typeof value === 'string' && value.length > 0 && value.length < 512 &&
   !value.startsWith('/') && !value.includes('\\') && value.split('/').every(part => part && part !== '.' && part !== '..');
-const equal = (left, right) => JSON.stringify(canonical(left)) === JSON.stringify(canonical(right));
-function canonical(value) {
-  if (Array.isArray(value)) return value.map(canonical);
-  if (value && typeof value === 'object') return Object.fromEntries(Object.keys(value).sort().map(key => [key, canonical(value[key])]));
-  return value;
-}
 const fixedConfig = {
   $schema: 'node_modules/wrangler/config-schema.json',
   name: target,
@@ -66,10 +59,10 @@ const providerNames = ['@red-cup-engineering/static-site-publisher', '@red-cup-e
 if (manifest.kind !== '561-group.play-release/v1' || manifest.target !== target || manifest.origin !== origin ||
     manifest.wranglerVersion !== '4.123.0' || manifest.feeds !== false ||
     !Array.isArray(manifest.sources) || manifest.sources.length !== 3 ||
-    !equal(manifest.sources.map(source => source.repository).sort(), sourceOwners) ||
+    !canonicalEqual(manifest.sources.map(source => source.repository).sort(), sourceOwners) ||
     manifest.sources.some(source => !gitId(source.commit) || !gitId(source.tree)) ||
     !Array.isArray(manifest.suppliers) || manifest.suppliers.length !== 2 ||
-    !equal(manifest.suppliers.map(supplier => supplier.name).sort(), providerNames) ||
+    !canonicalEqual(manifest.suppliers.map(supplier => supplier.name).sort(), providerNames) ||
     manifest.suppliers.some(supplier => !/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(supplier.version ?? '') ||
       !/^sha512-[A-Za-z0-9+/]{86}==$/.test(supplier.integrity ?? '') ||
       !manifest.sources.some(source => source.repository === supplier.repository && source.commit === supplier.commit)) ||
@@ -78,7 +71,7 @@ if (manifest.kind !== '561-group.play-release/v1' || manifest.target !== target 
 const names = Object.keys(manifest.files).sort();
 if (names.length < 10 || names.length > 64 || names.some(name =>
     !safePath(name) || (!name.startsWith('public/') && !['wrangler.jsonc', 'source-bindings.json', 'build-report.json'].includes(name))) ||
-    !equal(await fileSet(root), ['manifest.json', ...names].sort()))
+    !canonicalEqual(await fileSet(root), ['manifest.json', ...names].sort()))
   throw new Error('Play carrier file set differs from its reviewed manifest');
 let totalBytes = 0;
 const content = new Map();
@@ -93,7 +86,7 @@ const json = name => {
   if (!content.has(name)) throw new Error('Required Play artifact absent: ' + name);
   return JSON.parse(content.get(name));
 };
-if (!equal(json('wrangler.jsonc'), fixedConfig)) throw new Error('Release changes the existing Play target or Wrangler configuration');
+if (!canonicalEqual(json('wrangler.jsonc'), fixedConfig)) throw new Error('Release changes the existing Play target or Wrangler configuration');
 const bindings = json('source-bindings.json');
 if (bindings.kind !== 'play-catalog-source-bindings/v1' || !Array.isArray(bindings.sources) || bindings.sources.length !== 16 ||
     new Set(bindings.sources.map(source => source.repository)).size !== 16 ||
@@ -113,7 +106,7 @@ if (report.releasable !== true || !Array.isArray(report.refusals) || report.refu
     nativeRelease.digest !== manifest.nativeReleaseDigest || report.releaseCandidate?.digest !== nativeRelease.digest ||
     !Array.isArray(nativeRelease.artifacts) || nativeRelease.artifacts.length !== nativeRelease.artifactCount ||
     new Set(nativeRelease.artifacts.map(artifact => artifact.path)).size !== nativeRelease.artifactCount ||
-    !equal(nativeRelease.artifacts.map(artifact => 'public/' + artifact.path).sort(), names.filter(name => name.startsWith('public/') && name !== 'public/release-manifest.json')))
+    !canonicalEqual(nativeRelease.artifacts.map(artifact => 'public/' + artifact.path).sort(), names.filter(name => name.startsWith('public/') && name !== 'public/release-manifest.json')))
   throw new Error('Original VICTOR build was not received as a releasable catalog');
 let nativeBytes = 0;
 for (const artifact of nativeRelease.artifacts) {
@@ -125,7 +118,7 @@ for (const artifact of nativeRelease.artifacts) {
 if (nativeBytes !== nativeRelease.byteCount) throw new Error('Native release byte count changed');
 const catalog = json('public/catalog.json');
 if (!Array.isArray(catalog.games) || catalog.games.length !== 21 || !Array.isArray(manifest.gameIds) ||
-    new Set(manifest.gameIds).size !== 21 || !equal(catalog.games.map(game => game.id).sort(), [...manifest.gameIds].sort()) ||
+    new Set(manifest.gameIds).size !== 21 || !canonicalEqual(catalog.games.map(game => game.id).sort(), [...manifest.gameIds].sort()) ||
     catalog.generated !== manifest.generatedDate || !/^\d{4}-\d{2}-\d{2}$/.test(manifest.generatedDate ?? ''))
   throw new Error('The original 21-game catalog or its generation date changed');
 const feedPaths = ['/feed.rss.xml', '/feed.atom.xml', '/feed.json'];

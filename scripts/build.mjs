@@ -1,10 +1,10 @@
 #!/usr/bin/env node
+import { sha256Digest, sha256Hex } from "@red-cup-engineering/semiotic-content-address-system";
 import { execGitSync } from "@red-cup-engineering/git-engine/git-process";
 // Writes the generated files in public/ from data/. Fonts, favicon and card are sources.
 
 import { mkdir, readFile, writeFile, rename, rm } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
-import { createHash } from "node:crypto";
 
 import { renderHumans, renderSecurity, renderIndex, renderLlms, renderLlmsFull, renderRobots, renderSitemap } from "../src/render.mjs";
 import { readFeedsWithCoverage, mergeItems, renderFeedInputRecord, renderFeedItemOrigin, renderJsonFeed, renderAtom, renderRss } from "../src/feed.mjs";
@@ -17,7 +17,7 @@ const read = async (path) => JSON.parse(await readFile(new URL(path, root), "utf
 const home = await read("data/home.json");
 const frontdoorBytes=await readFile(new URL("data/frontdoor.json",root));
 const frontdoor=JSON.parse(frontdoorBytes.toString("utf8"));
-const frontdoorSha256=createHash("sha256").update(frontdoorBytes).digest("hex");
+const frontdoorSha256=sha256Hex(frontdoorBytes);
 // A release advertises the exact site-source commit supplied by its original GitHub checkout.
 const sourceCommit = process.env.GITHUB_SHA;
 if (sourceCommit !== undefined && !/^[0-9a-f]{40}$/iu.test(sourceCommit)) throw new Error("GITHUB_SHA must be one exact source commit");
@@ -59,7 +59,7 @@ console.log("feed input observation", JSON.stringify({
 }));
 
 const estate = { ...authored, nodes: [...authored.nodes] };
-estate.revision = createHash("sha256").update(JSON.stringify(estate)).digest("hex");
+estate.revision = sha256Hex(JSON.stringify(estate));
 
 const hosts = new Set(estate.nodes.map((n) => n.host));
 for (const door of estate.doors) if (!hosts.has(door)) throw new Error(`door ${door} is not an estate node`);
@@ -131,7 +131,7 @@ if(sourceCommit){
     .filter(([path])=>path!=="public/_headers") // not a retrievable asset
     .sort(([a],[b])=>a.localeCompare(b))
     .map(([path,body])=>[path.slice("public/".length),
-      "sha256:"+createHash("sha256").update(body,"utf8").digest("hex")]));
+      sha256Digest(body)]));
   files["public/source-revision.json"]=JSON.stringify({
     repository:"561-group/561.group",sourceCommit,renderer:"TUFTE",
     application:"LivingWebServer",origin:home.origin,

@@ -208,8 +208,7 @@ export function checkPublicFeedProjection(publication) {
 }
 
 // This deterministic exact URL identity matches the original build's
-// createHash('sha256').update(item.url).digest('hex'), without any network I/O.
-import { createHash } from "node:crypto";
+// sha256Hex(item.url), without any network I/O.
 
 
 

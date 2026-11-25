@@ -1,11 +1,10 @@
 #!/usr/bin/env node
-import { sha256Hex } from "@red-cup-engineering/semiotic-content-address-system";
+import { canonicalEqual, sha256Hex } from "@red-cup-engineering/semiotic-content-address-system";
 // Receive a generated release from the original Production Outcome Watch.
 // The private content carrier supplies bytes; this application supplies its
 // existing production runner. Canonical service code stays with its owner.
 import { readFile, lstat } from 'node:fs/promises';
 import { resolve, join } from 'node:path';
-import { createHash } from 'node:crypto';
 import { setTimeout as delay } from 'node:timers/promises';
 
 const [mode, directory, expectedManifest] = process.argv.slice(2);
@@ -46,12 +45,7 @@ for (const [name, declared] of Object.entries(manifest.files)) {
     throw new Error('Generated release file changed: ' + name);
 }
 const config = JSON.parse(await bytes('wrangler.json', 16384));
-function canonical(value) {
-  if (Array.isArray(value)) return value.map(canonical);
-  if (value && typeof value === 'object') return Object.fromEntries(Object.keys(value).sort().map(key => [key, canonical(value[key])]));
-  return value;
-}
-if (JSON.stringify(canonical(config)) !== JSON.stringify(canonical(fixedConfig)))
+if (!canonicalEqual(config, fixedConfig))
   throw new Error('Release changes the existing Worker, R2 binding, schedule or build profile');
 if (mode === 'verify') {
   console.log(JSON.stringify({ verified: true, worker: manifest.target, manifest: expectedManifest, policyRevision: manifest.policyRevision }));

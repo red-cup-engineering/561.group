@@ -1,7 +1,6 @@
 #!/usr/bin/env node
 import { sha256Hex } from "@red-cup-engineering/semiotic-content-address-system";
 // Unpack a privately carried output of the original section publisher.
-import {createHash} from 'node:crypto';
 import {execFileSync} from 'node:child_process';
 import {mkdir,readFile,writeFile} from 'node:fs/promises';
 import {dirname,isAbsolute,join,resolve} from 'node:path';

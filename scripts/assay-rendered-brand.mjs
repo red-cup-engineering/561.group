@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 // Browser-level receiving candidate for the ORIGINAL 561.group LivingWebServer
 // TUFTE projection. Screenshots are review evidence, NOT accepted golden masters.
+import { sha256Hex } from "@red-cup-engineering/semiotic-content-address-system";
 import {createServer} from "node:http";
 import {readFile,mkdir,writeFile} from "node:fs/promises";
-import {createHash} from "node:crypto";
 import {resolve,join} from "node:path";
 import {pathToFileURL} from "node:url";
 import {create561GroupLivingApplication} from "../src/living-home.mjs";
@@ -283,7 +283,7 @@ async function receiveBrowserWorkPreview(browser, host, output) {
     return {qualifiedBrowserRead:true,customerReceiving:false,
       sourceRequests:seen.length,download:download.suggestedFilename(),
       inquiryScopeCopiedOrSelectable:true,screenshot:"work-audit-mobile.png",
-      screenshotSha256:createHash("sha256").update(await readFile(screenshot)).digest("hex")};
+      screenshotSha256:sha256Hex(await readFile(screenshot))};
   }finally{await context.close()}
 }
 
@@ -349,7 +349,7 @@ async function receiveBrowserBuyerIntake(browser,host,output){
       externalContactSent:false,rightsScopedDraftReceived:true,
       stalePermissionRefused:true,nonRightsDraftExcludesProtectedFields:true,
       viewport:{width:390,height:844},screenshot:"contact-mobile.png",
-      sha256:createHash("sha256").update(await readFile(path)).digest("hex")};
+      sha256:sha256Hex(await readFile(path))};
   }finally{await context.close()}
 }
 
@@ -595,7 +595,7 @@ export async function receiveBrowserVisuals({output="artifacts/brand-visual",sou
            colorObservation.independentlyAccepted!==false ||
            colorObservation.reports.length!==2)
           throw Error("Rendered visual instrument invented authority or omitted the comparison");
-        const hash=createHash("sha256").update(png).digest("hex");
+        const hash=sha256Hex(png);
         cases.push({name:item.name,path:item.path,colorScheme:item.colorScheme??"light",
           viewport:{width:item.width,height:item.height},
           ...result,reading,...(editionReading?{editionReading}:{}),

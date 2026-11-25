@@ -1,6 +1,6 @@
 #!/usr/bin/env node
+import { gitBlobIdOf } from "@red-cup-engineering/git-engine/git-object-id";
 import { sha256Hex } from "@red-cup-engineering/semiotic-content-address-system";
-import { createHash } from 'node:crypto';
 import { execFile } from 'node:child_process';
 import { lstat, mkdir, readFile, realpath, writeFile } from 'node:fs/promises';
 import path from 'node:path';
@@ -51,7 +51,7 @@ async function verify(directory, expectedManifest) {
     }
     if (entry.path.startsWith('service/')) {
       const originalPath = entry.path.slice('service/'.length);
-      const blob = createHash('sha1').update(`blob ${content.length}\0`).update(content).digest('hex');
+      const blob = gitBlobIdOf(content);
       if (entry.originalPath !== originalPath || entry.gitBlob !== blob) fail(`Original service blob mismatch: ${entry.path}`);
     }
   }

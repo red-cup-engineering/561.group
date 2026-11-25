@@ -1,7 +1,7 @@
 // What the Group is publishing: the four companies' JSON Feeds merged, newest first, and written out as
 // JSON Feed 1.1, Atom and RSS. Pure except readFeeds, which tolerates any feed being unreachable.
 
-import { createHash } from "node:crypto";
+import { Sha256Stream, sha256Hex } from "@red-cup-engineering/semiotic-content-address-system";
 
 export const FEED_LIMIT = 60;
 
@@ -83,7 +83,7 @@ async function readBoundedFeed(response) {
     throw new TypeError("Source feed needs a readable response body");
   const reader = response.body.getReader();
   const chunks = [];
-  const digest = createHash("sha256");
+  const digest = new Sha256Stream();
   let bytes = 0;
   try {
     while (true) {
@@ -110,7 +110,7 @@ async function readBoundedFeed(response) {
   const content = new TextDecoder("utf-8", { fatal: true }).decode(merged);
   return {
     feed: JSON.parse(content),
-    sha256: "sha256:" + digest.digest("hex"),
+    sha256: "sha256:" + digest.digestHex(),
     bytes,
   };
 }
@@ -288,7 +288,7 @@ export function renderFeedItemOrigin(home, sources, items) {
  * identifier is preserved verbatim in JSON Feed and schema:identifier. */
 export function syndicatedItemIdentity(home,item) {
   return home.origin + "/feed.json#item-" +
-    createHash("sha256").update(item.url).digest("hex");
+    sha256Hex(item.url);
 }
 
 /** JSON Feed requires source-backed content rather than an empty item.
